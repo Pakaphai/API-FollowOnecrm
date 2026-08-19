@@ -7,39 +7,37 @@ http:
   method: POST
   url: "{{sale_uat}}/api/v1/quotation/create"
   body:
-    type: json
-    data: |
-      {
-        "customer_id": 6,
-        "quotation_date": "2026-08-04",
-        "header_discount": 1000,
-        "price_mode": "vat",
-        "note": "ใบเสนอราคาหลายรายการ",
-        "quotation_lines": [
-          {
-            "product_id": 6,
-            "qty": 2,
-            "manual_discount": 0,
-            "discount_type": "amount",
-            "uom_code": "HRS"
-          },
-          {
-            "product_id": 3,
-            "qty": 3,
-            "manual_discount": 10,
-            "discount_type": "percent",
-            "uom_code": "EA"
-          },
-          {
-            "product_id": 1,
-            "qty": 4,
-            "manual_discount": 0,
-            "discount_type": "amount",
-            "uom_code": "EA"
-          }
-        ],
-        "conditions": []
-      }
+    type: multipart-form
+    data:
+      - name: customer_id
+        type: text
+        value: "2"
+      - name: quotation_date
+        type: text
+        value: 2026-08-19
+      - name: price_mode
+        type: text
+        value: price
+      - name: quotation_lines[0][product_id]
+        type: text
+        value: "1"
+      - name: quotation_lines[0][qty]
+        type: text
+        value: "1"
+      - name: quotation_lines[0][uom_code]
+        type: text
+        value: EA
+      - name: quotation_lines[0][manual_discount]
+        type: text
+        value: "0"
+      - name: quotation_lines[0][discount_type]
+        type: text
+        value: amount
+      - name: quotation_image
+        type: file
+        value:
+          - C:\Users\Softa-P\Pictures\image33.png
+        contentType: image/png
   auth:
     type: bearer
     token: "{{token}}"
@@ -49,3 +47,397 @@ settings:
   timeout: 0
   followRedirects: true
   maxRedirects: 5
+
+docs: |
+  # API — สร้างใบเสนอราคา (Quotation Create)
+
+  สร้างใบเสนอราคา 1 ใบ พร้อม **สร้างใบสั่งขายที่ผูกกันให้อัตโนมัติ** ในคำขอเดียว
+
+  ```
+  POST /api/v1/quotation/create
+  Authorization: Bearer <token>
+  Accept: application/json
+  Content-Type: application/json          ← หรือ multipart/form-data เมื่อแนบรูป
+  ```
+
+  | | |
+  |---|---|
+  | Route | [`routes/api/api_v1.php`](../routes/api/api_v1.php) — อยู่ในกลุ่ม `auth_api` |
+  | Controller | [`Api\ApiQuotationController::quotation_create_api()`](../app/Http/Controllers/Api/ApiQuotationController.php) |
+  | ตารางที่ถูกเขียน | `quotation_headers` · `quotation_lines` · `orders` · `order_lines` · `quotation_conditions` · `order_conditions` · `usd_rate_logs` |
+  | ข้อมูลตั้งต้นของฟอร์ม | [api-quotation-preload.md](api-quotation-preload.md) |
+  | แก้ไขเอกสารที่สร้างแล้ว | [api-quotation-update.md](api-quotation-update.md) |
+  | เวอร์ชันราคา USD | [`POST quotation/usd/create`](api-reference.md) — บังคับให้ทุกบรรทัดมี `usd_price` |
+
+  > ทุกอย่างอยู่ใน **transaction เดียว** — พลาดตรงไหนก็ rollback ทั้งหมด ไม่มีเอกสารค้างครึ่งใบ
+
+  ---
+
+  ## 1. สองโหมดของเอกสาร
+
+  | โหมด | ใช้เมื่อไหร่ | ต้องส่งอะไร |
+  |---|---|---|
+  | **มีรายการสินค้า** | ปกติ — คีย์สินค้าทีละบรรทัด | `quotation_lines[]` อย่างน้อย 1 บรรทัด |
+  | **แนบรูปแทน** | ใบเสนอราคาที่ทำนอกระบบแล้วเอามาแนบ | `quotation_image` + `additional_amount` |
+
+  **ต้องมีอย่างน้อยหนึ่งอย่าง** — ไม่มีทั้งสินค้าและรูป จะได้ `422`
+
+  ```json
+  {"errors":{"quotation_lines":["กรุณาเพิ่มรายการสินค้าอย่างน้อย 1 รายการ หรือแนบรูปภาพใบเสนอราคา"]}}
+  ```
+
+  ส่งมาทั้งคู่ก็ได้ — ระบบจะคิดยอดจากรายการสินค้า แล้วเก็บรูปแนบไว้ด้วย
+
+  ---
+
+  ## 2. พารามิเตอร์ระดับหัวเอกสาร
+
+  | ฟิลด์ | บังคับ | ชนิด | หมายเหตุ |
+  |---|:---:|---|---|
+  | `customer_id` | ✅ | integer | ต้องมีจริงใน `customers` |
+  | `quotation_date` | ✅ | date | `YYYY-MM-DD` · ต้องเป็น **ค.ศ.** ปี 2000 ขึ้นไป และล่วงหน้าไม่เกิน 1 ปี |
+  | `price_mode` | | string | `price` · `vat` · `novat` — ดูข้อ 4 |
+  | `header_discount` | | numeric ≥0 | ส่วนลดท้ายบิล **หน่วยบาท** |
+  | `note` | | string | หมายเหตุท้ายเอกสาร |
+  | `status` | | string | `open` (ค่าเริ่มต้น) หรือ `confirmed` — ค่าอื่นได้ `422` |
+  | `conditions` | | array | array ของ `conditions.id` |
+  | `relationship_id` | | integer | ผูกกับแผนการติดต่อ → ตั้ง `is_quotation_created = 1` ให้แผนนั้น |
+  | `quotation_image` | | file | jpeg,png,jpg,gif,webp ≤5MB → เก็บบน S3 แบบ private |
+  | `additional_amount` | | numeric ≥0 | **ยอดรวมสุทธิของโหมดแนบรูป** (ใช้เฉพาะตอนไม่มีรายการสินค้า) |
+
+  > ช่องยอดเงินรับค่าที่มีคอมมาได้ — `"1,000.00"` ระบบตัดให้ก่อนตรวจ (`normalizeMoneyInputs`)
+
+  ## 3. พารามิเตอร์รายบรรทัด — `quotation_lines[]`
+
+  | ฟิลด์ | บังคับ | ชนิด | หมายเหตุ |
+  |---|:---:|---|---|
+  | `product_id` | ✅ | integer | ต้องมีจริงใน `products` |
+  | `qty` | ✅ | numeric ≥1 | หน่วยที่นับเป็นชิ้น (`EA` `BX` `SET` …) ต้องเป็นจำนวนเต็ม |
+  | `uom_code` | ✅ | string ≤3 | ต้องมีใน `uoms` |
+  | `unit_price` | | numeric ≥0 | ราคาต่อหน่วย **หน่วยบาท** — ไม่ส่ง = ใช้ราคาที่ตั้งไว้ที่สินค้า |
+  | `usd_price` | | numeric ≥0 | ราคาต่อหน่วย **หน่วยดอลลาร์** — ส่งมาแล้วจะ**ใช้แทน** `unit_price` |
+  | `manual_discount` | | numeric ≥0 | ส่วนลดพิเศษที่พนักงานกรอกเอง — ไม่ส่ง = `0` |
+  | `discount_type` | | enum | `amount` (บาท) หรือ `percent` (%) — คู่กับ `manual_discount` |
+
+  > `manual_discount` แบบ `amount` คือ **ลดทั้งบรรทัด** ไม่ใช่ลดต่อหน่วย
+  > สามช่องบนสุดขาดไม่ได้ ขาดเมื่อไรได้ `422` ที่ระบุบรรทัดชัดเจน — ส่วนสองช่องล่างเว้นได้
+
+  ### ส่งแบบ multipart/form-data (ตอนแนบรูป)
+
+  `quotation_lines` เป็น **array ของ object** เสมอ ต่อให้ส่งเป็น form-data ก็ต้องคงรูปนั้นไว้ — ชื่อ key ต้องมี **เลขบรรทัด** กำกับ
+
+  ```
+  customer_id                        4
+  quotation_date                     2026-08-19
+  price_mode                         price
+  quotation_lines[0][product_id]     119
+  quotation_lines[0][qty]            1
+  quotation_lines[0][uom_code]       EA
+  quotation_lines[0][manual_discount] 9
+  quotation_lines[0][discount_type]  amount
+  quotation_image                    <file>
+  ```
+
+  บรรทัดที่ 2 ขึ้นไปก็เปลี่ยนเลขในวงเล็บแรกเป็น `[1]` `[2]` … ไปเรื่อย ๆ
+
+  > ⚠️ **ส่ง `product_id` / `qty` / `uom_code` แบบแบน ๆ (ไม่มี `quotation_lines[0]` นำหน้า) เซิร์ฟเวอร์จะมองไม่เห็นเลย**
+  > ถ้าแนบ `quotation_image` มาด้วย คำขอจะ**ผ่าน `201`** เพราะเข้าเงื่อนไข "โหมดแนบรูป" แต่ได้ใบเปล่า:
+  > `quotationLines: []` · ยอดทุกช่องเป็น `0` · `price_mode` กลายเป็น `null` (เซิร์ฟเวอร์เก็บ `price_mode` เฉพาะใบที่มีรายการสินค้า)
+  > เจออาการนี้เมื่อไร แปลว่าชื่อ key ผิด ไม่ใช่ข้อมูลผิด
+
+  ---
+
+  ## 4. `price_mode` — โหมดภาษีของทั้งใบ
+
+  | ค่า | ป้ายบนหน้าเว็บ | ราคาตั้งต้นที่เซิร์ฟเวอร์ใช้ | บวก VAT 7% ท้ายบิล |
+  |---|---|---|:---:|
+  | `price` | ราคาสินค้า (ไม่มีภาษี) | `product_price` | ไม่ |
+  | `vat` | ราคาสินค้า (รวมภาษีมูลค่าเพิ่ม 7%) | `product_price_exclude_vat` | ✅ |
+  | `novat` | ราคาสินค้า (แยกภาษีมูลค่าเพิ่ม 7%) | `product_price_include_vat` | ✅ |
+
+  ⚠️ **ชื่อค่าสวนทางกับป้าย** — `vat` = "รวมภาษี" · `novat` = "แยกภาษี" อย่าเดาจากชื่อ
+  ⚠️ โหมด `novat` หน้าเว็บกับเซิร์ฟเวอร์ใช้คอลัมน์คนละตัวอยู่ (ดู [preload § 11](api-quotation-preload.md))
+
+  ไม่ส่ง `price_mode` มา = ราคาตั้งต้นเป็น `0` ทุกบรรทัด ต้องส่ง `unit_price` หรือ `usd_price` มาเองทุกบรรทัด
+
+  ---
+
+  ## 5. เซิร์ฟเวอร์คำนวณอะไรบ้าง — ทีละขั้น
+
+  ใช้ payload จริงนี้เป็นตัวอย่าง (อัตรา ธปท. ที่ปัดแล้ว = ฿34):
+
+  ```json
+  {
+    "customer_id": 4,
+    "quotation_date": "2026-08-18",
+    "header_discount": 1000,
+    "price_mode": "price",
+    "note": "ใบเสนอราคาหลายรายการ",
+    "quotation_lines": [
+      {"product_id":119,"qty":2,"manual_discount":0, "discount_type":"amount", "uom_code":"EA"},
+      {"product_id":121,"qty":1,"manual_discount":10,"discount_type":"percent","uom_code":"EA"},
+      {"product_id":120,"qty":1,"manual_discount":0, "discount_type":"amount", "uom_code":"EA"}
+    ],
+    "conditions": []
+  }
+  ```
+
+  ### ขั้นที่ 1 — หาราคาต่อหน่วย
+
+  1. หยิบราคาตั้งต้นจาก `product_prices` ตาม `price_mode` + `uom_code`
+  2. **ถ้าส่ง `usd_price` มา** → `ceil(usd) × อัตราที่ปัดแล้ว` แล้วข้ามขั้นที่ 3 ไปเลย
+  3. **ถ้าไม่ได้ส่ง** → ใช้ `unit_price` ที่ส่งมา แต่**บีบไม่ให้ต่ำกว่าราคาขั้นต่ำ**
+     - สินค้าที่ตั้ง `min_price` ไว้ → ห้ามต่ำกว่านั้น
+     - สินค้าที่**ไม่ได้ตั้ง** → ห้ามต่ำกว่าราคาที่ตั้งไว้เลย
+     - ต่ำกว่า = `422` ที่คีย์ `quotation_lines.N.unit_price` (ไม่บันทึกทั้งใบ)
+     - ขายแพงกว่าราคาที่ตั้งไว้ได้เสมอ ไม่มีเพดาน
+
+  ### ขั้นที่ 2 — ส่วนลดของบรรทัด
+
+  ```
+  ยอดก่อนลด   = qty × ราคาต่อหน่วย
+  ส่วนลดโปรฯ  = โปรโมชันที่ active ณ "วันที่บนเอกสาร" (สินค้าก่อน → หมวดหมู่ทีหลัง)
+  ส่วนลดพิเศษ = manual_discount  (amount = บาท / percent = % ของยอดก่อนลด)
+  ส่วนลดรวม   = โปรฯ + พิเศษ      ← ลดได้มากสุดเท่ายอดก่อนลด ยอดสุทธิต่ำสุดคือ 0
+  ยอดสุทธิ    = ยอดก่อนลด − ส่วนลดรวม
+  ```
+
+  | บรรทัด | ราคา/หน่วย | จำนวน | ยอดก่อนลด | ส่วนลด | ยอดสุทธิ |
+  |---|---|---|---|---|---|
+  | 119 | ฿1,020.00 | 2 | 2,040.00 | 0 | **2,040.00** |
+  | 121 | ฿17,204.00 | 1 | 17,204.00 | 10% = 1,720.40 | **15,483.60** |
+  | 120 | ฿38,420.00 | 1 | 38,420.00 | 0 | **38,420.00** |
+
+  ### ขั้นที่ 3 — ยอดรวมทั้งใบ
+
+  ```
+  total_before_discount = ผลรวมยอดสุทธิของทุกบรรทัด          = 55,943.60
+  total_discount        = ผลรวมส่วนลดของทุกบรรทัด            =  1,720.40
+  vat_amount            = 7% ของยอดสุทธิแต่ละบรรทัด (โหมด vat/novat) = 0
+  total_after_discount  = total_before_discount + vat_amount − header_discount
+                        = 55,943.60 + 0 − 1,000.00 = 54,943.60
+                        → ปัดขึ้นเป็นบาทเต็ม        = 54,944.00
+  ```
+
+  > ⚠️ **`total_before_discount` ชื่อหลอก** — มันคือยอด**หลัง**หักส่วนลดรายบรรทัดแล้ว
+  > (ตรงกับช่อง "รวมราคาสินค้า" บนหน้าเว็บ) ส่วนที่ยังไม่ได้หักคือ **ส่วนลดท้ายบิล** เท่านั้น
+
+  > **`total_after_discount` ปัดขึ้นเป็นบาทเต็มเสมอ** เพราะเป็นยอดที่เก็บเงินจริง
+  > ยอดย่อยยังคงเศษสตางค์ไว้ → ผลบวกของยอดย่อยต่างจากยอดรวมได้ไม่เกิน 1 บาท **อย่าเขียนโค้ดเช็คว่าต้องเท่ากันเป๊ะ**
+
+  ### โหมดแนบรูป
+
+  ไม่มี `quotation_lines` → ข้ามทั้งหมดข้างบน `total_after_discount = additional_amount` ตรง ๆ
+  (**ไม่ปัดขึ้น** เพราะผู้ใช้ตั้งใจพิมพ์เลขนั้นมาเอง) ส่วน `total_before_discount` · `total_discount` · `vat_amount` · `price_mode` เก็บเป็น `null`
+
+  ---
+
+  ## 6. ⚠️ ฟิลด์ที่ส่งไปแล้วเซิร์ฟเวอร์ไม่ได้ใช้
+
+  เซิร์ฟเวอร์**คำนวณเองทั้งหมด** ไม่เชื่อยอดที่ไคลเอนต์ส่งมา — ส่งไปก็ไม่ผิด แต่ไม่มีผล
+
+  | ฟิลด์ | เกิดอะไรขึ้น |
+  |---|---|
+  | `vat_amount` | ผ่าน validation แต่ถูกคำนวณทับ |
+  | `total_after_discount` | ผ่าน validation แต่ **ไม่ถูกใช้เลยทั้งสองโหมด** (โหมดแนบรูปใช้ `additional_amount`) |
+  | `total_before_discount` · `total_discount` | ไม่ได้อยู่ใน validation ด้วยซ้ำ |
+  | `quotation_lines[].total_line` | ถูกคำนวณทับ |
+  | `quotation_lines[].unit_price` | ใช้เป็น "ราคาที่เสนอ" แต่ถูกบีบด้วยราคาขั้นต่ำ · **ถูกมองข้ามทั้งหมดถ้าส่ง `usd_price` มาด้วย** |
+
+  ---
+
+  ## 7. ราคาสกุล USD
+
+  ใส่ `usd_price` รายบรรทัดได้เลยในเส้นนี้ — บรรทัดที่ไม่ใส่จะคิดเป็นเงินบาทตามปกติ (ปนกันได้)
+
+  ```
+  $42.50 → ปัดขึ้นเป็นดอลลาร์เต็ม $43 × ฿34 = ฿1,462.00 ต่อหน่วย
+  ```
+
+  - **ราคาขั้นต่ำเงินบาทไม่ถูกนำมาบีบ**บรรทัดที่ขายเป็น USD (ยึดตัวเลขที่เสนอลูกค้าเป็นหลัก)
+  - อัตราที่ใช้ถูกยึดไว้กับตัวเอกสาร + บันทึกลง `usd_rate_logs` เปิดใบเดิมวันหลังได้ตัวเลขชุดเดิมเสมอ
+  - ส่ง `usd_price` มาแต่บริษัทไม่ได้เปิดฟีเจอร์ / ดึงอัตราไม่ได้ → `422` พร้อม `code`
+
+  > **อยากขายเป็น USD ทั้งใบให้ใช้ [`POST quotation/usd/create`](api-reference.md)** — เส้นนี้ปล่อยให้ลืมใส่ `usd_price` บางบรรทัดได้
+  > แล้วบรรทัดนั้นจะเงียบ ๆ กลับไปใช้ราคาบาทของสินค้าแทน ซึ่งจับได้ยากมากถ้าราคาสองสกุลบังเอิญใกล้กัน
+
+  ---
+
+  ## 8. Response — `201 Created`
+
+  ```json
+  {
+    "success": true,
+    "message": "สร้างใบเสนอราคาสำเร็จ",
+    "data": {
+      "quotation": {
+        "id": 3,
+        "quotation_number": "QT-2026-0003",
+        "quotation_date": "2026-08-18",
+        "status": "open",
+        "price_mode": "price",
+        "total_before_discount": 55943.6,
+        "header_discount": 1000,
+        "total_discount": 1720.4,
+        "vat_amount": 0,
+        "total_after_discount": 54944,
+        "quotation_image": null,
+        "total_after_discount_usd": 1616,
+        "quotationLines": [
+          {
+            "id": 6,
+            "quotation_id": 3,
+            "product_id": 119,
+            "uom_code": "EA",
+            "qty": 200,
+            "unit_price": 102000,
+            "usd_price": 30,
+            "manual_discount": 0,
+            "discount_type": "amount",
+            "discount": 0,
+            "total_line": 204000,
+            "total_line_usd": 60,
+            "promotion": { "has_promotion": false, "discount_type": null, "discount_value": 0,
+                           "discount_amount": 0, "discount_percent": 0, "label": "-" },
+            "is_delete": false,
+            "created_at": "2026-08-18T09:04:13.000000Z",
+            "created_by": 2,
+            "updated_at": null,
+            "updated_by": null
+          }
+        ]
+      },
+      "usd_rate": { "rate": 33.2264, "rate_used": 34, "as_of": "2026-08-17",
+                    "source": "bot", "display": "1 USD = ฿34.00" },
+      "quotationLines": [ ... ],
+      "order": { "id": 3, "order_number": "PO-260818-0002", "status": "open" }
+    }
+  }
+  ```
+
+  ### รายการสินค้าอยู่ 2 ที่ — ข้อมูลชุดเดียวกันเป๊ะ
+
+  | path | ใช้ยังไง |
+  |---|---|
+  | `data.quotation.quotationLines` | **ตำแหน่งที่ควรอ่าน** — อยู่ในตัวใบเสนอราคา ไม่ต้องประกอบเองจากสอง key |
+  | `data.quotationLines` | ตำแหน่งเดิม **ยังส่งเหมือนเดิม** ไม่ได้ถอดออก แอปที่ปล่อยไปแล้วจึงไม่พัง |
+
+  เป็น array ตัวเดียวกัน (ไม่ได้ query ซ้ำ) จะอ่านจากที่ไหนก็ได้ค่าเท่ากันเสมอ — ของใหม่ให้ใช้ path บน
+
+  ### ลำดับคีย์ในแต่ละบรรทัด
+
+  เรียงตามลำดับที่ไล่อ่านตามได้ ไม่ใช่ลำดับคอลัมน์ในฐานข้อมูล — เหมือนกันทั้ง `create` และ [`update`](api-quotation-update.md)
+
+  ```
+  ตัวระบุ    id · quotation_id · product_id
+  สินค้า     uom_code
+  จำนวน      qty
+  ราคา       unit_price · usd_price
+  ส่วนลด     manual_discount · discount_type · discount
+  ยอดรวม     total_line · total_line_usd
+  โปรโมชัน   promotion            ← เฉพาะเส้นนี้ ไม่มีใน update
+  ข้อมูลกำกับ is_delete · created_at · created_by · updated_at · updated_by
+  ```
+
+  ### ⚠️ หน่วยเงินไม่เหมือนกันในสอง block
+
+  | block | หน่วย | ตัวอย่าง |
+  |---|---|---|
+  | `data.quotation` (ช่องยอดรวม) | **บาท** (หารกลับให้แล้ว) | `total_after_discount: 54944` = ฿54,944.00 |
+  | `quotationLines[]` (ทั้งสอง path) | **สตางค์** (แถวดิบจากฐานข้อมูล) | `unit_price: 102000` = ฿1,020.00 |
+  | `quotationLines[].qty` | **×100** | `200` = 2 ชิ้น |
+  | `usd_price` · `total_line_usd` · `total_after_discount_usd` | **ดอลลาร์** | `60` = $60 |
+
+  ### ฟิลด์ที่ต้องอธิบายเพิ่ม
+
+  | ฟิลด์ | ความหมาย |
+  |---|---|
+  | `quotation_number` | `QT-<ปี ค.ศ.>-<running 4 หลัก>` เดินเลขต่อรายปี — เกิน 9999 ใบ/ปี จะได้ `null` |
+  | `order.order_number` | `PO-<YYMMDD>-<running 4 หลัก>` เดินเลขต่อ**รายวัน** |
+  | `quotation_image` | path บน S3 (ไม่ใช่ URL) — ขอ presigned URL ได้จาก `quotation/list` |
+  | `usd_rate` | อัตราที่ใบนี้ยึดไว้ · `null` = ใบนี้ไม่ได้ผูกกับอัตราใด |
+  | `total_after_discount_usd` | ยอดสุทธิเทียบ USD ปัดขึ้นเป็นดอลลาร์เต็ม |
+  | `quotationLines[].usd_price` | ราคา USD ที่ใช้จริง · **`null` = บรรทัดนี้คิดเป็นเงินบาท** ← ใช้เช็คว่าเส้นทาง USD ทำงานจริงไหม |
+  | `quotationLines[].discount` | ส่วนลดรวมของบรรทัด (โปรฯ + พิเศษ) หน่วยสตางค์ |
+  | `promotion` | โปรฯ ที่ใช้จริงกับบรรทัดนั้น พร้อม `label` ที่แสดงได้เลย |
+  | `uom_code` | ตัดช่องว่างให้แล้ว (`"EA"`) — คอลัมน์จริงเป็น `char(3)` ที่เก็บเป็น `"EA "` |
+
+  ---
+
+  ## 9. สิ่งที่ถูกสร้างพร้อมกันโดยอัตโนมัติ
+
+  | อะไร | รายละเอียด |
+  |---|---|
+  | **ใบสั่งขาย 1 ใบ** | ยอดชุดเดียวกับใบเสนอราคา · `commission_status = 1` · สถานะตามใบเสนอราคา |
+  | **บรรทัดใบสั่งขาย** | คัดลอกจาก `quotation_lines` ทั้งหมด |
+  | **เงื่อนไข** | เขียนทั้ง `quotation_conditions` และ `order_conditions` |
+  | **แถว `usd_rate_logs`** | ประวัติอัตราที่ใช้ (เฉพาะเมื่อมีอัตรา) — ล้มเหลวแล้วไม่ล้มการบันทึก |
+  | **อัปเดตแผนการติดต่อ** | เมื่อส่ง `relationship_id` มา |
+
+  > ไม่มีทางสร้างใบเสนอราคาโดยไม่สร้างใบสั่งขาย — ถ้าต้องการแค่ใบเสนอราคา ให้ปล่อยใบสั่งขายไว้สถานะ `open`
+
+  ---
+
+  ## 10. Error
+
+  | HTTP | เมื่อไหร่ | รูปแบบ |
+  |:---:|---|---|
+  | `401` | token หาย/หมดอายุ | `{status, message, code}` |
+  | `403` | แพ็กเกจหมดอายุเกิน 3 วัน | `{code: "subscription_expired"}` |
+  | `422` | validation ไม่ผ่าน | `{message: "Validation failed.", errors: {...}}` |
+  | `422` | ราคาต่อหน่วยต่ำกว่าขั้นต่ำ | `{message: "Validation failed.", errors: {"quotation_lines.0.unit_price": [...]}}` |
+  | `422` | ส่ง `usd_price` แต่ใช้ไม่ได้ | `{success: false, code: "usd_pricing_disabled" \| "usd_rate_unavailable"}` |
+  | `500` | ข้อผิดพลาดอื่น (rollback แล้ว) | `{success: false, message, error}` |
+
+  ข้อความ error ที่เจอบ่อย:
+
+  ```json
+  {"errors":{
+    "quotation_lines.0.product_id":["กรุณาเลือกสินค้า"],
+    "quotation_lines.0.uom_code":["กรุณาระบุหน่วยนับ"],
+    "quotation_lines.0.qty":["จำนวนของหน่วยนับ EA ต้องเป็นจำนวนเต็ม (กรอกมา 2.5)"],
+    "quotation_lines.1.unit_price":["สินค้า \"Apple AirTag\" ยังไม่ได้กำหนดราคาขายขั้นต่ำ จึงขายต่ำกว่าราคาที่ตั้งไว้ 1,020.00 บาท ไม่ได้"],
+    "quotation_date":["วันที่ใบเสนอราคาระบุปี 2569 ซึ่งดูเหมือนเป็นปี พ.ศ. กรุณากรอกเป็นปี ค.ศ. (พ.ศ. 2569 = ค.ศ. 2026)"],
+    "status":["สถานะต้องเป็น open หรือ confirmed"]
+  }}
+  ```
+
+  ---
+
+  ## 11. กับดักที่เหลืออยู่
+
+  ทั้งหมดนี้เป็น **ข้อตกลงของ API ที่แก้ไม่ได้** เพราะแอปที่ปล่อยไปแล้วอ่านค่าแบบนี้อยู่
+  (รายการที่เคยเป็นข้อผิดพลาดจริงถูกแก้ไปแล้ว — ดูข้อ 12)
+
+  | # | เรื่อง | ต้องทำอะไร |
+  |:---:|---|---|
+  | 1 | ช่องยอดรวมใน `quotation` เป็นบาท แต่ `quotationLines` เป็นสตางค์ — **ถึงจะย้ายเข้าไปอยู่ใน `quotation` แล้วก็ยังคนละหน่วยกันอยู่** | อย่าใช้ parser ตัวเดียวกับทั้งสองส่วน |
+  | 2 | `qty` ใน response คูณ 100 มา | `200` = 2 ชิ้น |
+  | 3 | `total_before_discount` คือยอด**หลัง**ส่วนลดรายบรรทัด | ชื่อหลอก อ่านข้อ 5 |
+  | 4 | ผลบวกยอดย่อย ≠ `total_after_discount` (ต่างได้ ≤1 บาท) | เกิดจากการปัดยอดรวมขึ้นเป็นบาทเต็ม เป็นพฤติกรรมที่ตั้งใจ |
+  | 5 | ลืม `usd_price` แล้วระบบไม่เตือน | เช็ค `quotationLines[].usd_price` ต้องไม่เป็น `null` หรือใช้ `quotation/usd/create` |
+  | 6 | สร้างสำเร็จ = มีใบสั่งขายเกิดขึ้นด้วยเสมอ | เผื่อไว้ในโฟลว์ฝั่งแอป |
+  | 7 | ส่งรายการสินค้าผิดรูปแบบ + แนบรูป = ได้ `201` ใบเปล่า ไม่มี error | ตรวจ `quotationLines` ใน response ว่าไม่ว่าง และ `price_mode` ไม่เป็น `null` — ดูรูปแบบ key ที่ข้อ 3 |
+
+  ## 12. สิ่งที่แก้ไปแล้ว
+
+  ### 2026-08-19 — เพิ่มอย่างเดียว ไม่มีอะไรหาย
+
+  | เดิม | ตอนนี้ |
+  |---|---|
+  | รายการสินค้าอยู่ที่ `data.quotationLines` ที่เดียว | เพิ่ม `data.quotation.quotationLines` เข้ามาด้วย ชุดเดียวกันเป๊ะ · **ของเดิมยังอยู่ครบ** |
+
+  ### 2026-08-18
+
+  | เดิม | ตอนนี้ |
+  |---|---|
+  | ไม่ส่ง `product_id` / `qty` / `uom_code` ในบรรทัด → **`500`** โดยไม่บอกว่าผิดตรงไหน | **`422`** ระบุบรรทัดและช่องที่ขาด |
+  | `status` ค่าที่ไม่รู้จักถูกเปลี่ยนเป็น `open` เงียบ ๆ | **`422`** `"สถานะต้องเป็น open หรือ confirmed"` |
+  | `uom_code` ใน response มีช่องว่างต่อท้าย (`"EA "`) | ตัดให้แล้ว (`"EA"`) ทุกเส้นของใบเสนอราคา |
+
+  > ⚠️ สองข้อแรกทำให้คำขอที่**เคยผ่าน** (แบบผิด ๆ) กลายเป็น `422` — ถ้าแอปเคยส่ง `status` แปลก ๆ
+  > หรือส่งบรรทัดที่ข้อมูลไม่ครบมา ต้องแก้ฝั่งแอปด้วย
+
+  ---
+
+  *อัปเดตล่าสุด: 2026-08-19 · อ้างอิงจาก [`ApiQuotationController::quotation_create_api()`](../app/Http/Controllers/Api/ApiQuotationController.php)*

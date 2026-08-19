@@ -1,0 +1,51 @@
+info:
+  name: Update-Order-with-image
+  type: http
+  seq: 4
+
+http:
+  method: POST
+  url: "{{sale_uat}}/api/v1/order/update-api/1"
+  body:
+    type: multipartForm
+  auth:
+    type: bearer
+    token: "{{token}}"
+
+body:multipart-form:
+  customer_id: 1
+  quotation_id: 1
+  order_date: "2026-08-19"
+  price_mode: price
+  header_discount: 150.00
+  note: แก้รูปและรายการสินค้าพร้อมกัน
+  order_lines[0][product_id]: 3
+  order_lines[0][qty]: 3
+  order_lines[0][uom_code]: EA
+  order_lines[0][discount_type]: amount
+  order_lines[0][manual_discount]: 0
+  order_lines[1][product_id]: 1
+  order_lines[1][qty]: 1
+  order_lines[1][uom_code]: EA
+  order_lines[1][discount_type]: amount
+  order_lines[1][manual_discount]: 0
+
+docs: |
+  แก้รูป + รายการสินค้าในคำขอเดียว (multipart/form-data)
+
+  - แนบไฟล์ที่ช่อง quotation_image (jpeg,png,jpg,gif,webp,pdf ≤5MB)
+    รูปเก็บที่ quotation_headers.quotation_image ของใบเสนอราคาต้นทาง
+    ใบสั่งขายที่ไม่ได้ออกจากใบเสนอราคา -> 422 code: order_has_no_quotation
+
+  - order_lines คือ "แทนที่ทั้งชุด" ไม่ใช่เพิ่มทีละรายการ
+    สินค้าที่ไม่ได้อยู่ใน payload จะถูกลบออกจากใบ (soft delete)
+    ถ้าอยากแก้แค่รูป: ตัด order_lines ออกให้หมด รายการสินค้าและยอดเดิมจะไม่ถูกแตะ
+
+  - ใบที่ขายเป็น USD ต้องส่ง order_lines[N][usd_price] กลับมาด้วยทุกบรรทัด
+    ไม่งั้นราคาจะเด้งกลับไปเป็นราคาบาทที่ตั้งไว้ที่สินค้า
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

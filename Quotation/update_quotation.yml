@@ -7,39 +7,37 @@ http:
   method: POST
   url: "{{sale_uat}}/api/v1/quotation/update/3"
   body:
-    type: json
-    data: |
-      {
-        "customer_id": 2,
-        "quotation_date": "2026-07-30",
-        "header_discount": 0,
-        "price_mode": "price",
-        "note": "ใบเสนอราคาหลายรายการ",
-        "quotation_lines": [
-          {
-            "product_id": 1,
-            "qty": 3,
-            "manual_discount": 0,
-            "discount_type": "amount",
-            "uom_code": "EA"
-          },
-          {
-            "product_id": 2,
-            "qty": 11,
-            "manual_discount": 10,
-            "discount_type": "amount",
-            "uom_code": "EA"
-          },
-          {
-            "product_id": 2,
-            "qty": 6,
-            "manual_discount": 0,
-            "discount_type": "amount",
-            "uom_code": "EA"
-          }
-        ],
-        "conditions": []
-      }
+    type: multipart-form
+    data:
+      - name: customer_id
+        type: text
+        value: "2"
+      - name: quotation_date
+        type: text
+        value: 2026-08-19
+      - name: price_mode
+        type: text
+        value: price
+      - name: quotation_lines[0][product_id]
+        type: text
+        value: "1"
+      - name: quotation_lines[0][qty]
+        type: text
+        value: "1"
+      - name: quotation_lines[0][uom_code]
+        type: text
+        value: EA
+      - name: quotation_lines[0][manual_discount]
+        type: text
+        value: "0"
+      - name: quotation_lines[0][discount_type]
+        type: text
+        value: amount
+      - name: quotation_image
+        type: file
+        value:
+          - C:\Users\Softa-P\Pictures\image33.png
+        contentType: image/png
   auth:
     type: bearer
     token: "{{token}}"
@@ -49,3 +47,376 @@ settings:
   timeout: 0
   followRedirects: true
   maxRedirects: 5
+
+docs: |
+  # API — แก้ไขใบเสนอราคา (Quotation Update)
+
+  แก้ไขใบเสนอราคาที่มีอยู่ **พร้อมอัปเดตใบสั่งขายที่ผูกกันให้ไปด้วยกัน**
+
+  ```
+  POST /api/v1/quotation/update/{id}
+  Authorization: Bearer <token>
+  Accept: application/json
+  Content-Type: application/json
+  ```
+
+  | | |
+  |---|---|
+  | Route | [`routes/api/api_v1.php`](../routes/api/api_v1.php) — อยู่ในกลุ่ม `auth_api` |
+  | Controller | [`Api\ApiQuotationController::quotation_update_api()`](../app/Http/Controllers/Api/ApiQuotationController.php) |
+  | ตารางที่ถูกเขียน | `quotation_headers` · `quotation_lines` · `orders` · `order_lines` · `quotation_conditions` · `usd_rate_logs` |
+  | เส้นคู่กัน | [สร้าง](api-quotation-create.md) · [ข้อมูลตั้งต้นฟอร์ม](api-quotation-preload.md) |
+
+  > ใช้ `POST` ไม่ใช่ `PUT`/`PATCH` — และ **ไม่มีการแก้บางส่วน (partial update)** ทุกครั้งต้องส่งเอกสารมาทั้งใบ
+
+  ---
+
+  ## 1. ข้อแตกต่างจาก `quotation/create`
+
+  | | create | **update** |
+  |---|---|---|
+  | `quotation_lines` | ไม่บังคับ (แนบรูปแทนได้) | **บังคับ** `required\|array\|min:1` |
+  | แนบรูป | ได้ (`quotation_image`) | **ไม่รับ** — ใช้ [`quotation/with-images/update/{id}`](api-reference.md) แทน |
+  | `status` ที่ส่งมา | `open` / `confirmed` | **ไม่รับ** — ถูกตั้งเป็น `open` เสมอ |
+  | เลขที่เอกสาร | ออกใหม่ | **คงเลขเดิม** |
+  | ตรวจสถานะก่อนแก้ | — | ต้องอยู่ในสถานะที่แก้ได้ ไม่งั้น `403` |
+
+  ### ⚠️ แก้ได้เฉพาะเอกสารที่ยังไม่ถูกยืนยัน
+
+  ```json
+  {"success": false, "message": "ใบเสนอราคาเลขที่ QT-2026-0003 ไม่อยู่ในสถานะที่แก้ไขได้"}
+  ```
+
+  คืน `403` เมื่อสถานะไม่อยู่ใน `QuotationHeadersModel::SALE_EDITABLE_STATUSES` — เอกสารที่ยืนยัน/ยกเลิกแล้วห้ามแก้ (ตรวจฝั่งเซิร์ฟเวอร์ ไม่ใช่แค่ซ่อนปุ่มในแอป)
+
+  > แก้สำเร็จ = **สถานะถูกรีเซ็ตกลับเป็น `open` เสมอ** ทั้งใบเสนอราคาและใบสั่งขาย
+
+  ---
+
+  ## 2. พารามิเตอร์
+
+  เหมือน [`quotation/create`](api-quotation-create.md) ทุกช่อง ยกเว้นที่ระบุไว้ในตารางข้อ 1
+
+  | ฟิลด์ | บังคับ | หมายเหตุ |
+  |---|:---:|---|
+  | `customer_id` | ✅ | เปลี่ยนลูกค้าได้ |
+  | `quotation_date` | ✅ | date + กฎ `DocumentDate` |
+  | `quotation_lines` | ✅ | array ≥1 — **คือรายการทั้งหมดของเอกสารหลังแก้** |
+  | `quotation_lines.*.product_id` | ✅ | ต้องมีจริง |
+  | `quotation_lines.*.qty` | ✅ | ≥1 · หน่วยนับเป็นชิ้นต้องเป็นจำนวนเต็ม |
+  | `quotation_lines.*.uom_code` | ✅ | ต้องมีใน `uoms` |
+  | `quotation_lines.*.unit_price` | | บาท — ถูกบีบด้วยราคาขั้นต่ำเหมือนตอนสร้าง |
+  | `quotation_lines.*.usd_price` | | ดอลลาร์ — ส่งมาแล้วใช้แทน `unit_price` |
+  | `quotation_lines.*.manual_discount` | | ไม่ส่ง = `0` |
+  | `quotation_lines.*.discount_type` | | `amount` · `percent` |
+  | `header_discount` · `price_mode` · `note` | | เหมือน create |
+  | `conditions` | | array ของ `conditions.id` |
+
+  ---
+
+  ## 3. ⚠️ บรรทัดที่ไม่ได้ส่งมา = ถูกลบ
+
+  `quotation_lines` ที่ส่งมา คือ**รายการทั้งหมดของเอกสารหลังแก้** ไม่ใช่ "เฉพาะบรรทัดที่เปลี่ยน"
+
+  | สิ่งที่เกิดขึ้น | เงื่อนไข |
+  |---|---|
+  | แก้บรรทัดเดิม | `product_id` นั้นมีอยู่แล้วในเอกสาร |
+  | เพิ่มบรรทัดใหม่ | `product_id` ยังไม่เคยมี |
+  | **ลบบรรทัด** | `product_id` เดิม**ไม่ได้อยู่ใน payload** → ตั้ง `is_delete = true` ทั้งใน `quotation_lines` และ `order_lines` |
+
+  ลบแบบ soft delete — ข้อมูลเดิมยังอยู่ในฐานข้อมูลให้ตรวจย้อนได้ แต่จะไม่ถูกคืนกลับมาในทุกเส้น API
+  เอาสินค้าที่เคยลบกลับเข้ามาใหม่ได้ ธง `is_delete` จะถูกปลดให้เอง
+
+  > ส่งมาแค่บรรทัดเดียวเพราะคิดว่าเป็น partial update = **สินค้าที่เหลือหายไปทั้งหมด** และยอดรวมจะเหลือแค่บรรทัดนั้น
+
+  ### ⚠️ หนึ่ง `product_id` ได้หนึ่งบรรทัดเท่านั้น
+
+  แถวถูกจับคู่ด้วย `(quotation_id, product_id)` — ส่งสินค้าตัวเดียวกันมาสองบรรทัด (คนละหน่วยนับ) **บรรทัดหลังจะทับบรรทัดแรก** เหลือแถวเดียวในฐานข้อมูล แต่ยอดรวมของหัวเอกสารนับทั้งสองบรรทัด → ผลบวกของบรรทัดจะไม่ตรงกับยอดรวม
+
+  ถ้าต้องขายสินค้าเดียวกันหลายหน่วยนับในใบเดียว ต้องแยกเป็นคนละเอกสารไปก่อน
+
+  ---
+
+  ## 4. การคำนวณ
+
+  **เหมือน [`quotation/create` ข้อ 5](api-quotation-create.md) ทุกขั้น** — คิดใหม่ทั้งใบจาก payload ที่ส่งมา ไม่ได้แก้เฉพาะส่วนต่าง
+
+  - ราคาต่อหน่วยถูกบีบด้วยราคาขั้นต่ำอีกครั้ง (บรรทัดที่ส่ง `usd_price` ไม่ถูกบีบ)
+  - โปรโมชันถูกคิดใหม่ตาม **`quotation_date` ที่ส่งมาในครั้งนี้** — เลื่อนวันที่แล้วส่วนลดเปลี่ยนได้
+  - `total_after_discount` **ปัดขึ้นเป็นบาทเต็ม** เหมือนตอนสร้าง
+
+  ### อัตราแลกเปลี่ยนถูกบันทึกทับด้วยอัตราของ "วันที่แก้"
+
+  | | |
+  |---|---|
+  | คอลัมน์ `usd_rate_*` ในหัวเอกสาร | **ถูกเขียนทับ**ด้วยอัตราปัจจุบัน |
+  | ตาราง `usd_rate_logs` | **เพิ่มแถวใหม่** `action = update` |
+
+  > แก้ใบเดิมหลังจากอัตราขยับ = ยอดบาทของบรรทัดที่ขายเป็น USD จะเปลี่ยนตามอัตราใหม่
+  > อัตราเดิมยังตามรอยได้จาก `usd_rate_logs` ว่าใบนี้เคยใช้อัตราไหนบ้าง
+
+  ---
+
+  ## 5. Response — `201 Created`
+
+  > ใช้รหัส `201` ทั้งที่เป็นการแก้ไข — เป็นพฤติกรรมเดิมของ API ไม่ได้เปลี่ยนเพราะจะกระทบแอปที่เช็ค `=== 201`
+
+  ```json
+  {
+    "success": true,
+    "message": "แก้ไขใบเสนอราคาสำเร็จ",
+    "data": {
+      "quotation": {
+        "id": 3,
+        "quotation_number": "QT-2026-0003",
+        "quotation_date": "2026-08-18",
+        "status": "open",
+        "price_mode": "price",
+        "total_before_discount": 55943.6,
+        "header_discount": 1000,
+        "total_discount": 1720.4,
+        "vat_amount": 0,
+        "total_after_discount": 54944,
+        "total_after_discount_usd": 1616
+      },
+      "usd_rate": {
+        "rate": 33.2264, "rate_used": 34, "as_of": "2026-08-17",
+        "last_updated": "2026-08-17", "fetched_at": "2026-08-18 09:04:13",
+        "source": "bot", "display": "1 USD = ฿34.00"
+      },
+      "quotationLines": [
+        {
+          "id": 6,
+          "quotation_id": 3,
+          "product_id": 119,
+          "uom_code": "EA",
+          "qty": 200,
+          "unit_price": 102000,
+          "usd_price": 30,
+          "manual_discount": 0,
+          "discount_type": "amount",
+          "discount": 0,
+          "total_line": 204000,
+          "total_line_usd": 60,
+          "is_delete": false,
+          "created_at": "2026-08-18T09:04:13.000000Z",
+          "created_by": 2,
+          "updated_at": "2026-08-18T10:12:05.000000Z",
+          "updated_by": 2
+        }
+      ],
+      "order": { "id": 3, "order_number": "PO-260818-0002", "status": "open" }
+    }
+  }
+  ```
+
+  ### ระดับบนสุด
+
+  | ฟิลด์ | ความหมาย |
+  |---|---|
+  | `success` | `true` เสมอเมื่อได้ `2xx` — ตัดสินสำเร็จ/ล้มเหลวจาก **HTTP status** เท่านั้น อย่าพึ่งฟิลด์นี้ |
+  | `message` | ข้อความภาษาไทยพร้อมแสดง `"แก้ไขใบเสนอราคาสำเร็จ"` |
+  | `data` | ก้อนข้อมูล 4 ส่วน — `quotation` · `usd_rate` · `quotationLines` · `order` |
+
+  ### `data.quotation` — หัวเอกสารหลังแก้ (**หน่วยบาท**)
+
+  | ฟิลด์ | ความหมาย |
+  |---|---|
+  | `id` | รหัสใบเสนอราคา — เอาไปเรียก `quotation/edit/{id}` หรือเปลี่ยนสถานะต่อได้ |
+  | `quotation_number` | เลขที่เอกสาร **คงเลขเดิมเสมอ** ไม่ออกใหม่ตอนแก้ |
+  | `quotation_date` | วันที่บนเอกสารหลังแก้ — เป็นวันที่ที่ใช้ตัดสินว่าโปรโมชันตัวไหนใช้ได้ |
+  | `status` | `"open"` เสมอ — การแก้ไขรีเซ็ตสถานะกลับทุกครั้ง |
+  | `price_mode` | โหมดภาษีที่ใช้คิดยอดรอบนี้ (`price` · `vat` · `novat`) |
+  | `total_before_discount` | **ยอดรวมหลังหักส่วนลดรายบรรทัดแล้ว** — ที่ยังไม่ได้หักคือส่วนลดท้ายบิลอย่างเดียว (ชื่อหลอก ตรงกับช่อง "รวมราคาสินค้า" บนเว็บ) |
+  | `header_discount` | ส่วนลดท้ายบิลที่ส่งมา |
+  | `total_discount` | ผลรวมส่วนลด**รายบรรทัด**ทั้งใบ (โปรโมชัน + ส่วนลดพิเศษ) — **ไม่รวม** `header_discount` |
+  | `vat_amount` | VAT 7% ที่บวกเข้าไปในยอดรวม · `0` เมื่อ `price_mode = price` |
+  | `total_after_discount` | **ยอดสุทธิที่เก็บเงินจริง** = `total_before_discount + vat_amount − header_discount` แล้ว**ปัดขึ้นเป็นบาทเต็ม** |
+  | `total_after_discount_usd` | ยอดสุทธิเทียบเป็น USD ปัดขึ้นเป็นดอลลาร์เต็ม · `null` = ใบนี้ไม่ได้ผูกกับอัตราใด |
+
+  > ⚠️ `total_before_discount − header_discount` **ไม่เท่ากับ** `total_after_discount` เป๊ะ ๆ เพราะตัวหลังถูกปัดขึ้น (ต่างได้ ≤1 บาท)
+  > ต่างจาก `create` ตรงที่ก้อนนี้**ไม่มี** `quotation_image` — เส้นแก้ไขไม่รับรูป
+
+  ### `data.usd_rate` — อัตราที่ใบนี้ยึดไว้หลังแก้
+
+  `null` ทั้งก้อนเมื่อบริษัทไม่ได้เปิดฟีเจอร์ USD หรือดึงอัตราจาก ธปท. ไม่ได้
+
+  | ฟิลด์ | ความหมาย |
+  |---|---|
+  | `rate` | อัตราขายดิบตามที่ ธปท. ประกาศ — ไว้อ้างอิง/แสดงที่มาเท่านั้น |
+  | `rate_used` | **อัตราที่ใช้คิดเงินจริง** ปัดขึ้นเป็นบาทเต็มแล้ว — แอปต้องใช้ตัวนี้ |
+  | `as_of` | งวดของอัตราที่หยิบมาใช้ (ธปท. ไม่ประกาศวันหยุด ระบบย้อนหางวดล่าสุดที่มีค่า) |
+  | `last_updated` | วันที่ ธปท. ปรับปรุงชุดข้อมูล — คนละตัวกับ `as_of` |
+  | `fetched_at` | เวลาที่ระบบดึงอัตรามา (มี cache ~3 ชม. ค่านี้จึงไม่ใช่เวลาที่กดบันทึก) |
+  | `source` | `bot` = จาก ธปท. · `fallback` = อัตราสำรองใน `.env` |
+  | `display` | ข้อความพร้อมแสดง `"1 USD = ฿34.00"` |
+
+  ### `data.quotationLines[]` — บรรทัดสินค้าหลังแก้ (**หน่วยสตางค์**)
+
+  คืนเฉพาะบรรทัดที่ `is_delete = false` เรียงตาม `id`
+
+  | ฟิลด์ | หน่วย | ความหมาย |
+  |---|---|---|
+  | `id` | | รหัสบรรทัด — **คงเดิม**เมื่อแก้สินค้าตัวเดิม · เป็นเลขใหม่เมื่อเพิ่มสินค้าใหม่ |
+  | `quotation_id` | | รหัสใบเสนอราคาที่บรรทัดนี้สังกัด |
+  | `product_id` | | รหัสสินค้า — **คีย์ที่ระบบใช้จับคู่แถวตอนแก้ไข** |
+  | `uom_code` | | หน่วยนับ ตัดช่องว่างให้แล้ว (`"EA"`) |
+  | `qty` | **×100** | จำนวน — `200` = 2 ชิ้น |
+  | `unit_price` | สตางค์ | **ราคาต่อหน่วยที่เซิร์ฟเวอร์คิดจริง** หลังบีบด้วยราคาขั้นต่ำ หรือหลังแปลงมาจาก `usd_price` — ไม่ใช่ค่าที่แอปส่งมาเสมอไป |
+  | `usd_price` | ดอลลาร์ | ราคาต่อหน่วยสกุล USD ที่ใช้จริง · `null` = บรรทัดนี้คิดเป็นเงินบาท |
+  | `manual_discount` | **ขึ้นกับ `discount_type`** | ส่วนลดพิเศษที่ส่งมา — `amount` = สตางค์ · **`percent` = เปอร์เซ็นต์ ×100** (`1000` = 10%) |
+  | `discount_type` | | `amount` (บาท) หรือ `percent` (%) |
+  | `discount` | สตางค์ | **ส่วนลดรวมของบรรทัดที่คำนวณเสร็จแล้ว** = โปรโมชัน + ส่วนลดพิเศษ · เป็นจำนวนเงินเสมอ ไม่ว่า `discount_type` จะเป็นอะไร |
+  | `total_line` | สตางค์ | ยอดสุทธิของบรรทัด = `qty × unit_price − discount` |
+  | `total_line_usd` | ดอลลาร์ | ยอดสุทธิของบรรทัดเทียบเป็น USD |
+  | `is_delete` | | `false` เสมอในก้อนนี้ (บรรทัดที่ถูกลบไม่ถูกส่งกลับมา) |
+  | `created_at` · `created_by` | | ตอนที่บรรทัดนี้ถูกสร้างครั้งแรก — **ไม่เปลี่ยน**เมื่อแก้ไข |
+  | `updated_at` · `updated_by` | | เวลาที่บันทึกรอบนี้ — บรรทัดที่เพิ่งเพิ่มเข้ามาก็มีค่านี้ ไม่ได้เป็น `null` (จะเป็น `null` เฉพาะบรรทัดที่มาจาก `quotation/create` แล้วยังไม่เคยถูกแก้) |
+
+  > ⚠️ **`manual_discount` กับ `discount` เป็นคนละเรื่องกัน**
+  > `manual_discount` = ค่าที่ผู้ใช้กรอก (อาจเป็น % ) · `discount` = จำนวนเงินที่ลดได้จริงหลังรวมโปรโมชันแล้ว
+  > ตัวอย่าง: `manual_discount: 1000` + `discount_type: "percent"` (= 10%) กับยอด ฿17,204 → `discount: 172040` (= ฿1,720.40)
+
+  ### `data.order` — ใบสั่งขายที่ผูกกัน
+
+  | ฟิลด์ | ความหมาย |
+  |---|---|
+  | `id` | รหัสใบสั่งขาย |
+  | `order_number` | `PO-<YYMMDD>-<running 4 หลัก>` — **คงเลขเดิม** ยกเว้นกรณีที่ใบเดิมหาย ระบบจะออกเลขใหม่ให้ |
+  | `status` | `"open"` เสมอ ตามใบเสนอราคา |
+
+  > ก้อนนี้ไม่มีรายการสินค้าของใบสั่งขายมาด้วย — ถ้าต้องการให้เรียก `order/edit-api/{id}`
+
+  ### ลำดับคีย์ในแต่ละบรรทัด
+
+  เรียงตามลำดับที่ไล่อ่านตามได้ ไม่ใช่ลำดับคอลัมน์ในฐานข้อมูล — เหมือนกันทั้ง `create` และ `update`
+
+  ```
+  ตัวระบุ    id · quotation_id · product_id
+  สินค้า     uom_code
+  จำนวน      qty
+  ราคา       unit_price · usd_price
+  ส่วนลด     manual_discount · discount_type · discount
+  ยอดรวม     total_line · total_line_usd
+  โปรโมชัน   promotion            ← เฉพาะ quotation/create
+  ข้อมูลกำกับ is_delete · created_at · created_by · updated_at · updated_by
+  ```
+
+  ### ฟิลด์ USD รายบรรทัด
+
+  | ฟิลด์ | ความหมาย |
+  |---|---|
+  | `usd_price` | ราคาต่อหน่วยสกุล USD ที่ระบบใช้จริง **หลังปัดขึ้นเป็นดอลลาร์เต็ม** ($29.99 ที่ส่งมา → `30`) · **`null` = บรรทัดนี้คิดเป็นเงินบาท** |
+  | `total_line_usd` | ยอดสุทธิของบรรทัดเทียบเป็น USD — ใช้แสดง `≈ $60.00` ใต้ยอดเงินบาท |
+
+  **`total_line_usd` คำนวณย้อนจากยอดบาท** ไม่ใช่ `usd_price × qty`:
+
+  ```
+  total_line (สตางค์) ÷ 100 ÷ rate_used  แล้วปัดขึ้นเป็นดอลลาร์เต็ม
+  204000 ÷ 100 ÷ 34 = 60.0 → $60
+  ```
+
+  จึงไม่เท่ากับ `usd_price × qty` เสมอไปเมื่อบรรทัดนั้นมีส่วนลด — เช่นยอด ฿1,009.80 → `$30` ไม่ใช่ `$29.7`
+
+  > **`usd_price` เป็น `null` ทั้งที่ตั้งใจขายเป็น USD = ไม่ได้ส่ง `usd_price` มา** แล้วระบบตกไปใช้ราคาบาทของสินค้าแทน
+  > ใช้ฟิลด์นี้เป็นตัวตรวจว่าเส้นทาง USD ทำงานจริงหรือเปล่า
+
+  ### ⚠️ หน่วยเงินในแต่ละ block
+
+  | block | หน่วย |
+  |---|---|
+  | `data.quotation` | **บาท** — `total_after_discount: 54944` = ฿54,944.00 |
+  | `data.quotationLines` | **สตางค์** — `unit_price: 102000` = ฿1,020.00 · `qty: 200` = 2 ชิ้น |
+  | `usd_price` · `total_line_usd` · `total_after_discount_usd` | **ดอลลาร์** |
+
+  `quotationLines` คืนเฉพาะบรรทัดที่ `is_delete = false` เรียงตาม `id` — บรรทัดที่เพิ่งถูกลบไม่โผล่กลับมา
+
+  ---
+
+  ## 6. สิ่งที่ถูกอัปเดตพร้อมกัน
+
+  | อะไร | รายละเอียด |
+  |---|---|
+  | **ใบสั่งขายที่ผูกกัน** | ยอดชุดเดียวกัน · สถานะกลับเป็น `open` · `commission_status = 1` |
+  | **บรรทัดใบสั่งขาย** | แก้/เพิ่ม/ลบ ตามใบเสนอราคา |
+  | **เงื่อนไข** | `updateOrCreate` เข้า `quotation_conditions` |
+  | **แถว `usd_rate_logs`** | `action = update` |
+
+  > **ไม่มีใบสั่งขายผูกอยู่ = สร้างให้ใหม่** (ออกเลข `PO-` ใหม่) พร้อม `commission_status = 0`
+  > ⚠️ **เงื่อนไขที่เอาออกจาก payload ไม่ถูกลบ** — ต่างจากบรรทัดสินค้า เงื่อนไขเก่าที่เคยติ๊กไว้จะค้างอยู่
+
+  ---
+
+  ## 7. Error
+
+  | HTTP | เมื่อไหร่ | รูปแบบ |
+  |:---:|---|---|
+  | `401` | token หาย/หมดอายุ | `{status, message, code}` |
+  | `403` | เอกสารไม่อยู่ในสถานะที่แก้ได้ | `{success: false, message}` |
+  | `404` | ไม่พบใบเสนอราคา `{id}` นั้น | Laravel `ModelNotFoundException` |
+  | `422` | validation ไม่ผ่าน | `{message: "Validation failed.", errors: {...}}` |
+  | `422` | ราคาต่อหน่วยต่ำกว่าขั้นต่ำ | `errors: {"quotation_lines.0.unit_price": [...]}` |
+  | `422` | ส่ง `usd_price` แต่ใช้ไม่ได้ | `{success: false, code: "usd_pricing_disabled" \| "usd_rate_unavailable"}` |
+  | `500` | ข้อผิดพลาดอื่น (rollback แล้ว) | `{success: false, message, error}` |
+
+  ---
+
+  ## 8. ตัวอย่างการยิง
+
+  ```bash
+  BASE="https://silvercolorcupslt.followonecrm.com/api/v1"
+  AUTH="Authorization: Bearer $TOKEN"
+
+  curl -s -X POST "$BASE/quotation/update/3" \
+    -H "$AUTH" -H "Content-Type: application/json" -H "Accept: application/json" \
+    -d '{
+      "customer_id": 4,
+      "quotation_date": "2026-08-18",
+      "header_discount": 1000,
+      "price_mode": "price",
+      "note": "แก้ไขราคาตามที่ตกลงใหม่",
+      "quotation_lines": [
+        {"product_id":119,"qty":2,"usd_price":29.99,"manual_discount":0,"discount_type":"amount","uom_code":"EA"},
+        {"product_id":121,"qty":1,"usd_price":505.60,"manual_discount":0,"discount_type":"amount","uom_code":"EA"}
+      ],
+      "conditions": []
+    }' | jq '.data.quotationLines[] | {product_id, unit_price, total_line, usd_price, total_line_usd}'
+  ```
+
+  ```json
+  {"product_id":119,"unit_price":102000,"total_line":204000,"usd_price":30,"total_line_usd":60}
+  {"product_id":121,"unit_price":1720400,"total_line":1720400,"usd_price":506,"total_line_usd":506}
+  ```
+
+  > ตัวอย่างนี้ส่งมา 2 บรรทัด — ถ้าเอกสารเดิมมี 3 บรรทัด **สินค้าตัวที่ 3 จะถูกลบทิ้ง**
+
+  ---
+
+  ## 9. กับดัก
+
+  | # | เรื่อง | ต้องทำอะไร |
+  |:---:|---|---|
+  | 1 | **ไม่รองรับ partial update** | ส่งรายการสินค้ามาให้ครบทุกครั้ง ไม่งั้นของที่ไม่ได้ส่งหายหมด |
+  | 2 | หนึ่ง `product_id` ได้หนึ่งบรรทัด | สินค้าเดียวกันคนละหน่วยนับในใบเดียวไม่ได้ |
+  | 3 | สถานะถูกรีเซ็ตเป็น `open` เสมอ | ใบที่ยืนยันแล้วแก้ไม่ได้อยู่แล้ว (`403`) |
+  | 4 | อัตรา USD ถูกเขียนทับด้วยอัตราวันที่แก้ | ยอดของบรรทัด USD เปลี่ยนตามอัตราใหม่ — ดูประวัติที่ `usd_rate_logs` |
+  | 5 | เงื่อนไขที่เอาออกไม่ถูกลบ | ต่างจากบรรทัดสินค้า — ยังต้องลบเองถ้าจำเป็น |
+  | 6 | คืน `201` ไม่ใช่ `200` | ตัดสินสำเร็จจากช่วง 2xx อย่าเทียบ `=== 200` |
+  | 7 | `quotation` เป็นบาท / `quotationLines` เป็นสตางค์ | อย่าใช้ parser ตัวเดียวกับทั้งสอง block |
+  | 8 | ลืม `usd_price` แล้วระบบไม่เตือน | เช็ค `quotationLines[].usd_price` ต้องไม่เป็น `null` |
+
+  ## 10. สิ่งที่แก้ไปแล้ว (2026-08-18)
+
+  | เดิม | ตอนนี้ |
+  |---|---|
+  | บรรทัดที่เอาออกจาก payload **ค้างอยู่ในฐานข้อมูล** — ยอดรวมคิดจาก payload แต่รายการยังมีของเก่า ผลบวกจึงไม่ตรงกับยอดรวม | ตั้ง `is_delete = true` ให้บรรทัดที่หายไป ทั้งใบเสนอราคาและใบสั่งขาย |
+  | response ไม่มีข้อมูล USD รายบรรทัด | เพิ่ม `usd_price` + `total_line_usd` |
+  | `uom_code` มีช่องว่างต่อท้าย (`"EA "`) | ตัดให้แล้ว (`"EA"`) |
+  | `message` เขียนว่า `"สร้างใบเสนอราคาสำเร็จ"` | `"แก้ไขใบเสนอราคาสำเร็จ"` |
+  | `quotation/list` แสดงบรรทัดที่ถูกลบไปแล้วด้วย | กรอง `is_delete = false` ใน join |
+
+  > ⚠️ ถ้าแอปเคยแสดงข้อความจาก `message` ตรง ๆ ข้อความจะเปลี่ยนไป
+
+  ---
+
+  *อัปเดตล่าสุด: 2026-08-18 · อ้างอิงจาก [`ApiQuotationController::quotation_update_api()`](../app/Http/Controllers/Api/ApiQuotationController.php)*

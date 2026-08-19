@@ -8,7 +8,7 @@ http:
   url: https://nicharpn.uat-followonecrm.com/api/v1/profilelist/4
   auth:
     type: bearer
-    token: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwczovL25pY2hhcnBuLnVhdC1mb2xsb3dvbmVjcm0uY29tL2FwaS92MS9sb2dpbiIsImlhdCI6MTc4NTM4NDc3MywiZXhwIjoxNzg1Mzg4MzczLCJuYmYiOjE3ODUzODQ3NzMsImp0aSI6IjF2TTYxRXhsdmRzOVZ3NTEiLCJzdWIiOiI0IiwicHJ2IjoiMjNiZDVjODk0OWY2MDBhZGIzOWU3MDFjNDAwODcyZGI3YTU5NzZmNyJ9.7j81yFTdAeVI61zO6sxFw04MTH0NJY_LVU0oPKOfkgY
+    token: "{{token}}"
 
 settings:
   encodeUrl: true
