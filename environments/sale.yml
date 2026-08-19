@@ -6,3 +6,4 @@ variables:
     value: http://sunnypop.localhost:8000
   - secret: true
     name: token
+    description: ""
