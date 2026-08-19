@@ -1,0 +1,47 @@
+info:
+  name: calendar-all-customer
+  type: http
+  seq: 7
+
+http:
+  method: GET
+  url: "{{sale_uat}}/api/v1/calendar/all/customer"
+  auth:
+    type: bearer
+    token: "{{token}}"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+
+docs: |-
+  ## 7. `GET /api/v1/calendar/all/customer`
+
+  นัดหมาย **ทั้งบริษัท ทุกเซลส์ ทุกเดือน** (ไม่กรองอะไรเลยนอกจาก `is_delete`) — ตั้งใจให้เห็นภาพรวม
+
+  ```json
+  { "global_schedule": [
+    { "id": 5, "customer_id": 3, "customer_name": "อนัญพร",
+      "formatted_name": "บริษัท อนัญพร จำกัด",
+      "contact_name": "...", "customer_tel": "...",
+      "contact_type_name": "โทรศัพท์ (Phone Call)",
+      "relationship_topic": "...",
+      "sale_name": "นิชาพร พินิจนันท์",
+      "follow_date": "2026-08-15", "time_start": "09:00", "mode": "scheduled",
+      "visit_pic": "crm/visit_pics/...",
+      "visit_pic_url": "https://...&X-Amz-Expires=600&..." } ] }
+  ```
+
+  | ฟิลด์ | ความหมาย |
+  |---|---|
+  | `formatted_name` | ชื่อลูกค้าเติมคำนำหน้าตามประเภทธุรกิจ |
+  | `sale_name` | ชื่อเต็มของเซลส์ที่รับผิดชอบลูกค้ารายนั้น |
+  | `visit_pic_url` | presigned 10 นาที (`null` ถ้าไม่มีรูป) |
+
+  เรียงตาม `created_at` ล่าสุดก่อน · **ไม่แบ่งหน้าและไม่กรองเดือน** — บริษัทที่ใช้งานมานานจะได้ข้อมูลก้อนใหญ่มาก
+
+  > ถ้าต้องการเฉพาะนัดหมายของตัวเองในเดือนปัจจุบัน ใช้ `GET calendar` แทน — ดู [api-dashboard.md](api-dashboard.md#6-get-apiv1calendar)
+
+  ---

@@ -1,0 +1,30 @@
+info:
+  name: create-debt-reduction
+  type: http
+  seq: 4
+
+http:
+  method: POST
+  url: "{{sale_uat}}/api/v1/debt-reduction/store"
+  body:
+    type: json
+    data: |-
+      {
+          "customer_id": 1,
+          "order_id": 12,
+          "total_amount": 1500.50,
+          "note": "สินค้าชำรุด",
+          "items": [
+            { "selected": "1", "order_item_id": 45, "quantity": 2, "unit_price": 500 },
+            { "selected": "0", "order_item_id": 46, "quantity": 1, "unit_price": 300 }
+          ]
+        }
+  auth:
+    type: bearer
+    token: "{{token}}"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

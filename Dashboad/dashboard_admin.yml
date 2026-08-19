@@ -1,0 +1,56 @@
+info:
+  name: dashboard_admin
+  type: http
+  seq: 5
+
+http:
+  method: GET
+  url: "{{sale_uat}}/api/v1/user/dashboard/admin"
+  auth:
+    type: bearer
+    token: "{{token}}"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+
+docs: |-
+  ## 3. `GET /api/v1/user/dashboard/admin`
+
+  แดชบอร์ดระดับบริษัท — **level 2 (เซลส์) เข้าไม่ได้ ได้ 403**
+
+  **query:** `month` + `year` (ต้องส่งคู่กัน ถ้าส่งไม่ครบจะใช้เดือนปัจจุบัน)
+
+  ```json
+  { "status": true, "message": "Success", "data": {
+      "sales_users": { "total": 2, "percent": 12.5 },
+      "customers":   { "total": 15, "percent": 8.3 },
+      "products":    { "total": 4, "percent": 2.1 },
+      "order_summary": {
+        "openSalesOrder": 5, "confirmedSalesOrder": 3, "approvedCount": 2,
+        "pending_billing_Count": 1, "pending_dispatch_Count": 2,
+        "shippedCount": 4, "completedCount": 12, "cancelledCount": 1
+      },
+      "relationship_type_by_user": [...],
+      "top6_user_sales_order": [...],
+      "total_all_sales": "1,234,567.00" }}
+  ```
+
+  | ฟิลด์ | ความหมาย |
+  |---|---|
+  | `sales_users` / `customers` / `products` | `total` = จำนวนที่**เพิ่มขึ้นเดือนนี้** · `percent` = เทียบกับเดือนที่แล้ว |
+  | `order_summary` | จำนวนใบสั่งขายแยกตามสถานะ — **key ไม่ตรงกับของ `user/dashboard`** (`pending_billing_Count` vs `waitingForBilling`) |
+  | `top6_user_sales_order` | 6 อันดับเซลส์ยอดสูงสุด พร้อม `percentage` และ `profile_img_url` |
+  | `total_all_sales` | ยอดขายรวมทั้งบริษัท (string มีคอมมา) |
+
+  | HTTP | เงื่อนไข |
+  |:---:|---|
+  | `401` | token ไม่ผ่าน |
+  | `403` | `level == 2` → `{status:false, message:"Unauthorized: You do not have permission..."}` |
+  | `500` | `{status:false, message:"Server Error", debug:"..."}` |
+
+  > ⚠️ เช็คแค่ `level == 2` เท่านั้น — level 3 (บัญชี) และ 4 (คลัง) **เข้าได้** ถ้าตั้งใจให้เฉพาะแอดมิน ควรเปลี่ยนเป็น `! in_array($user->level, [0,1])`
+
+  ---

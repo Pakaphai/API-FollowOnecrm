@@ -1,0 +1,17 @@
+info:
+  name: delete-debt-reduction
+  type: http
+  seq: 5
+
+http:
+  method: POST
+  url: "{{sale_uat}}/api/v1/debt-reduction/delete/6"
+  auth:
+    type: bearer
+    token: "{{token}}"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

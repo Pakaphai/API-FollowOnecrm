@@ -1,0 +1,142 @@
+info:
+  name: update-user
+  type: http
+  seq: 4
+
+http:
+  method: POST
+  url: "{{sale_uat}}/api/v1/user/update/4"
+  body:
+    type: multipart-form
+    data:
+      - name: profile_img
+        type: text
+        value: ""
+        disabled: true
+      - name: email
+        type: text
+        value: ""
+        disabled: true
+      - name: firstname
+        type: text
+        value: นิชาพร
+      - name: lastname
+        type: text
+        value: พินิจนันท์
+      - name: phone
+        type: text
+        value: "0985632134"
+      - name: address
+        type: text
+        value: 8/8 ถ.นาคราช แขวงคลองมหานาค เขตป้อมปราบ
+      - name: subdistrict
+        type: text
+        value: "770502"
+      - name: district
+        type: text
+        value: "7705"
+      - name: province
+        type: text
+        value: "77"
+      - name: tax_id
+        type: text
+        value: "7849309876895"
+  auth:
+    type: bearer
+    token: "{{token}}"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+
+docs: |
+  ## 3. `POST /api/v1/user/update/{id}`
+
+  แก้ไขโปรไฟล์ — `multipart/form-data` (มีอัปโหลดรูป)
+
+  | ฟิลด์ | กติกา |
+  |---|---|
+  | `profile_img` | image · jpeg,png,jpg · ≤ **2MB** |
+  | `firstname` · `lastname` | ≤255 + **ตัวอักษรเท่านั้น** (ห้ามตัวเลข/อักขระพิเศษ) |
+  | `email` | รูปแบบอีเมล · ≤255 · **unique** (ยกเว้นตัวเอง) |
+  | `phone` | รูปแบบเบอร์ไทย (`ThaiPhone::RULE`) |
+  | `tax_id` | ≤255 — ขีดกลางถูกตัดออกอัตโนมัติ |
+  | `position_id` | integer |
+  | `address` · `subdistrict` · `district` · `province` | ≤255 (ส่งเป็น **code**) |
+
+  ทุกฟิลด์เป็น `nullable` → **ส่งมาแค่บางตัวได้** แต่ดู ⚠️ ข้างล่าง
+
+  ```json
+  { "success": true, "message": "อัปเดตข้อมูลสำเร็จ", "data": { ...ค่าที่เขียนลง DB... } }
+  ```
+
+  | HTTP | เงื่อนไข |
+  |:---:|---|
+  | `422` | ผิดกติกา → `{success:false, message: <ข้อความแรก>, errors:{...}}` |
+  | `500` | `{success:false, error:"เกิดข้อผิดพลาด...", message: <exception>}` |
+
+  ### ⚠️ ส่งไม่ครบ = ข้อมูลเดิมถูกลบ
+
+  controller สร้าง `$data` แบบไม่มีเงื่อนไข:
+
+  ```php
+  $data = [
+      'firstname'   => $request->firstname,   // ไม่ส่งมา → null
+      'lastname'    => $request->lastname,
+      'phone'       => $request->phone,
+      'email'       => $request->email,
+      'position_id' => $request->position_id,
+      'address'     => $request->address,
+      ...
+  ];
+  $user->update($data);
+  ```
+
+  **ส่งมาแค่ `firstname` → `email`, `phone`, `address`, `position_id`, `tax_id` จะกลายเป็น `null` ทั้งหมด**
+
+  เส้นนี้จึงทำงานแบบ **PUT (แทนที่ทั้งก้อน)** ไม่ใช่ PATCH ทั้งที่ validation เป็น `nullable` — ฝั่งแอปต้องส่งค่าเดิมกลับมาให้ครบทุกครั้ง
+
+  **วิธีแก้ฝั่ง server:**
+  ```php
+  $data = $request->only([
+      'firstname','lastname','phone','email','position_id',
+      'address','subdistrict','district','province','tax_id',
+  ]);   // ส่งอะไรมาก็อัปเดตแค่นั้น
+  ```
+
+  ### ⚠️ ฟิลด์ที่ถูกเขียนทับทุกครั้งโดยไม่ได้ตั้งใจ
+
+  ```php
+  'has_logged_in' => true,
+  'user_type'     => '0',
+  'responsible'   => '0',
+  ```
+
+  - `has_logged_in = true` — แก้โปรไฟล์ครั้งเดียวก็ทำให้ธง `is_first_login` / `must_run_system_setup` ของ [api-login.md](api-login.md) เปลี่ยนถาวร
+  - `responsible = '0'` — **ล้างผู้รับผิดชอบ/หัวหน้าทิ้งทุกครั้ง** (ฟิลด์ที่ `profilelist` เอาไปทำ `responsible_name`)
+
+  ถ้าไม่ได้ตั้งใจ ควรเอาสามบรรทัดนี้ออกจาก `$data`
+
+  ### ⚠️ รูปเก่าไม่เคยถูกลบ
+
+  ```php
+  if (! empty($relationship->visit_pic)) {   // ← $relationship ไม่มีอยู่จริงในเมธอดนี้
+      ...ลบรูปเก่า...
+  }
+  ```
+
+  `$relationship` เป็นตัวแปรที่ไม่ได้ประกาศ (คัดลอกมาจาก controller นัดหมาย) — `empty()` ของตัวแปรที่ไม่มีอยู่คืน `true` เงื่อนไขจึงเป็น `false` เสมอ **บล็อกลบรูปเก่าไม่เคยทำงาน** ไม่ crash แต่ไฟล์เก่าค้างสะสมบน S3 เรื่อย ๆ
+
+  **วิธีแก้:**
+  ```php
+  $current = User::find($id);
+  if ($current && ! empty($current->profile_img) && $disk->exists($current->profile_img)) {
+      $disk->delete($current->profile_img);
+  }
+  ```
+
+  > `data` ที่คืนกลับมาเป็น array ที่เขียนลง DB ไม่ใช่ข้อมูลจริงจากโมเดล และมี `profile_img` เป็น **path ดิบ** ปนมาด้วย — อย่าเอาไปแสดงตรง ๆ ให้เรียก `profilelist/{id}` ใหม่แทน
+
+  ---

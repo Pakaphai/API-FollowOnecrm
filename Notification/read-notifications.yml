@@ -1,0 +1,17 @@
+info:
+  name: read-notifications
+  type: http
+  seq: 4
+
+http:
+  method: POST
+  url: "{{sale_uat}}/api/v1/notifications/c93dc213-0817-40cc-aeb3-04b283a83323/read"
+  auth:
+    type: bearer
+    token: "{{token}}"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

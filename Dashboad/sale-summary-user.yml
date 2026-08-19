@@ -1,0 +1,142 @@
+info:
+  name: sale-summary-user
+  type: http
+  seq: 1
+
+http:
+  method: GET
+  url: "{{sale_uat}}/api/v1/sale-summary-user"
+  auth:
+    type: bearer
+    token: "{{token}}"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+
+docs: |-
+  ## 1. `GET /api/v1/sale-summary-user`
+
+  สรุปผลงานการขายของ **ผู้ใช้ที่ login เท่านั้น** — กราฟเปรียบเทียบปีนี้กับปีที่แล้ว + ตัวเลขสรุป 8 ตัว
+
+  ```
+  GET /api/v1/sale-summary-user
+  Authorization: Bearer <token>
+  Accept: application/json
+  ```
+
+  | | |
+  |---|---|
+  | Controller | [`Api\ApiUserController::saleSummaryUser()`](../app/Http/Controllers/Api/ApiUserController.php) |
+  | ขอบเขตข้อมูล | ลูกค้าที่ `customers.user_id = ตัวเอง` |
+
+  ### พารามิเตอร์
+
+  **ไม่มีเลย** — เดือน/ปีถูก hardcode เป็น `now()` ส่งอะไรมาก็ถูกเมิน (ตรงกับที่เห็นใน Postman ว่า Query ว่างเปล่า)
+
+  > ต่างจาก `user/dashboard`, `contact-rank`, `sales-rank` ที่รับ `date` ได้ — เส้นนี้ดูย้อนหลังไม่ได้
+
+  ### Response — `200 OK`
+
+  ```json
+  {
+    "status": true,
+    "message": "Success",
+    "data": {
+      "chartData": {
+        "labels": ["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."],
+        "currentYear": 2026,
+        "lastYear": 2025,
+        "currentData": [0, 12500.00, 8900.50, 0, 0, 0, 0, 45000.00, 0, 0, 0, 0],
+        "lastData":    [3200.00, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+      },
+      "salesThisYear": "66,400.50",
+      "salesThisMonth": "45,000.00",
+      "receivedAmount": "120,000.00",
+      "outstandingAmount": 18500.75,
+      "totalCreditNoteThisMonth": "0.00",
+      "successfulReturningCustomers": 3,
+      "totalNewCustomersThisMonth": 2,
+      "totalNewCustomers": 2
+    }
+  }
+  ```
+
+  ### `chartData` — กราฟรายเดือน
+
+  | ฟิลด์ | ความหมาย |
+  |---|---|
+  | `labels` | ชื่อเดือนไทยย่อ 12 ตัว — **คงที่เสมอ** เอาไปเป็นแกน X ได้เลย |
+  | `currentYear` / `lastYear` | ปี ค.ศ. ของแต่ละชุดข้อมูล |
+  | `currentData` | ยอดขาย 12 เดือนของปีนี้ (**บาท**, index 0 = ม.ค.) |
+  | `lastData` | ยอดขาย 12 เดือนของปีที่แล้ว |
+
+  array มี 12 ช่องเสมอ เดือนที่ไม่มียอดเป็น `0` — วาดกราฟได้โดยไม่ต้องเช็ค null
+
+  ### ตัวเลขสรุป
+
+  | ฟิลด์ | ชนิด | ที่มา | ขอบเขตเวลา |
+  |---|---|---|---|
+  | `salesThisYear` | **string** `"66,400.50"` | `orders` (คิดสด) | ปีนี้ |
+  | `salesThisMonth` | **string** | `orders` (คิดสด) | เดือนนี้ |
+  | `receivedAmount` | **string** | `payment_received_summary` | ⚠️ **ตลอดกาล** ไม่ใช่เดือนนี้ |
+  | `outstandingAmount` | **number** `18500.75` | `orders` (คิดสด) | ทุกช่วงเวลา |
+  | `totalCreditNoteThisMonth` | **string** | `debt_reductions` | เดือนนี้ |
+  | `successfulReturningCustomers` | int | `customer_behavior_summary` | เดือนนี้ |
+  | `totalNewCustomersThisMonth` | int | `customer_behavior_summary` | เดือนนี้ |
+  | `totalNewCustomers` | int | — | **ค่าเดียวกับบรรทัดบนเป๊ะ ๆ** |
+
+  ⚠️ **ชนิดข้อมูลไม่สม่ำเสมอ** — ยอดเงิน 4 ตัวเป็น **string มีคอมมา** (`"66,400.50"`) แต่ `outstandingAmount` เป็น **number ดิบ** (`18500.75`) แอปต้อง parse คนละแบบ ดู [หมายเหตุข้อ 3](#3-outstandingamount-เป็น-number-ตัวอื่นเป็น-string)
+
+  ### นิยามของแต่ละตัวเลข
+
+  **`salesThisYear` / `salesThisMonth`** — ยอดขายที่ปิดจบแล้วจริง
+  ```sql
+  orders.status = 'completed' AND orders.payment_status = 'paid'
+  AND customers.user_id = ฉัน
+  AND YEAR(orders.created_at) = ปีนี้     -- ⚠️ created_at ไม่ใช่ order_date
+  ```
+
+  **`receivedAmount`** — ผลรวม `slip_amount` ของสลิปทุกใบที่เคยอัปโหลด **ไม่จำกัดช่วงเวลา**
+
+  **`outstandingAmount`** — ยอดค้างชำระ
+  ```
+  orders.status ∈ ['completed', 'shipped']  AND  payment_status = 'unpaid'
+  ```
+
+  **`totalCreditNoteThisMonth`** — ใบลดหนี้เดือนนี้ที่ `status ∈ ['approved','commissioned']` นับตาม `reduction_date`
+
+  **`successfulReturningCustomers`** — ลูกค้าที่สร้างไว้**ก่อน**เดือนนี้ แล้วกลับมาซื้อในเดือนนี้ (นับตาม `order_date`)
+
+  **`totalNewCustomersThisMonth`** — ลูกค้าที่ถูกสร้าง**ในเดือนนี้** และมีบิลที่ `completed` + `paid` แล้ว (ลูกค้าใหม่ที่ยังไม่ปิดการขายจะไม่ถูกนับ)
+
+  ### ความสดของข้อมูล
+
+  3 ใน 8 ตัวมาจาก **ตารางสรุป** ที่ refresh ด้วย cron ไม่ได้คิดสด:
+
+  ```
+  routes/console.php
+  └─ Schedule::command('summary:refresh')->everyMinute();
+        └─ monthly_sales_summary      →  chartData
+        └─ payment_received_summary   →  receivedAmount
+        └─ customer_behavior_summary  →  successfulReturningCustomers, totalNewCustomers*
+        └─ outstanding_summary        →  ⚠️ refresh ไว้แต่ "ไม่มีใครอ่าน" ในเส้นนี้
+  ```
+
+  **ล่าช้าได้ถึง ~1 นาที** — ถ้าเพิ่งปิดการขายแล้วกราฟยังไม่ขยับ ให้รอรอบ cron ถัดไป ไม่ใช่บั๊ก
+
+  รันเองได้ด้วย:
+  ```bash
+  php artisan summary:refresh
+  ```
+
+  ### Error
+
+  | HTTP | เงื่อนไข |
+  |:---:|---|
+  | `401` | token หาย/หมดอายุ/ผิด (จาก middleware) |
+  | `500` | DB ล่ม — **ไม่มี try/catch** ในเมธอดนี้ |
+
+  ---

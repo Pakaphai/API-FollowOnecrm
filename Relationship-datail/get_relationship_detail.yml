@@ -1,0 +1,84 @@
+info:
+  name: get_relationship_detail
+  type: http
+  seq: 5
+
+http:
+  method: GET
+  url: "{{sale_uat}}/api/v1/relationship-detail/6"
+  auth:
+    type: bearer
+    token: "{{token}}"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+
+docs: |
+  ## 15. `GET /api/v1/relationship-detail/{id}`
+
+  ⚠️ ชื่อ path ชวนเข้าใจผิด — **`{id}` ที่นี่คือ `customer_id` ไม่ใช่ `relationship_detail_id`**
+  คืน **นัดหมายทุกใบของลูกค้ารายนั้น** เรียงตาม `visit_number` จากน้อยไปมาก
+
+  ```bash
+  curl -s "$BASE/relationship-detail/12" -H "$AUTH" -H "Accept: application/json" | jq
+  ```
+
+  ```json
+  {
+    "status": "success",
+    "data": {
+      "details": [
+        {
+          "id": 88,
+          "customer_id": 12,
+          "visit_number": "VIS202608-0001",
+          "customer_name": "ร้านกาแฟบ้านสวน",
+          "formatted_name": "บริษัท ร้านกาแฟบ้านสวน จำกัด",
+          "customer_scope": "domestic",
+          "customer_scope_label": "ลูกค้าในประเทศ",
+          "contact_type_name": "เข้าพบ",
+          "visit_conclusion_name": "สนใจ",
+          "relationship_status_name": "กำลังเจรจา",
+          "mode": "completed",
+          "visit_pic_url": "https://...?X-Amz-Signature=..."
+        }
+      ]
+    }
+  }
+  ```
+
+  ### อธิบายตัวแปรใน response ทุกตัว
+
+  | ฟิลด์ | ชนิด | อธิบาย |
+  |---|---|---|
+  | `status` | string | `"success"` เสมอ — เส้นนี้ไม่มีเคส error (ลูกค้าไม่มีอยู่จริงก็ได้ `success` + array ว่าง) |
+  | `data.details` | array | รายการนัดหมายทั้งหมดของลูกค้ารายนั้น เรียงตาม `visit_number` น้อย→มาก (= เก่า→ใหม่) |
+
+  **ฟิลด์ในแต่ละรายการของ `details[]`**
+
+  | ฟิลด์ | ความสำคัญ | อธิบาย |
+  |---|:---:|---|
+  | `id` | 🔴 | id ของนัดหมาย ใช้ยิงเส้น update/submit/delete/late-status ต่อ |
+  | `visit_number` | 🔴 | เลขครั้งที่ติดต่อ ใช้เป็นหัวข้อรายการ ("ครั้งที่ ...") |
+  | `mode` | 🔴 | `scheduled` = นัดค้าง · `completed` = ติดต่อแล้ว — ใช้แยกสีหรือแยกแท็บ |
+  | `follow_date` · `time_start` · `time_end` | 🔴 | วัน-เวลานัด |
+  | `contact_type_name` | 🔴 | ชื่อไทยของประเภทการติดต่อ แสดงได้เลย (คู่กับ `contact_type_id`) |
+  | `relationship_status_name` | 🟡 | ชื่อไทยของสถานะความสัมพันธ์ (คู่กับ `relationship_status_id`) |
+  | `visit_conclusion_name` | 🟡 | ชื่อไทยของสรุปผลการเข้าพบ (คู่กับ `visit_conclusion_id`) |
+  | `contact_detail` | 🟡 | บันทึกย่อของการติดต่อครั้งนั้น |
+  | `visit_pic_url` | 🔴 | **signed URL อายุ 10 นาที** · `visit_pic` (path ดิบ) ถูกลบออกจาก response เส้นนี้ · ไม่มีรูป = `null` |
+  | `latitude` / `longitude` | 🟡 | พิกัดที่บันทึกไว้ คืนมาเป็น string |
+  | `customer_name` | 🟡 | ชื่อลูกค้าดิบ |
+  | `formatted_name` | 🔴 | ชื่อลูกค้าพร้อมคำนำหน้าตามประเภทนิติบุคคล เอาไปแสดงได้เลย |
+  | `contact_name` · `business_type_id` | 🟢 | ผู้ติดต่อ / ประเภทนิติบุคคล |
+  | `customer_scope` | 🟢 | คีย์ภาษาอังกฤษ `domestic` / `international` |
+  | `customer_scope_label` | 🟡 | **ชื่อไทยของ `customer_scope`** ระบบแปลงมาให้แล้ว ไม่ต้อง map เอง |
+  | `relationship_id` · `occasion` · `follow_status_id` · `created_by` · `updated_by` · `created_at` · `updated_at` · `is_delete` | 🟢 | คอลัมน์ที่เหลือของตาราง ส่งมาครบเพราะ query ใช้ `relationship_details.*` |
+
+  - ลูกค้าไม่มีนัดหมายเลย → `details: []` (ไม่ใช่ 404)
+  - นัดหมายที่ `is_delete = true` ถูกกรองออกให้แล้ว
+
+  > ต้องการนัดหมาย **1 ใบ** ตาม detail id ให้ใช้ [`GET relationship-detail/edit-contact/{id}`](#9-get-apiv1relationship-detailedit-contactid) แทน

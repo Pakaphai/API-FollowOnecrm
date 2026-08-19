@@ -1,0 +1,314 @@
+info:
+  name: login-googleAuth
+  type: http
+  seq: 3
+
+http:
+  method: GET
+  url: "{{sale_uat}}/api/v1/login/google"
+  body:
+    type: json
+    data: |-
+      { "id_token": "eyJhbGciOiJSUzI1NiIsImtpZCI6IjMwZmUwZTIzYzRkNmUzNmM1MjU3N2IxZTJmZWZkMWFiYzM4ODk1ZGUiLCJ0eXAiOiJKV1QifQ.eyJpc3MiOiJodHRwczovL2FjY291bnRzLmdvb2dsZS5jb20iLCJhenAiOiIxNjc3MzUzNjYwNzMtb3Jub3V1bGNhc2g2bXJsMW9ybmI3OW41OGhpOXA1bGUuYXBwcy5nb29nbGV1c2VyY29udGVudC5jb20iLCJhdWQiOiIxNjc3MzUzNjYwNzMtb3Jub3V1bGNhc2g2bXJsMW9ybmI3OW41OGhpOXA1bGUuYXBwcy5nb29nbGV1c2VyY29udGVudC5jb20iLCJzdWIiOiIxMDcyMjIwMzYxNjA2NTQyNzA1NTAiLCJlbWFpbCI6Imx1bmFyaWUuMThseEBnbWFpbC5jb20iLCJlbWFpbF92ZXJpZmllZCI6dHJ1ZSwiYXRfaGFzaCI6ImJqTm03U0RrUTd4amY2TzdPYndKOEEiLCJuYW1lIjoibHVuYXJpZSIsInBpY3R1cmUiOiJodHRwczovL2xoMy5nb29nbGV1c2VyY29udGVudC5jb20vYS9BQ2c4b2NLQmZhNUd2bVBTU2RZd01uRTJxcDRMeWVMajQzeWlUOW81aDFlWm9ZYVNkb0RoVmc9czk2LWMiLCJnaXZlbl9uYW1lIjoibHVuYXJpZSIsImlhdCI6MTc4NTIxNzIxNywiZXhwIjoxNzg1MjIwODE3fQ.j1jawc3T9boGPEDQamVqFTusnnw_-OhMapKaj4dgiBByik3hZRDtTI1prnrwEMWIZGl5_cdkaesMEX-C3vwR1_Hv23Z9nSUT6jdH_AqBP6qTsLf9HjzwU9fCZueZqbp7GmQZNYUyZ62e5HWa61XMko9Dp57zTMUQCDa7xENLTZse0IDDbQhdnnIAiZmX4Nytw7KcAK-SfbdV8RA12ubbAnHMRKJ0zITfeyO2_x0AhJQEyFRm7LOoDNTCet1DO3pz_FIFsmQ0SMW4rI2yH8YxY1YcJ6VDEtER-QooTxBReLR7yVVoWeTRGdt6otcz9liawN5R6eHsPfNT_koVBvL44A", 
+       "device_id": "550e8400-e29b-41d4-a716-446655440000" }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+
+docs: |
+  # API — เข้าสู่ระบบด้วย Google (ผ่าน BukkhonID)
+
+  เข้าสู่ระบบด้วยบัญชี Google โดยใช้ **BukkhonID เป็นตัวกลางยืนยันตัวตน** แล้วออก JWT ของ CRM ให้เหมือน login ปกติ
+
+  ```
+  POST /api/v1/login/google
+  Content-Type: application/json
+  Accept: application/json
+  ```
+
+  > ⚠️ **เป็น `POST` ไม่ใช่ `GET`** — ถ้ายิงด้วย `GET` จะได้ `405 Method Not Allowed` (หรือหน้า HTML ถ้าไม่ได้แนบ `Accept: application/json`) แม้จะใส่ body มาถูกต้องแล้วก็ตาม
+
+  | | |
+  |---|---|
+  | Route | [`routes/api/api_v1.php`](../routes/api/api_v1.php) — เส้น **public** อยู่นอก `middleware('auth_api')` |
+  | Controller | [`Auth\ApiAuthController::loginWithGoogle()`](../app/Http/Controllers/Auth/ApiAuthController.php) |
+  | Response | **โครงสร้างเดียวกับ [`POST /login`](api-login.md) เป๊ะ ๆ** (ใช้ `issueTokenForUser()` ร่วมกัน) |
+
+  ---
+
+  ## 1. ภาพรวมการทำงาน
+
+  CRM **ไม่ได้ verify ลายเซ็นของ Google ID Token เอง** — ส่งต่อให้ BukkhonID เป็นคนตรวจ แล้วเชื่อ email ที่ได้กลับมา
+
+  ```
+  แอปมือถือ
+     │  1. Google Sign-In SDK  →  ได้ id_token
+     ▼
+  POST {subdomain}/api/v1/login/google   { id_token, device_id? }
+     │
+     │  2. CRM ส่งต่อ  →  POST {EXTERNAL_API_URL}/api/v1/auth/google/login
+     │                      { id_token, device_id, register_from }
+     ▼
+  BukkhonID  →  verify ลายเซ็น + aud + exp  →  คืน { user: { bukkhon_id, email, ... } }
+     │
+     │  3. CRM หา user ใน schema ของบริษัท:
+     │        WHERE (email = <email> OR bukkhon_id = <bukkhon_id>) AND is_delete = 0
+     │
+     │  4. ถ้า user ยังไม่มี bukkhon_id  →  บันทึกให้อัตโนมัติ
+     │
+     ▼
+  issueTokenForUser()  →  JWT + user_detail + first_login   (200)
+  ```
+
+  **สิ่งที่ต้องเข้าใจ**
+
+  - **ไม่สร้าง user ใหม่** — ถ้าไม่มีบัญชีที่ email ตรงในบริษัทนี้จะได้ `404` ต้องให้แอดมินสร้าง user ก่อน
+  - **tenant มาจาก subdomain เหมือนทุกเส้น** — ยิงเข้า `nicharpn.uat-followonecrm.com` จะหา user ใน schema ของ `nicharpn` เท่านั้น
+  - **การผูกบัญชีเกิดขึ้นเองตอน login ครั้งแรก** — ไม่จำเป็นต้องเรียก `connect/google` ก่อน ขอแค่ email ใน CRM ตรงกับ email ของ Google
+
+  ---
+
+  ## 2. Request
+
+  ```bash
+  curl -s -X POST "$BASE/login/google" \
+    -H "Accept: application/json" \
+    -H "Content-Type: application/json" \
+    -d '{
+      "id_token": "eyJhbGciOiJSUzI1NiIsImtpZCI6...",
+      "device_id": "550e8400-e29b-41d4-a716-446655440000"
+    }'
+  ```
+
+  | ฟิลด์ | บังคับ | ชนิด | หมายเหตุ |
+  |---|:---:|---|---|
+  | `id_token` | ✅ | string | Google ID Token (JWT) จาก Google Sign-In SDK ฝั่งแอป |
+  | `device_id` | | uuid | ถ้าไม่ส่ง ระบบ generate `Str::uuid()` ให้เอง — ผิดรูปแบบ UUID จะได้ 422 |
+  | `register_from` | | string | program code ที่ส่งให้ BukkhonID — ไม่ส่งจะใช้ `BUKKHONID_REGISTER_FROM` (default `FOLLOWONECRM`) |
+
+  **ตั้งค่าที่เกี่ยวข้อง** ([`config/services.php`](../config/services.php))
+
+  | config | env | ใช้ทำอะไร |
+  |---|---|---|
+  | `services.bukkhonid.url` | `EXTERNAL_API_URL` | base URL ของ BukkhonID (default `https://api.uat-bukkhonid.com`) |
+  | `services.bukkhonid.register_from` | `BUKKHONID_REGISTER_FROM` | program code (ตั้งเป็นค่าว่างเพื่อไม่ส่งเลย) |
+  | `services.google.client_id` | `GOOGLE_CLIENT_ID` | ใช้ตอน debug — เทียบกับ `aud` ใน id_token |
+
+  ---
+
+  ## 3. Response — `200 OK`
+
+  เหมือน `POST /login` ทุกฟิลด์ (ดูคำอธิบายแต่ละฟิลด์ที่ [api-login.md](api-login.md#3-response--200-ok))
+
+  ```json
+  {
+    "message": "เข้าสู่ระบบสำเร็จ",
+    "user_detail": {
+      "id": 4,
+      "sale_code": "SALE-202607-0003",
+      "username": "saleofficer0002",
+      "firstname": "นิชาพร",
+      "lastname": "พินิจนันท์",
+      "level": 2,
+      "profile_img": "https://inet-s3-object-gw.inet.co.th/...&X-Amz-Expires=600&...",
+      "has_logged_in": true,
+      "is_first_login": false
+    },
+    "first_login": {
+      "is_first_login": false,
+      "should_change_password": false,
+      "should_complete_profile": false,
+      "must_run_system_setup": false,
+      "message": null
+    },
+    "token": {
+      "access_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...",
+      "token_type": "bearer",
+      "expires_in": 3600
+    }
+  }
+  ```
+
+  ธง `first_login` ทำงานเหมือนกัน — ผู้ใช้ที่เข้าระบบครั้งแรกผ่าน Google ก็ได้ `is_first_login: true` และระบบตั้ง `has_logged_in = true` ให้ทันที
+
+  > **ไม่มี key `success`** ตอนสำเร็จ (เหมือน `/login`) — แอปต้องเช็ค HTTP status code
+
+  ---
+
+  ## 4. Error ที่เป็นไปได้
+
+  | HTTP | เกิดเมื่อ | `message` |
+  |:---:|---|---|
+  | `405` | ยิงด้วย method อื่นที่ไม่ใช่ `POST` | Method Not Allowed |
+  | `422` | ไม่ส่ง `id_token` | `"จำเป็นต้องกรอก id_token"` |
+  | `422` | `device_id` ไม่ใช่ UUID | `"device_id ต้องเป็น UUID"` |
+  | `422` | BukkhonID ปฏิเสธ id_token (status ≠ 401) | ข้อความจาก BukkhonID (`error.message_th` → `message_en` → fallback) |
+  | `422` | BukkhonID ตอบสำเร็จแต่ไม่มี email | `"ไม่สามารถดึงข้อมูลอีเมลจาก BukkhonID ได้"` |
+  | `401` | BukkhonID ตอบ 401 | ข้อความจาก BukkhonID |
+  | `404` | ไม่มี user ที่ email/bukkhon_id ตรงในบริษัทนี้ | `"ไม่พบบัญชีผู้ใช้ในระบบที่ตรงกับอีเมลนี้ กรุณาติดต่อผู้ดูแลระบบ"` |
+  | `404` | subdomain ไม่มีใน `tenants` | HTML abort ของ Laravel |
+  | `500` | exception อื่น ๆ | `"เกิดข้อผิดพลาดในการเข้าสู่ระบบ"` |
+
+  รูปแบบ error body:
+
+  ```json
+  { "success": false, "message": "..." }
+  ```
+
+  ทุกครั้งที่ BukkhonID ปฏิเสธ ระบบเขียน `Log::warning('API Google login: BukkhonID failed', ...)` พร้อม status + body ไว้แล้ว
+
+  ---
+
+  ## 5. โหมดทดสอบ (local เท่านั้น)
+
+  ```bash
+  curl -s -X POST "http://sunnypop.localhost:8000/api/v1/login/google" \
+    -H "Accept: application/json" -H "Content-Type: application/json" \
+    -d '{"id_token":"MOCK_GOOGLE_TOKEN"}'
+  ```
+
+  เมื่อ `APP_ENV=local` และ `id_token === "MOCK_GOOGLE_TOKEN"` ระบบ **ข้ามการเรียก BukkhonID ทั้งหมด** แล้ว login เป็นแอดมินที่ active คนแรก:
+
+  ```php
+  User::where('is_delete', 0)->where('status', 1)->orderBy('level')->orderBy('id')->first()
+  ```
+
+  ใช้ทดสอบ flow ฝั่งแอปโดยไม่ต้องมี Google account จริง — ถ้าไม่มี user เลยจะได้ `404 "MOCK: ไม่พบผู้ใช้ในระบบสำหรับทดสอบ"`
+
+  > โหมดนี้ทำงานเฉพาะ `APP_ENV=local` — บน UAT/production ค่า `MOCK_GOOGLE_TOKEN` จะถูกส่งไป BukkhonID จริงและโดนปฏิเสธ
+
+  ---
+
+  ## 6. Troubleshooting — ทำไม BukkhonID ตอบ `INVALID_TOKEN`
+
+  สาเหตุหลักมี 2 อย่าง และทั้งคู่อยู่ใน payload ของ `id_token` เอง
+
+  | อาการ | สาเหตุ | วิธีแก้ |
+  |---|---|---|
+  | `aud` ไม่ตรง | Google Client ID ที่แอปใช้ขอ token ≠ ตัวที่ BukkhonID/CRM คาดไว้ | ตรวจ `GOOGLE_CLIENT_ID` ให้ตรงกับ client ที่ SDK ฝั่งแอปใช้ (Android/iOS/Web เป็นคนละ client ID) |
+  | `exp` หมดอายุ | Google ID Token มีอายุสั้น (~1 ชม.) | ขอ token ใหม่จาก SDK ทุกครั้งก่อนยิง อย่าเก็บไว้ใช้ซ้ำ |
+  | `email_verified: false` | บัญชี Google ยังไม่ยืนยัน email | ให้ผู้ใช้ยืนยัน email กับ Google ก่อน |
+
+  โค้ดมี helper `inspectGoogleIdToken()` ที่ **แกะ payload ของ id_token โดยไม่ verify ลายเซ็น** เพื่อ debug — คืนค่า:
+
+  ```json
+  {
+    "iss": "https://accounts.google.com",
+    "aud": "xxx.apps.googleusercontent.com",
+    "azp": "...",
+    "email": "user@gmail.com",
+    "email_verified": true,
+    "exp": 1786516800,
+    "exp_at": "2026-08-11 15:00:00",
+    "is_expired": false,
+    "expected_aud": "yyy.apps.googleusercontent.com",
+    "aud_matches": false
+  }
+  ```
+
+  ใช้ที่เส้น `connect/google` — เมื่อ BukkhonID ปฏิเสธ ระบบจะแนบ `token_info` มาใน response **เฉพาะตอน `APP_ENV=local`** (บน production ถูกตัดออกด้วย `array_filter`) ส่วนใน log จะมีให้ดูทุก environment
+
+  **แกะดูเองเร็ว ๆ:**
+
+  ```bash
+  # ดู payload ของ id_token (ส่วนกลางของ JWT)
+  echo "<id_token>" | cut -d. -f2 | base64 -d 2>/dev/null | jq '{aud, exp, email, email_verified}'
+  ```
+
+  ---
+
+  ## 7. `POST /api/v1/connect/google` — เชื่อม / ยกเลิกการเชื่อมบัญชี
+
+  ต้องแนบ JWT ของ CRM (อยู่ใน `auth_api`) — ใช้เมื่อผู้ใช้ที่ login ด้วย username/password อยู่แล้ว อยากผูกบัญชี Google เข้ากับตัวเอง
+
+  ### เชื่อมบัญชี
+
+  ```bash
+  curl -s -X POST "$BASE/connect/google" \
+    -H "$AUTH" -H "Accept: application/json" -H "Content-Type: application/json" \
+    -d '{"id_token":"<Google ID Token>", "bukkhon_token":"<access_token จาก BukkhonID>"}'
+  ```
+
+  | ฟิลด์ | บังคับ | หมายเหตุ |
+  |---|:---:|---|
+  | `id_token` | ✅ | Google ID Token |
+  | `bukkhon_token` | | ถ้าส่งมา จะเรียก `/auth/google/link` ผูก Google เข้ากับบัญชี BukkhonID นั้นก่อน (**ล้มเหลวก็ทำงานต่อ** แค่เขียน log warning เผื่อเคยผูกไว้แล้ว) |
+  | `device_id` | | ไม่บังคับ |
+
+  ขั้นตอนภายใน:
+  1. (ถ้ามี `bukkhon_token`) `POST {BukkhonID}/api/v1/auth/google/link`
+  2. `POST {BukkhonID}/api/v1/auth/google/login` เพื่อดึง `bukkhon_id`
+  3. เช็คว่า `bukkhon_id` นี้ถูกใช้โดย user อื่นในบริษัทหรือยัง — **1 บัญชี Google ผูกได้กับ 1 user เท่านั้น**
+  4. บันทึก `bukkhon_id` ลง user ปัจจุบัน
+
+  ```json
+  {
+    "success": true,
+    "message": "เชื่อมต่อบัญชี Google สำเร็จ",
+    "bukkhon_id": "BK-xxxxx",
+    "access_token": "<access_token ของ BukkhonID>"
+  }
+  ```
+
+  | HTTP | เกิดเมื่อ |
+  |:---:|---|
+  | `401` | ไม่ได้แนบ JWT ของ CRM |
+  | `422` | ไม่ส่ง `id_token` |
+  | `400` | BukkhonID ปฏิเสธ id_token / ไม่พบ `bukkhon_id` ใน response |
+  | `409` | `"บัญชี Google นี้ถูกเชื่อมกับผู้ใช้อื่นในระบบแล้ว"` |
+  | `500` | exception อื่น ๆ |
+
+  ### ยกเลิกการเชื่อมต่อ
+
+  ส่ง `bukkhon_id` มาโดย **ไม่ต้องมี `id_token`**:
+
+  ```bash
+  curl -s -X POST "$BASE/connect/google" \
+    -H "$AUTH" -H "Accept: application/json" -H "Content-Type: application/json" \
+    -d '{"bukkhon_id": null}'
+  ```
+
+  ```json
+  { "success": true, "message": "ยกเลิกการเชื่อมต่อบัญชีแล้ว" }
+  ```
+
+  ---
+
+  ## 8. ข้อควรทราบ
+
+  **1. เส้นนี้ไม่ได้เช็ค `isAccessBlocked()`**
+  `POST /login` มีเงื่อนไขบล็อกเมื่อแพ็กเกจบริษัทหมดอายุ แต่ `loginWithGoogle()` → `issueTokenForUser()` ไม่มี — ตอนนี้ไม่ต่างกันเพราะ [`isAccessBlocked()`](../app/Models/Tenant.php) ถูกปิดไว้ (`return false;` ตายตัว) **แต่ถ้าวันไหนเปิดใช้จริง Google login จะกลายเป็นทางลัดข้ามการบล็อก** ต้องเพิ่มเงื่อนไขเดียวกันเข้าไปด้วย
+
+  **2. ไม่ได้ตรวจคอลัมน์ `status`**
+  เหมือน `/login` — กรองแค่ `is_delete = 0` ผู้ใช้ที่ถูกปิดใช้งานด้วย `status = 0` จึงยัง login ได้ (ยกเว้นโหมด MOCK ที่กรอง `status = 1` ด้วย)
+
+  **3. เส้น unlink รับค่า `bukkhon_id` แบบไม่ validate**
+  ```php
+  if (!$request->filled('id_token') && $request->exists('bukkhon_id')) {
+      $user->bukkhon_id = $request->bukkhon_id;   // ← เขียนค่าอะไรก็ได้ลง DB
+      $user->save();
+  }
+  ```
+  เจตนาคือให้ส่ง `bukkhon_id = null` เพื่อยกเลิกการเชื่อมต่อ แต่โค้ดรับค่าอะไรก็ได้ และ**ข้ามการเช็คซ้ำในขั้นที่ 3** ผู้ใช้ที่ login อยู่จึงตั้ง `bukkhon_id` ของตัวเองให้เท่ากับของคนอื่นในบริษัทเดียวกันได้
+
+  ผลกระทบ: ตอน `loginWithGoogle` ค้นด้วย `WHERE email = ? OR bukkhon_id = ?` แล้ว `first()` — ถ้ามีสองแถวตรงเงื่อนไข ระบบอาจคืนแถวของผู้โจมตีแทนเจ้าของบัญชีจริง
+
+  วิธีปิด — บังคับให้ค่าเป็น `null` เท่านั้น:
+  ```php
+  if (!$request->filled('id_token') && $request->exists('bukkhon_id')) {
+      $user->bukkhon_id = null;   // unlink ได้อย่างเดียว ไม่ให้กำหนดค่าเอง
+      $user->save();
+      return response()->json(['success' => true, 'message' => 'ยกเลิกการเชื่อมต่อบัญชีแล้ว']);
+  }
+  ```
+
+  **4. CRM เชื่อ email จาก BukkhonID โดยตรง**
+  ไม่ได้ verify ลายเซ็น Google เอง — ความปลอดภัยของ flow นี้ขึ้นกับ BukkhonID ทั้งหมด ถ้า `EXTERNAL_API_URL` ถูกตั้งผิดไปชี้ปลายทางที่ไม่น่าเชื่อถือ จะกลายเป็นช่องเข้าระบบทันที **ตรวจค่านี้ใน `.env` ของทุก environment**
+
+  ---
+
+  *เอกสารที่เกี่ยวข้อง: [api-login.md](api-login.md) · [api-subscription-status.md](api-subscription-status.md) · [standalone-mode.md](standalone-mode.md)*

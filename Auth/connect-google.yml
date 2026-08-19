@@ -1,0 +1,24 @@
+info:
+  name: connect/google
+  type: http
+  seq: 2
+
+http:
+  method: GET
+  url: "{{sale_uat}}/api/v1/connect/google"
+  body:
+    type: json
+    data: |-
+      {
+          "id_token": "eyJhbGciOiJSUzI1NiIsImtpZCI6IjMwZmUwZTIzYzRkNmUzNmM1MjU3N2IxZTJmZWZkMWFiYzM4ODk1ZGUiLCJ0eXAiOiJKV1QifQ.eyJpc3MiOiJodHRwczovL2FjY291bnRzLmdvb2dsZS5jb20iLCJhenAiOiI3NzIyNDU0OTgyMzEtY3ZlcGRvYzNmZDAybHBwYzhnbmZjYzM1MXA0NWFnbnYuYXBwcy5nb29nbGV1c2VyY29udGVudC5jb20iLCJhdWQiOiI3NzIyNDU0OTgyMzEtY3ZlcGRvYzNmZDAybHBwYzhnbmZjYzM1MXA0NWFnbnYuYXBwcy5nb29nbGV1c2VyY29udGVudC5jb20iLCJzdWIiOiIxMTIxNjQxNDY5MzQwNjczNDY2NjciLCJlbWFpbCI6ImFzdWlvbm1leHNsaW9AZ21haWwuY29tIiwiZW1haWxfdmVyaWZpZWQiOnRydWUsImF0X2hhc2giOiJJaDhDQ3hCbnhmVXRsaWZEQjNGb1FnIiwibm9uY2UiOiJuNUtMaHBBVlBVaXpwenpubXpwcTFOaVpHMjlOQ2pmSm9jdnJwVEtPQkEwIiwibmFtZSI6IjAzIiwicGljdHVyZSI6Imh0dHBzOi8vbGgzLmdvb2dsZXVzZXJjb250ZW50LmNvbS9hL0FDZzhvY0tpajBhZFdHeklkMjVrQ0ZjX3cydEctYVBOSGdHMlU3QkQwamt5Vl9uM0FtaFlXUT1zOTYtYyIsImdpdmVuX25hbWUiOiIwMyIsImlhdCI6MTc4NTIzMjk5OCwiZXhwIjoxNzg1MjM2NTk4fQ.L-liTmEbM0Fk0l_f6UtWo6AWl3DQZOLyTbi5f7CjQ0RU8vR2rFa4oyELk9NEWHEed8-PWIKrqjAs_c3SVXdG8XMum4PyKgxrANIsExecITuWguZJYQd0tgZEcp7lTHwKZ1uIp2dkZSoSDIM9kn2diVnIdZaTE5ZcXhQW65-exW6nJt7OMfa6xI31hoX9BMUuoMt8VEPeYTdWAAOv-J5hu_H_n9unPQAAOEw-HGIhm1luSKtRrXOxk97TDMJGpkJkef0upA-FlwrmtBDy6x8-grva6KjuTOh-rzTAdjNKeKcuhqBPuQYaGzHjuCiw9Z8rVZ-MtGRvS8-stQv58V5rkQ",
+          "device_id": "550e8400-e29b-41d4-a716-446655440000"
+      }
+  auth:
+    type: bearer
+    token: "{{token}}"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

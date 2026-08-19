@@ -1,0 +1,23 @@
+info:
+  name: device-token
+  type: http
+  seq: 1
+
+http:
+  method: GET
+  url: "{{sale_uat}}/api/v1/device-token"
+  body:
+    type: json
+    data: |-
+      {
+        "fcm_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwOi8vaml3b25tZWFvc29temFhLmxvY2FsaG9zdDo4MDAwL2FwaS92MS9sb2dpbiIsImlhdCI6MTc4MzM5OTI4OSwiZXhwIjoxNzgzNDAyODg5LCJuYmYiOjE3ODMzOTkyODksImp0aSI6InE1cFVmdHpSTjF5ZGtoMVIiLCJzdWIiOiI2IiwicHJ2IjoiMjNiZDVjODk0OWY2MDBhZGIzOWU3MDFjNDAwODcyZGI3YTU5NzZmNyJ9.W7hxguSP9wClYiM9OeeT4vvIxWwsS-kvHCLvJpfDn_U"
+      }
+  auth:
+    type: bearer
+    token: "{{token}}"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

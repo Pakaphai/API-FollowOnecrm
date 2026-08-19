@@ -1,0 +1,17 @@
+info:
+  name: confirmed_quotation
+  type: http
+  seq: 6
+
+http:
+  method: POST
+  url: "{{sale_uat}}/api/v1/quotation/3/status/confirmed"
+  auth:
+    type: bearer
+    token: "{{token}}"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

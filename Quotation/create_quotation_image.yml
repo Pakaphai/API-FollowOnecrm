@@ -1,0 +1,37 @@
+info:
+  name: create_quotation_image
+  type: http
+  seq: 8
+
+http:
+  method: POST
+  url: "{{sale_uat}}/api/v1/quotation/with-images/create"
+  body:
+    type: multipart-form
+    data:
+      - name: customer_id
+        type: text
+        value: "2"
+      - name: quotation_date
+        type: text
+        value: 2026-07-30
+      - name: additional_amount
+        type: text
+        value: "5000"
+      - name: quotation_image
+        type: file
+        value:
+          - C:\Users\Softa-P\Pictures\Screenshots\image0001.png
+        contentType: image/png
+      - name: note
+        type: text
+        value: ทดสอบใบเสนอราครา
+  auth:
+    type: bearer
+    token: "{{token}}"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

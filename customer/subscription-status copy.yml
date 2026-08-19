@@ -1,0 +1,173 @@
+info:
+  name: subscription/status copy
+  type: http
+  seq: 12
+
+http:
+  method: GET
+  url: "{{sale_uat}}/api/v1/subscription/status"
+  auth:
+    type: bearer
+    token: "{{token}}"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+
+docs: |
+  # API — สถานะแพ็กเกจ / วันใช้งาน / สิทธิ์ใช้ฟีเจอร์
+
+  ให้แอปมือถือแสดงตัวนับ "วันใช้งาน" แบบเดียวกับแถบบน navbar ของเว็บ
+  และเช็คว่าหมดช่วงทดลองใช้แล้วหรือยัง เพื่อปิดปุ่มสร้างใบเสนอราคา / นัดหมาย
+
+  ```
+  GET /api/v1/subscription/status
+  Authorization: Bearer <token>
+  Accept: application/json
+  ```
+
+  ---
+
+  ## ตัวอย่าง response
+
+  ```json
+  {
+    "status": "success",
+    "data": {
+      "plan": "basic",
+      "plan_label": "Basic",
+      "is_paid_plan": true,
+      "is_trial": false,
+      "billing_cycle": "yearly",
+      "seats": 20,
+      "price": 17800,
+
+      "subscription_started_at": "2026-07-31",
+      "subscription_ends_at": "2027-07-31",
+
+      "usage": {
+        "days_used": 11,
+        "total_days": 365,
+        "days_left": 354,
+        "percent": 3,
+        "text": "11 / 365 วัน"
+      },
+
+      "days_remaining": 354,
+      "is_expired": false,
+      "is_blocked": false,
+
+      "features": {
+        "can_create_quotation": true,
+        "can_create_appointment": true,
+        "blocked_reason": null
+      },
+
+      "is_admin": true,
+      "notice": null
+    }
+  }
+  ```
+
+  ---
+
+  ## ฟิลด์ที่เพิ่มเข้ามา
+
+  ### `usage` — ตัวนับวันใช้งาน
+
+  | ฟิลด์ | ความหมาย |
+  |---|---|
+  | `days_used` | ใช้งานมาแล้วกี่วัน นับจาก `subscription_started_at` (ไม่เกิน `total_days`) |
+  | `total_days` | ระยะเวลาทั้งหมดของแพ็กเกจ — `14` ช่วงทดลอง, `365` รายปี, **`null` = ไม่มีวันหมดอายุ** (standalone) |
+  | `days_left` | เหลืออีกกี่วัน (ไม่ติดลบ) — `null` เมื่อไม่มีวันหมดอายุ |
+  | `percent` | เปอร์เซ็นต์ที่ใช้ไป (0–100) เอาไปวาด progress bar ได้เลย |
+  | `text` | ข้อความพร้อมแสดง เช่น `"11 / 365 วัน"` หรือ `"ใช้งานมาแล้ว 23 วัน"` ถ้าไม่มีวันหมดอายุ |
+
+  > ตัวเลขชุดนี้คำนวณจาก `Tenant::daysUsedInPlan()` / `Tenant::planTotalDays()` **ตัวเดียวกับที่ navbar ฝั่งเว็บใช้** จึงตรงกันเสมอ
+
+  ### `features` — สิทธิ์ใช้ฟีเจอร์
+
+  | ฟิลด์ | ความหมาย |
+  |---|---|
+  | `can_create_quotation` | `false` = ห้ามเปิดใบเสนอราคาใหม่ |
+  | `can_create_appointment` | `false` = ห้ามสร้างนัดหมายใหม่ |
+  | `blocked_reason` | ข้อความไทยพร้อมแสดง — `null` เมื่อยังใช้ได้ปกติ |
+
+  เป็น `false` เมื่อ **เลยวันหมดอายุแล้วและยังไม่ต่อแพ็กเกจ** (`days_remaining < 0`)
+
+  - ช่วงทดลอง → `"หมดช่วงทดลองใช้งานแล้ว กรุณาต่ออายุแพ็กเกจเพื่อใช้งานต่อ"`
+  - แพ็กเกจเสียเงิน → `"แพ็กเกจหมดอายุแล้ว กรุณาต่ออายุเพื่อใช้งานต่อ"`
+
+  ### ฟิลด์อื่นที่เพิ่ม
+
+  | ฟิลด์ | ความหมาย |
+  |---|---|
+  | `plan_label` | ป้ายพร้อมแสดง: `Free` / `Basic` / `Pro` / `Standalone` |
+  | `is_paid_plan` | เคยถูกกำหนดแพ็กเกจแบบชำระเงินจริงหรือยัง |
+  | `is_trial` | `true` = ยังอยู่ช่วงทดลองใช้ฟรี |
+  | `price` | ราคา snapshot ของแพ็กเกจ (บาท) |
+  | `subscription_started_at` | วันเริ่มนับ (ถ้าไม่มีจะถอยไปใช้วันที่สร้างบริษัท) |
+
+  ---
+
+  ## พฤติกรรมตรงเส้นแบ่ง
+
+  ทดสอบแล้วกับทุกกรณี
+
+  | สถานการณ์ | `days_used` | `days_left` | สร้างใบเสนอราคา/นัดหมาย |
+  |---|---:|---:|:---:|
+  | ทดลองใช้ วันที่ 11 | 11 | 3 | ✅ |
+  | ทดลองใช้ **วันที่ 14 (วันสุดท้าย)** | 14 | 0 | ✅ ยังใช้ได้ |
+  | ทดลองใช้ **เลย 1 วัน** | 14 | −1 | ❌ บล็อก |
+  | ทดลองใช้ เลย 7 วัน | 14 | −7 | ❌ บล็อก |
+  | Basic หมดอายุ 1 วัน | 365 | −1 | ❌ บล็อก |
+  | Standalone (ไม่มีวันหมดอายุ) | 100 | `null` | ✅ ตลอด |
+
+  **วันที่ 14 ยังใช้ได้** — บล็อกตั้งแต่วันที่ 15 เป็นต้นไป (ให้ใช้ครบ 14 วันเต็ม)
+
+  ---
+
+  ## วิธีใช้ในแอป
+
+  เรียกครั้งเดียวตอนเปิดแอป (หรือหลัง login) แล้วเก็บไว้ใน state
+
+  ```dart
+  final sub = await api.getSubscriptionStatus();
+
+  // แสดงแถบวันใช้งาน
+  Text(sub.usage.text);                        // "11 / 365 วัน"
+  LinearProgressIndicator(value: sub.usage.percent / 100);
+
+  // ปิดปุ่มเมื่อหมดอายุ
+  if (!sub.features.canCreateQuotation) {
+    showDialog(message: sub.features.blockedReason);
+    return;
+  }
+  ```
+
+  ควรเรียกซ้ำหลังผู้ใช้ต่อแพ็กเกจ หรือเมื่อแอปกลับมาจาก background ข้ามวัน (`days_used` เปลี่ยนตามวันที่)
+
+  ---
+
+  ## ⚠️ ข้อควรทราบ: ฝั่งเซิร์ฟเวอร์ยังไม่บังคับ
+
+  `features` เป็น **ธงให้แอปเอาไปปิด UI เท่านั้น** — endpoint สร้างใบเสนอราคาและนัดหมาย
+  **ยังรับ request ตามปกติ** แม้แพ็กเกจหมดอายุแล้ว
+
+  จงใจไม่บังคับที่เซิร์ฟเวอร์ เพราะ [`Tenant::isAccessBlocked()`](../app/Models/Tenant.php) ถูกปิดไว้
+  ด้วยเหตุผลทางธุรกิจ (มีบริษัทที่เลย 14 วันไปแล้วแต่ยังต้องใช้งานต่อได้) การเปิดบังคับทันที
+  จะตัดการใช้งานของบริษัทเหล่านั้น
+
+  **ถ้าจะบังคับจริงในภายหลัง** ทำได้โดยเพิ่ม middleware ที่เช็ค `tenant()->isSubscriptionLapsed()`
+  แล้วผูกกับ route กลุ่มสร้างเอกสาร/นัดหมาย (ทั้ง `routes/route/quotation.php`,
+  `routes/route/relationshipDetail.php` และฝั่ง `routes/api/api_v1.php`) — ตรวจสอบก่อนว่ามี tenant
+  ไหนบ้างที่จะโดนผลกระทบ
+
+  ```bash
+  php artisan tinker
+  >>> App\Models\Tenant::all()->filter->isSubscriptionLapsed()->pluck('id');
+  ```
+
+  ตอนนี้ยังไม่มี tenant ไหนหมดอายุ (ใกล้สุดเหลือ 2 วัน)

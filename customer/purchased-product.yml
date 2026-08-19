@@ -1,0 +1,41 @@
+info:
+  name: purchased-product
+  type: http
+  seq: 6
+
+http:
+  method: GET
+  url: "{{sale_uat}}/api/v1/api/customer/purchased-product/6"
+  auth:
+    type: bearer
+    token: "{{token}}"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+
+docs: |-
+  ## 6. `GET /api/v1/api/customer/purchased-product/{id}`
+
+  สินค้าที่ลูกค้ารายนี้เคยซื้อ รวมจำนวนต่อสินค้า เรียงมากไปน้อย
+
+  ```json
+  { "success": true, "data": [
+    { "product_name": "สินค้า A", "product_code": "PRD-0001",
+      "total_qty": 12.5, "uom_name": "ชิ้น" } ] }
+  ```
+
+  **นับเฉพาะบิลที่ปิดจบจริง** — `orders.status = 'completed'` **และ** `payment_status = 'paid'`
+
+  | ฟิลด์ | หมายเหตุ |
+  |---|---|
+  | `total_qty` | ผลรวมจำนวน หารกลับจากค่าที่เก็บ ×100 แล้ว |
+  | `uom_name` | ดึงเฉพาะข้อความ**ในวงเล็บ**ของ `uoms.description` เช่น `"HRS (ชม.)"` → `"ชม."` |
+
+  > path มี `api/` ซ้ำ — full path จริงคือ `/api/v1/api/customer/purchased-product/{id}` ดู [api-reference.md](api-reference.md#2-path-ทม-api-ซำ)
+  >
+  > ⚠️ ไม่เช็คความเป็นเจ้าของ — ดูสินค้าที่ลูกค้าของเซลส์คนอื่นเคยซื้อได้
+
+  ---

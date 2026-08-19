@@ -1,0 +1,67 @@
+info:
+  name: get-CustomerMaster
+  type: http
+  seq: 2
+
+http:
+  method: GET
+  url: "{{sale_uat}}/api/v1/master-data"
+  auth:
+    type: bearer
+    token: "{{token}}"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+
+docs: |-
+  ## 2. `GET /api/v1/master-data`
+
+  ข้อมูลตั้งต้น **ทุกชุดในก้อนเดียว** — ถ้าแอปต้องใช้มากกว่า contact type ให้เรียกเส้นนี้แทน จะได้ยิงครั้งเดียว
+
+  ```json
+  {
+    "contact_types":       [ {id, name, icon, icon_url} ],
+    "relationship_status": [ {id, name} ],
+    "visit_conclusions":   [ {id, name} ],
+    "business_types":      [ {id, name} ],
+    "product_types":       [ {id, name} ],
+
+    "logo_aw_followonecrm_01": "https://...",
+    "logo_aw_followonecrm_02": "https://...",
+    "logo_aw_followonecrm_03": "https://...",
+    "logo_aw_followonecrm_04": "https://...",
+    "branner_1": "https://...",
+    "branner_2": "https://...",
+    "branner_3": "https://...",
+    "branner_4": "https://..."
+  }
+  ```
+
+  | กลุ่ม | ตัวกรอง | ใช้ที่ไหน |
+  |---|---|---|
+  | `contact_types` | `is_delete=0` **และ** `is_active=1` | ช่องทางการติดต่อ — **ชุดเดียวกับเส้น `contact-type` เป๊ะ** |
+  | `relationship_status` | `is_delete=0` | สถานะความสัมพันธ์ (`relationship_status_id`) |
+  | `visit_conclusions` | `is_delete=0` | สรุปผลการติดต่อ (`visit_conclusion_id`) |
+  | `business_types` | `is_delete=0` | ประเภทธุรกิจของลูกค้า (`business_type_id`) |
+  | `product_types` | `is_delete=0` | หมวดหมู่สินค้า (`product_type_id`) |
+
+  ### โลโก้และแบนเนอร์
+
+  | key | ไฟล์บน S3 |
+  |---|---|
+  | `logo_aw_followonecrm_01` … `_04` | `crm/icon/aw_followonecrm-01..04.png` |
+  | `branner_1` | `crm/icon/PAOBanner.png` |
+  | `branner_2` … `_4` | `crm/icon/Banner1.jpg` … `Banner3.jpg` |
+
+  ⚠️ **presigned อายุแค่ 5 นาที** (สั้นกว่า `icon_url` ที่ได้ 30 นาที) — ถ้าแอปเก็บ response ทั้งก้อนไว้ใช้ทั้งวัน โลโก้กับแบนเนอร์จะพังก่อนใครเพื่อน แนะนำให้แยกเก็บ: cache เฉพาะ list ส่วน URL รูปดึงใหม่ตามอายุ
+
+  > key สะกดว่า `branner` (n เกิน) ไม่ใช่ `banner` — เป็นชื่อจริงใน response
+
+  ### ไม่มี try/catch
+
+  ถ้าไฟล์โลโก้ตัวใดตัวหนึ่งหายไปจาก S3 หรือ `temporaryUrl()` โยน exception **ทั้งเส้นจะพังเป็น 500** ไม่ใช่แค่ field นั้นเป็น `null` — ต่างจาก `contact_type_api` ที่ผ่าน accessor ซึ่งมี `try/catch` fallback ให้
+
+  ---

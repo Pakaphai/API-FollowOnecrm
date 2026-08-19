@@ -1,0 +1,352 @@
+info:
+  name: List-product
+  type: http
+  seq: 1
+
+http:
+  method: GET
+  url: "{{sale_uat}}/api/v1/productlist"
+  auth:
+    type: bearer
+    token: "{{token}}"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+
+docs: |
+  # API — รายการสินค้า (Product List)
+
+  รายการสินค้าแบบแบ่งหน้า พร้อมรูป ราคาแยกตามหน่วยนับ และกติกาการกรอกจำนวน — ใช้เป็นตัวเลือกสินค้าตอนสร้างใบเสนอราคา/ใบสั่งขาย
+
+  ```
+  GET /api/v1/productlist
+  Authorization: Bearer <token>
+  Accept: application/json
+  ```
+
+  | | |
+  |---|---|
+  | Route | [`routes/api/api_v1.php`](../routes/api/api_v1.php) — อยู่ในกลุ่ม `auth_api` |
+  | Controller | [`Auth\ApiAuthController::getProductApi()`](../app/Http/Controllers/Auth/ApiAuthController.php) |
+  | ตารางหลัก | `products` + `product_prices` + `product_image` + `uoms` + `brand` + `model` |
+
+  ---
+
+  ## 1. พารามิเตอร์ (query string)
+
+  ทุกตัวเป็น optional — ไม่ส่งอะไรเลยก็ได้ 20 รายการแรกเรียงจากใหม่ไปเก่า
+
+  | พารามิเตอร์ | ชนิด | ค่าเริ่มต้น | หมายเหตุ |
+  |---|---|---|---|
+  | `page` | integer ≥1 | 1 | หน้าที่ต้องการ |
+  | `per_page` | integer 1–200 | **20** | จำนวนต่อหน้า |
+  | `q` | string | — | ค้นหาจาก ชื่อสินค้า / ชื่อรุ่น / ชื่อแบรนด์ ⚠️ **ดูหมายเหตุข้อ 1 — พารามิเตอร์นี้ทำให้เกิด 500** |
+  | `brand_id` | integer | — | กรองตามแบรนด์ |
+  | `model_id` | integer | — | กรองตามรุ่น |
+  | `min_price` | numeric | — | ⚠️ หน่วยเป็น **สตางค์** ไม่ใช่บาท |
+  | `max_price` | numeric | — | ⚠️ หน่วยเป็น **สตางค์** ไม่ใช่บาท |
+  | `sort` | enum | `created_desc` | `price_asc` · `price_desc` · `created_asc` · `created_desc` |
+
+  ```bash
+  # 20 รายการแรก
+  curl -s "$BASE/productlist" -H "$AUTH" -H "Accept: application/json" | jq
+
+  # หน้า 2 หน้าละ 50 เรียงราคาถูกไปแพง
+  curl -s "$BASE/productlist?page=2&per_page=50&sort=price_asc" -H "$AUTH" -H "Accept: application/json"
+
+  # กรองราคา 500–1,500 บาท  →  ต้องคูณ 100
+  curl -s "$BASE/productlist?min_price=50000&max_price=150000" -H "$AUTH" -H "Accept: application/json"
+  ```
+
+  > ค่าที่ส่งมาถูก `appends()` กลับไปในลิงก์ pagination ให้อัตโนมัติ
+
+  ---
+
+  ## 2. Response — `200 OK`
+
+  ```json
+  {
+    "success": true,
+    "message": "OK",
+    "data": {
+      "products": [ ... ],
+      "counts":   { "product_types": 8, "models": 24, "brands": 12 },
+      "page": 1,
+      "size": 20,
+      "total_elements": 137,
+      "total_pages": 7,
+      "has_next": true,
+      "has_prev": false
+    }
+  }
+  ```
+
+  ### เมตาการแบ่งหน้า
+
+  | ฟิลด์ | ความหมาย |
+  |---|---|
+  | `page` | หน้าปัจจุบัน |
+  | `size` | จำนวนต่อหน้า (= `per_page`) |
+  | `total_elements` | จำนวนสินค้าทั้งหมดที่ตรงเงื่อนไข |
+  | `total_pages` | จำนวนหน้าทั้งหมด |
+  | `has_next` / `has_prev` | มีหน้าถัดไป/ก่อนหน้าไหม |
+
+  > เป็นเมตาแบบ **flat ไม่ใช่ paginator ของ Laravel** — ไม่มี `current_page`, `links`, `next_page_url` แบบเส้นอื่น
+
+  ### `counts` — ตัวเลขสรุปทั้งระบบ
+
+  จำนวน **ทั้งหมด** ของ product type / model / brand ที่ยังไม่ถูกลบ — **ไม่เกี่ยวกับผลการค้นหา** ส่งมาให้แอปเอาไปโชว์เป็นตัวเลขสรุปหน้าแรกได้เลย
+
+  ---
+
+  ## 3. โครงสร้างสินค้า 1 รายการ
+
+  ```json
+  {
+    "id": 12,
+    "product_type_id": 3,
+    "model_id": 5,
+    "brand_id": 2,
+    "code": "PRD-0012",
+    "name": "บริการติดตั้งระบบ",
+    "description": "...",
+    "uom_code": "HRS",
+    "min_stock_level": 0,
+    "min_price": null,
+    "is_active": true,
+    "is_delete": false,
+    "created_at": "2026-07-01T03:00:00.000000Z",
+
+    "brand_name": "ACME",
+    "model_name": "รุ่นมาตรฐาน",
+    "product_price": 1000,
+    "created_by": 1,
+    "updated_by": 1,
+
+    "main_image_url": "https://...&X-Amz-Expires=600&...",
+    "images": [
+      { "id": 44, "url": "https://...", "is_main": true },
+      { "id": 45, "url": "https://...", "is_main": false }
+    ],
+    "extra_image_urls": [ "https://..." ],
+
+    "uoms": [
+      {
+        "uom_code": "HRS",
+        "uom_desc": "HRS (ชม.)",
+        "is_current_price": true,
+        "barcode": null,
+        "product_price": 1000,
+        "product_price_include_vat": 1000,
+        "product_price_exclude_vat": 934.58,
+        "product_vat_amount": 65.42,
+        "is_whole_number": false,
+        "qty_step": 0.01,
+        "qty_min": 0.01,
+        "qty_decimals": 2
+      }
+    ],
+    "uom_codes": [ "HRS" ],
+    "uom_count": 1,
+    "default_uom": { "uom_code": "HRS", "...": "เหมือนใน uoms" }
+  }
+  ```
+
+  ### ฟิลด์จากตาราง `products` (ส่งมาทั้งแถวด้วย `products.*`)
+
+  | ฟิลด์ | หมายเหตุ |
+  |---|---|
+  | `id` | ค่าที่ต้องส่งเป็น `product_id` ตอนสร้างใบเสนอราคา |
+  | `code` | รหัสสินค้า (unique) |
+  | `name` · `description` | ชื่อ/รายละเอียด |
+  | `uom_code` | หน่วยเริ่มต้นที่ตั้งไว้ในตาราง products — **อาจไม่ตรงกับ `uoms[]`** ให้ยึด `uoms[]` เป็นหลัก |
+  | `is_active` | ⚠️ **ไม่ถูกกรอง** — สินค้าที่ปิดใช้งานก็ยังโผล่มาในรายการ |
+  | `min_price` · `min_stock_level` | ราคาขั้นต่ำ / จุดสั่งซื้อ |
+
+  ### รูปภาพ
+
+  | ฟิลด์ | ความหมาย |
+  |---|---|
+  | `main_image_url` | รูปหลัก — ถ้าสินค้าไม่ได้ตั้งรูปหลักไว้ จะใช้รูปแรกที่มีแทน (`null` ถ้าไม่มีรูปเลย) |
+  | `images[]` | ทุกรูป เรียง **รูปหลักมาก่อนเสมอ** แต่ละตัวมี `{id, url, is_main}` |
+  | `extra_image_urls[]` | เฉพาะ URL ของรูปที่ไม่ใช่รูปหลัก |
+
+  ⚠️ ทุก URL เป็น **presigned อายุ 10 นาที** (bucket เป็น private) — cache ตัวรายการได้ แต่ URL รูปต้องดึงใหม่
+
+  > รูปถูกดึงแยกหลังแบ่งหน้าแล้ว **จงใจไม่ join มาตั้งแต่แรก** เพราะสินค้าที่มีหลายรูปจะกลายเป็นหลายแถว ทำให้จำนวนต่อหน้าและ `total_elements` เพี้ยน
+
+  ---
+
+  ## 4. `uoms[]` — หัวใจของเส้นนี้
+
+  สินค้า 1 ตัวขายได้หลายหน่วย และ**ราคาต่างกันตามหน่วย** ระบบจึงส่งราคาแยกมาให้ครบทุกหน่วย
+
+  ระบบหยิบเฉพาะ **แถวราคาล่าสุด (`MAX(id)`) ของแต่ละคู่ `product_id` + `uom_code`** เพราะ `product_prices` เก็บเป็นประวัติได้หลายแถวต่อหน่วย ไม่งั้นหน่วยเดียวจะโผล่ซ้ำหลายรอบ
+
+  ### ราคา — คืนเป็น **บาท** แล้ว
+
+  | ฟิลด์ | ความหมาย |
+  |---|---|
+  | `product_price` | ราคาตั้งต้น |
+  | `product_price_include_vat` | ราคารวม VAT |
+  | `product_price_exclude_vat` | ราคาก่อน VAT |
+  | `product_vat_amount` | ยอด VAT |
+
+  ทั้ง 4 ตัวถูก `ROUND(x / 100.0, 2)` มาจากสตางค์ในฐานข้อมูลแล้ว — **ใช้ได้ตรง ๆ ไม่ต้องหารซ้ำ**
+
+  > จากตัวอย่าง: `1000 / 934.58 / 65.42` → ระบบตั้งราคาแบบ **รวม VAT** (1,000 บาทรวมภาษี = 934.58 + 65.42)
+
+  ### กติกาการกรอกจำนวน — จาก [`UomRules`](../app/Support/UomRules.php)
+
+  | ฟิลด์ | ค่า |
+  |---|---|
+  | `is_whole_number` | `true` = หน่วยนี้กรอกทศนิยมไม่ได้ |
+  | `qty_step` | `1` หรือ `0.01` — ใช้กับ `step` ของช่องกรอกได้ตรง ๆ |
+  | `qty_min` | `1` หรือ `0.01` |
+  | `qty_decimals` | `0` หรือ `2` — จำนวนตำแหน่งทศนิยมที่ยอมให้กรอก |
+
+  **หน่วยที่บังคับเป็นจำนวนเต็ม** (`WHOLE_NUMBER_CODES`):
+
+  ```
+  EA (ชิ้น) · BX (กล่อง) · PK (แพ็ค) · CT (ลัง) · RL (ม้วน)
+  DZ (โหล) · SET (ชุด) · PR (คู่) · PCS (ชิ้น)
+  ```
+
+  หน่วยอื่นนอกรายการนี้ (เช่น `HRS`, `KG`, `M`) กรอกทศนิยม 2 ตำแหน่งได้
+
+  > **ทำไมไล่จากฝั่ง "นับเป็นชิ้น"** — ผู้ใช้เพิ่มหน่วยเองได้จากหน้าจัดการ UOM หน่วยแปลก ๆ ที่ระบบไม่รู้จักจึงควรกรอกทศนิยมได้ตามเดิม ปลอดภัยกว่าเดาว่าเป็นจำนวนเต็มแล้วไปบล็อกการใช้งานที่เคยทำได้ (ที่มา: ขาย EA 3.14 ชิ้น ไม่มีความหมายทางธุรกิจ — BUG #68)
+
+  **เซิร์ฟเวอร์ตรวจซ้ำตอนบันทึกเสมอ** — ฟิลด์พวกนี้มีไว้กันผู้ใช้เสียเที่ยว ไม่ใช่ตัวบังคับสุดท้าย
+
+  ### ฟิลด์สรุปหน่วย
+
+  | ฟิลด์ | ความหมาย |
+  |---|---|
+  | `uom_codes[]` | รายการรหัสหน่วยสั้น ๆ เอาไปโชว์เป็น chip ได้ |
+  | `uom_count` | จำนวนหน่วยที่ขายได้ |
+  | `default_uom` | **มีค่าเฉพาะเมื่อสินค้ามีหน่วยเดียว** — ถ้ามีหลายหน่วยจะเป็น `null` เพราะต้องให้ผู้ใช้เลือกเอง (ราคาต่างกัน) กติกาเดียวกับหน้าเว็บ |
+
+  ### ⚠️ `is_current_price` ไม่ใช่ "หน่วยหลัก"
+
+  ชื่อฟิลด์ชวนเข้าใจผิด — หมายถึง "แถวราคานี้คือราคาที่ใช้อยู่ปัจจุบันของหน่วยนั้น" ข้อมูลจริง**ติด `true` ทุกหน่วยที่ยังขายอยู่** ระบบไม่มีแนวคิด "หน่วยหลักต่อสินค้า" เลย
+
+  **อย่าใช้ฟิลด์นี้เลือกหน่วยเริ่มต้น** — ให้ใช้ `default_uom` แทน (ซึ่งจะเป็น `null` เมื่อมีหลายหน่วย = ต้องให้ผู้ใช้เลือก)
+
+  ---
+
+  ## 5. วิธีใช้ในแอป
+
+  ```dart
+  final res = await api.getProductList(page: 1, perPage: 20);
+
+  for (final p in res.data.products) {
+    // เลือกหน่วยให้อัตโนมัติเฉพาะตอนมีหน่วยเดียว
+    final uom = p.defaultUom ?? await askUserToPickUom(p.uoms);
+
+    // ตั้งค่าช่องกรอกจำนวนตามกติกาของหน่วยที่เลือก
+    qtyField
+      ..step     = uom.qtyStep       // 1 หรือ 0.01
+      ..min      = uom.qtyMin
+      ..decimals = uom.qtyDecimals;  // 0 หรือ 2
+
+    // ราคาเป็นบาทแล้ว ใช้ได้ตรง ๆ
+    showPrice(uom.productPriceIncludeVat);
+  }
+
+  // เลื่อนหน้าถัดไป
+  if (res.data.hasNext) loadPage(res.data.page + 1);
+  ```
+
+  **ต่อยอด:** ได้ `product_id` + `uom_code` แล้วส่งไป [`GET promotion/check`](api-reference.md#9-quotation-) เพื่อให้เซิร์ฟเวอร์คำนวณส่วนลดโปรโมชันให้ (ผลตรงกับฝั่งเว็บ 100%)
+
+  ---
+
+  ## 6. Error
+
+  | HTTP | เงื่อนไข | body |
+  |:---:|---|---|
+  | `401` | token หาย/หมดอายุ/ผิด | `{success:false, message:"Token expired or invalid"}` หรือ `{status:"error", code:"token_..."}` จาก middleware |
+  | `422` | `per_page` > 200, `page` < 1, `sort` ไม่อยู่ในรายการ | `{message, errors}` (ValidationException) |
+  | `500` | ส่ง `q` มา — **ดูหมายเหตุข้อ 1** | error ของ Laravel |
+  | `404` | subdomain ไม่มีในระบบ | HTML abort |
+
+  > เส้นนี้เช็ค token เองซ้ำอีกชั้นหลังจาก middleware `auth_api` ผ่านแล้ว จึงมีข้อความ 401 สองรูปแบบ
+
+  ---
+
+  ## ⚠️ หมายเหตุ
+
+  ### 1. `?q=` ทำให้เกิด 500 — คอลัมน์ `products.sku` ไม่มีอยู่จริง
+
+  ```php
+  // app/Http/Controllers/Auth/ApiAuthController.php
+  $query->where(function ($w) use ($q) {
+      $w->where('products.name', 'like', "%{$q}%")
+          ->orWhere('model.name', 'like', "%{$q}%")
+          ->orWhere('brand.name', 'like', "%{$q}%")
+          ->orWhere('products.sku', 'like', "%{$q}%");   // ← คอลัมน์นี้ไม่มีในตาราง
+  });
+  ```
+
+  ตรวจแล้ว **ไม่มี migration ไหนสร้างคอลัมน์ `sku`** ในตาราง `products` และไม่มีโค้ดที่อื่นอ้างถึงเลย — บรรทัดนี้เป็นที่เดียวในโปรเจกต์
+
+  ผลคือ PostgreSQL ตอบ `column products.sku does not exist` → **500 ทุกครั้งที่ส่ง `q` มา** ส่วนการเรียกโดยไม่ส่ง `q` ทำงานปกติ (จึงยังไม่มีใครเจอ)
+
+  **วิธีแก้ — เลือกอย่างใดอย่างหนึ่ง:**
+
+  ```php
+  // ก) ลบเงื่อนไขทิ้ง (เร็วที่สุด — ค้นจากชื่อ/รุ่น/แบรนด์ก็พอ)
+  ->orWhere('brand.name', 'like', "%{$q}%");
+
+  // ข) เปลี่ยนไปใช้ products.code ซึ่งเป็นรหัสสินค้าที่มีจริงและ unique
+  ->orWhere('products.code', 'like', "%{$q}%");
+  ```
+
+  แนะนำ **(ข)** เพราะผู้ใช้น่าจะอยากค้นด้วยรหัสสินค้าอยู่แล้ว
+
+  ตรวจซ้ำได้ด้วย:
+  ```bash
+  php artisan tinker
+  >>> Schema::getColumnListing('products');
+  ```
+
+  ### 2. `min_price` / `max_price` เป็นสตางค์ ไม่ใช่บาท
+
+  ฟิลเตอร์เทียบกับคอลัมน์ดิบ `product_prices.product_price` ซึ่งเก็บเป็นสตางค์ ขณะที่ `product_price` ใน response ถูกหาร 100 มาแล้ว — **หน่วยไม่ตรงกันระหว่าง input กับ output**
+
+  ```
+  อยากกรองราคา 500–1,500 บาท  →  ?min_price=50000&max_price=150000
+  ส่ง ?min_price=500 ไป        →  ได้สินค้าตั้งแต่ 5 บาทขึ้นไป
+  ```
+
+  ถ้าจะแก้ให้รับเป็นบาท ต้องคูณ 100 ก่อนใส่ใน where และประกาศไว้ในเอกสาร API พร้อมกัน (breaking change สำหรับแอปที่ใช้อยู่)
+
+  ### 3. `product_price` ระดับบนสุด อาจไม่ตรงกับ `uoms[]`
+
+  สองค่านี้มาจากคนละ subquery และเงื่อนไขไม่เหมือนกัน:
+
+  | | เงื่อนไข |
+  |---|---|
+  | `product_price` (ระดับบนสุด) | `MAX(id)` ของสินค้านั้น **ข้ามทุกหน่วย** + บังคับ `created_by IS NOT NULL` |
+  | `uoms[].product_price` | `MAX(id)` **แยกตามหน่วย** ไม่สนใจ `created_by` |
+
+  ผลที่ตามมา:
+  - สินค้าหลายหน่วย → `product_price` ระดับบนสุดคือราคาของ**หน่วยที่ถูกแก้ล่าสุด** ไม่ใช่หน่วยหลัก (ซึ่งระบบไม่มีอยู่แล้ว)
+  - สินค้าที่ราคาทุกแถวมี `created_by = null` (เช่นข้อมูล seed) → `product_price` เป็น **`null`** ทั้งที่ `uoms[]` มีราคาครบ
+
+  **ฝั่งแอปควรอ่านราคาจาก `uoms[]` เสมอ** ส่วน `product_price` ระดับบนสุดใช้ได้แค่โชว์คร่าว ๆ หรือเรียงลำดับ
+
+  ### 4. ไม่กรอง `is_active`
+
+  query กรองแค่ `products.is_delete = false` — สินค้าที่แอดมินปิดใช้งาน (`is_active = false`) ยังถูกส่งมาด้วย ถ้าไม่ต้องการให้เซลส์เลือกสินค้าที่ปิดอยู่ ต้องกรองฝั่งแอปเอง หรือเพิ่ม `->where('products.is_active', true)` ที่ query
+
+  ### 5. controller อยู่ผิดที่
+
+  `getProductApi()` อยู่ใน `Auth\ApiAuthController` ทั้งที่ไม่เกี่ยวกับการยืนยันตัวตนเลย — ควรย้ายไป `Api\ApiProductController` ตอนที่มีโอกาส refactor (ต้องแก้ route ตามด้วย)
+
+  ---
+
+  *เอกสารที่เกี่ยวข้อง: [api-reference.md](api-reference.md) (สารบัญทุกเส้น) · [api-master-data.md](api-master-data.md) · [api-login.md](api-login.md)*

@@ -1,0 +1,50 @@
+info:
+  name: Update-Order
+  type: http
+  seq: 3
+
+http:
+  method: POST
+  url: "{{sale_uat}}/api/v1/order/update-api/1"
+  body:
+    type: json
+    data: |
+      {
+        "customer_id": 1,
+        "quotation_id": 1,
+        "order_date": "2026-07-27",
+        "price_mode": "price",
+        "header_discount": 150.00,
+        "note": "กรุณาจัดส่งก่อนเที่ยง",
+        "order_lines": [
+          {
+              "product_id": 3,
+              "qty": 3,
+              "discount_type": "amount",
+              "manual_discount": 0,
+              "uom_code": "EA",
+              "unit_price": 160,
+              "discount": 0,
+              "total_line": 480
+          },
+          {
+              "product_id": 1,
+              "qty": 1,
+              "discount_type": "amount",
+              "manual_discount": 0,
+              "uom_code": "EA",
+              "unit_price": 100,
+              "discount": 0,
+              "total_line": 100
+          }
+        ]
+      }
+  auth:
+    type: bearer
+    token: "{{token}}"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

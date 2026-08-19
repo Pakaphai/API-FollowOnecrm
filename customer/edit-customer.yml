@@ -1,0 +1,60 @@
+info:
+  name: edit-customer
+  type: http
+  seq: 4
+
+http:
+  method: GET
+  url: "{{sale_uat}}/api/v1/customer/edit/6"
+  auth:
+    type: bearer
+    token: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwczovL25pY2hhcnBuLnVhdC1mb2xsb3dvbmVjcm0uY29tL2FwaS92MS9sb2dpbiIsImlhdCI6MTc4NTgyMTgwOCwiZXhwIjoxNzg1ODI1NDA4LCJuYmYiOjE3ODU4MjE4MDgsImp0aSI6InlROHBPRHg0N0pKM3hpbkIiLCJzdWIiOiI0IiwicHJ2IjoiMjNiZDVjODk0OWY2MDBhZGIzOWU3MDFjNDAwODcyZGI3YTU5NzZmNyJ9.FjjpQ5tE0LyceKw3l1tWZ6H7OxbuPOjj3zReYcpvQRI
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+
+docs: |-
+  ## 4. `GET /api/v1/customer/edit/{id}`
+
+  ข้อมูลลูกค้าสำหรับเติมฟอร์มแก้ไข — **เส้นเดียวในกลุ่มนี้ที่กรองเจ้าของถูกต้อง**
+
+  ```php
+  ->where('customers.id', $id)
+  ->where('customers.user_id', $user->id)   // ← เฉพาะลูกค้าของตัวเอง
+  ```
+
+  ```json
+  {
+    "customer": {
+      "id": 10, "customer_code": "CUS-202608-0003",
+      "customer_name": "อนัญพร", "contact_name": "...",
+      "province": 10, "province_name": "กรุงเทพมหานคร",
+      "district": 1001, "district_name": "บางรัก",
+      "subdistrict": 100101, "subdistrict_name": "สีลม",
+      "subdistrict_zip_code": "10500",
+      "credit": 0, "credit_type": 0,
+      "credit_type_name": "เงินโอน / เงินสด",
+      "customer_scope_label": "ลูกค้าภายในประเทศ"
+    },
+    "user_id": { "id": 4, "sale_code": "SALE-202607-0003" }
+  }
+  ```
+
+  | ฟิลด์พิเศษ | ความหมาย |
+  |---|---|
+  | `province_name` · `district_name` · `subdistrict_name` · `subdistrict_zip_code` | ชื่อไทย + รหัสไปรษณีย์ (คอลัมน์จริงเก็บเป็น code) |
+  | `credit_type_name` | `0 → "เงินโอน / เงินสด"` · `1 → "เครดิต"` |
+  | `customer_scope_label` | ชื่อไทยของประเภทลูกค้า |
+  | `user_id` | **object ของเจ้าของ** ไม่ใช่ตัวเลข — มี `{id, sale_code}` |
+
+  | HTTP | เงื่อนไข |
+  |:---:|---|
+  | `401` | `{error:"Unauthenticated"}` |
+  | `404` | `{error:"ไม่พบข้อมูลลูกค้าของคุณ"}` — รวมกรณีที่เป็นลูกค้าของคนอื่น |
+
+  > ⚠️ key `user_id` เป็น object ไม่ใช่ int ต่างจาก `customer.user_id` ที่เป็น int — ชื่อซ้ำแต่คนละความหมาย
+
+  ---

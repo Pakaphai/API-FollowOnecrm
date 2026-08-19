@@ -1,0 +1,104 @@
+info:
+  name: calendar
+  type: http
+  seq: 6
+
+http:
+  method: GET
+  url: "{{sale_uat}}/api/v1/getcustomer/detail/byid/1"
+  auth:
+    type: bearer
+    token: "{{token}}"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+
+docs: |-
+  ## 16. `GET /api/v1/getcustomer/detail/byid/{id}`
+
+  **เส้นหลักของหน้ารายละเอียดลูกค้าและปฏิทิน** — **`{id}` = `customer_id`**
+  ยิงเส้นเดียวได้ครบทั้งข้อมูลลูกค้า ประวัติการเข้าพบ นัดหมายค้าง และปฏิทินรวมของเซลส์คนนี้
+
+  ```bash
+  curl -s "$BASE/getcustomer/detail/byid/12" -H "$AUTH" -H "Accept: application/json" | jq
+  ```
+
+  ```json
+  {
+    "status": "success",
+    "data": {
+      "customer": { "...": "..." },
+      "relationship_details_completed": [ "..." ],
+      "relationship_details_scheduled": [ "..." ],
+      "global_schedule": [ "..." ]
+    }
+  }
+  ```
+
+  ### อธิบายตัวแปรใน response ทุกตัว
+
+  ชั้นนอกมี 2 คีย์ — `status` (string, `"success"`) และ `data` (object) ข้างใน `data` มี 4 ก้อน
+
+  | คีย์ | คืออะไร | เรียงยังไง |
+  |---|---|---|
+  | `customer` | ลูกค้า + ที่อยู่ภาษาไทย + `customer_name_full` + `customer_scope_label` | — |
+  | `relationship_details_completed` | นัดหมายที่ปิดงานแล้ว (`mode = completed`) ของลูกค้ารายนี้ | `follow_date` ใหม่→เก่า |
+  | `relationship_details_scheduled` | นัดหมายที่ยังไม่ปิดงาน (`mode = scheduled`) ของลูกค้ารายนี้ | `follow_date`, `time_start` ใหม่→เก่า |
+  | `global_schedule` | **นัดหมายทุกใบของลูกค้าทุกรายที่เป็นของเซลส์คนนี้** สำหรับวาดปฏิทินรวม | ไม่เรียง |
+
+  ### ฟิลด์ใน `customer`
+
+  | ฟิลด์ | ความสำคัญ | อธิบาย |
+  |---|:---:|---|
+  | `id` · `customer_code` · `customer_name` | 🔴 | ข้อมูลระบุตัวลูกค้า |
+  | `customer_name_full` | 🔴 | **ชื่อพร้อมคำนำหน้าตามประเภทนิติบุคคล** (`บริษัท X จำกัด` ฯลฯ) ประกอบมาให้แล้ว — ประเภทที่ไม่รู้จักจะเท่ากับ `customer_name` |
+  | `contact_name` · `customer_tel` | 🔴 | ผู้ติดต่อและเบอร์โทร ใช้ปุ่มโทรออก |
+  | `customer_address` | 🟡 | บ้านเลขที่/ถนน (ไม่รวมตำบล-อำเภอ-จังหวัด) |
+  | `subdistrict` · `district` · `province` | 🟢 | **code ตัวเลข** ไม่ใช่ชื่อ ใช้ตอนส่งกลับไปแก้ไขข้อมูลลูกค้า |
+  | `subdistrict_name` · `district_name` · `province_name` | 🔴 | ชื่อภาษาไทยที่ join มาให้ ใช้ประกอบที่อยู่เต็มไปแสดง |
+  | `subdistrict_zip_code` | 🟡 | รหัสไปรษณีย์ |
+  | `latitude` · `longitude` | 🟡 | พิกัดลูกค้า ใช้เปิดแผนที่/นำทาง |
+  | `customer_scope` | 🟢 | คีย์ `domestic` / `international` |
+  | `customer_scope_label` | 🟡 | ชื่อไทยของประเภทลูกค้า แปลงมาให้แล้ว |
+  | `business_type_id` | 🟢 | ประเภทนิติบุคคล (ตัวกำหนดรูปแบบ `customer_name_full`) |
+  | `tax_id` · `credit` | 🟡 | เลขผู้เสียภาษี / เครดิตเทอม ใช้ตอนออกเอกสาร |
+  | `customer_detail` · `user_id` | 🟢 | โน้ตเพิ่มเติม / id เซลส์เจ้าของลูกค้า |
+
+  ### ฟิลด์ร่วมของทุกรายการใน `relationship_details_completed` และ `_scheduled`
+
+  | ฟิลด์ | ความสำคัญ | อธิบาย |
+  |---|:---:|---|
+  | `id` | 🔴 | id นัดหมาย ใช้ยิงเส้นอื่นต่อ |
+  | `visit_number` | 🔴 | เลขครั้งที่ติดต่อ |
+  | `mode` | 🔴 | `completed` / `scheduled` |
+  | `follow_date` · `time_start` · `time_end` | 🔴 | วัน-เวลานัด |
+  | `contact_type_id` + `contact_type_name` | 🔴 | ประเภทการติดต่อ + ชื่อไทยพร้อมแสดง |
+  | `relationship_status_id` + `relationship_status_name` | 🟡 | สถานะความสัมพันธ์ + ชื่อไทย |
+  | `visit_conclusion_id` + `visit_conclusion_name` | 🟡 | สรุปผลการเข้าพบ + ชื่อไทย |
+  | `contact_detail` | 🟡 | บันทึกย่อ |
+  | `latitude` · `longitude` | 🟡 | พิกัดที่บันทึกไว้ตอนติดต่อ |
+  | `visit_pic` | 🟢 | path ดิบบน S3 |
+  | `visit_pic_url` | 🔴 | signed URL อายุ 10 นาที เอาไปแสดงรูปได้เลย |
+  | `customer_scope` + `customer_scope_label` | 🟢 | ประเภทลูกค้า + ชื่อไทย (มีเฉพาะบางชุด) |
+  | `customer_name` · `contact_name` · `customer_tel` | 🟢 | ข้อมูลลูกค้าที่ join ซ้ำมา (มีครบใน `_completed`) |
+
+  > ชุด `_completed` แนบ `late_request`, `late_request_status`, `late_request_status_label` มาด้วย (ไม่มี `can_submit` / `can_request_late` เพราะปิดงานไปแล้ว)
+
+  ### flag ที่ใช้เรนเดอร์ปุ่มได้ทันที (อยู่ใน `relationship_details_scheduled`)
+
+  | ฟิลด์ | ความหมาย |
+  |---|---|
+  | `is_late` | เลยวันนัดแล้วหรือยัง |
+  | `can_submit` | กดปุ่ม "บันทึก" ได้ไหม (= `!is_late`) |
+  | `can_request_late` | โชว์ปุ่ม "ขออนุมัติล่าช้า" ได้ไหม |
+  | `late_request_status` | `pending` / `approved` / `rejected` / `null` |
+  | `late_request_status_label` | ป้ายภาษาไทยของสถานะข้างบน |
+  | `late_request_note` | `admin_note` — เหตุผลที่แอดมินตีกลับ |
+  | `late_request` | ก้อนคำขอเต็ม (มี `visit_pic_url` ของคำขอด้วย) |
+
+  `relationship_details_completed` ก็แนบ `late_request` มาด้วย จะได้รู้ว่าใบไหนปิดเพราะแอดมินอนุมัติคำขอล่าช้า
+
+  ### ฟิลด์เฉพาะของ `global_schedule`

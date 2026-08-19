@@ -1,0 +1,7 @@
+info:
+  name: Relationship-datail
+  type: folder
+  seq: 7
+
+request:
+  auth: inherit

@@ -1,0 +1,150 @@
+info:
+  name: create-relationship-detail
+  type: http
+  seq: 1
+
+http:
+  method: POST
+  url: "{{sale_uat}}/api/v1/relationship-detail/create-contact"
+  body:
+    type: json
+    data: |
+      {
+          "customer_id": 1,
+          "contact_type_id": 1,
+          "relationship_status_id": 1,
+          "visit_conclusion_id": 1,
+          "follow_date": "2026-07-30",
+          "time_start": "09:00",
+          "time_end": "10:30",
+          "contact_detail": "นัดเข้าพบลูกค้าเพื่อเสนอราคา",
+          "latitude": 13.7563,
+          "longitude": 100.5018
+        }
+  auth:
+    type: bearer
+    token: "{{token}}"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+
+docs: |-
+  ## 8. `POST /api/v1/relationship-detail/create-contact`
+
+  วางแผนนัดหมายใหม่ — สร้าง detail ที่ `mode = 'scheduled'` (ยังไม่ปิดงาน)
+  เป็นเส้นที่แอปเรียกบ่อยที่สุดเส้นหนึ่ง เพราะทุกนัดหมายเริ่มจากที่นี่ก่อนจะไปปิดงานที่ [เส้น 11](#11-post-apiv1relationship-detailsubmit-contactid)
+
+  ### Content-Type ใช้ได้ 2 แบบ
+
+  | แบบ | ใช้เมื่อ |
+  |---|---|
+  | `application/json` | **ไม่แนบรูป** — ส่ง body เป็น JSON ธรรมดา (แบบที่ Postman ใช้อยู่) |
+  | `multipart/form-data` | **แนบรูป `visit_pic`** — JSON ส่งไฟล์ไม่ได้ |
+
+  ```
+  POST /api/v1/relationship-detail/create-contact
+  Authorization: Bearer <token>
+  Content-Type: application/json
+  Accept: application/json
+  ```
+
+  ### พารามิเตอร์ — อันไหนสำคัญ อันไหนไม่
+
+  | ฟิลด์ | บังคับ | ความสำคัญ | กติกา / อธิบาย |
+  |---|:---:|:---:|---|
+  | `customer_id` | ⚠️ | 🔴 | **ต้องส่งเสมอ** — บอกว่านัดใคร · validator เขียนว่า `nullable` แต่คอลัมน์ในฐานข้อมูลเป็น **NOT NULL** ไม่ส่งมาก็ **500** อยู่ดี · ต้องมีอยู่จริงใน `customers` |
+  | `contact_type_id` | ✅ | 🔴 | ประเภทการติดต่อ (เข้าพบ / โทร / ไลน์ …) ดึงตัวเลือกจาก `GET contact-type` · ⚠️ **ไม่ตรวจว่ามีจริง** ส่งเลขมั่วผ่าน validator แต่ไปตายที่ foreign key เป็น **500** |
+  | `follow_date` | ✅ | 🔴 | **วันนัด** — ตัวชี้ขาดของทั้งระบบ ใช้คำนวณ `is_late`, จัดปฏิทิน และตัดสินว่าจะส่งแจ้งเตือนหรือไม่ · รูปแบบ `Y-m-d` (ส่ง datetime ก็ได้) |
+  | `time_start` / `time_end` | | 🟡 | เวลานัด `H:i` เช่น `09:30` · ใช้เรียงลำดับในปฏิทินและตารางนัดหมายวันนี้ · ไม่ส่ง = ช่องเวลาว่าง แต่บันทึกผ่าน |
+  | `contact_detail` | | 🟡 | บันทึกย่อว่าจะไปคุยเรื่องอะไร · validator จำกัด **255 ตัวอักษร** (คอลัมน์จริงเป็น `text` รับได้มากกว่า แต่ validator ตัดก่อน) |
+  | `latitude` / `longitude` | | 🟡 | พิกัดที่จะไป · คอลัมน์เป็น `decimal(9,6)` — เก็บทศนิยม **6 ตำแหน่ง** ส่งมามากกว่านั้นจะถูกปัด |
+  | `relationship_status_id` | | 🟢 | สถานะความสัมพันธ์ — **ตอนวางแผนยังไม่ต้องส่ง** ปกติมากรอกตอนปิดงาน · ไม่ตรวจว่ามีจริง |
+  | `visit_conclusion_id` | | 🟢 | สรุปผลการเข้าพบ — **ตอนวางแผนยังไม่ต้องส่ง** เพราะยังไม่ได้ไปพบ · ไม่ตรวจว่ามีจริง |
+  | `visit_pic` | | 🟢 | รูปการเข้าพบ — ตอนวางแผนแทบไม่มีใครแนบ ปกติแนบตอนปิดงาน · image ≤ **5MB** · `jpeg, jpg, png` เท่านั้น |
+
+  **ฟิลด์ที่ส่งมาก็ไม่มีผล** (controller ไม่หยิบไปใช้) — `relationship_id`, `visit_number`, `mode`, `occasion`, `follow_status_id`, `created_by`, `id`
+  ส่งมาไม่ error แต่ระบบจะเมินแล้วเซ็ตค่าของตัวเองแทน
+
+  ### ตัวอย่าง — JSON (ไม่แนบรูป)
+
+  ```bash
+  curl -s -X POST "$BASE/relationship-detail/create-contact" \
+    -H "$AUTH" -H "Accept: application/json" -H "Content-Type: application/json" \
+    -d '{
+      "customer_id": 1,
+      "contact_type_id": 1,
+      "relationship_status_id": 1,
+      "visit_conclusion_id": 1,
+      "follow_date": "2026-07-30",
+      "time_start": "09:00",
+      "time_end": "10:30",
+      "contact_detail": "นัดเข้าพบลูกค้าเพื่อเสนอราคา",
+      "latitude": 13.7563,
+      "longitude": 100.5018
+    }' | jq
+  ```
+
+  ### ตัวอย่าง — multipart (แนบรูป)
+
+  ```bash
+  curl -s -X POST "$BASE/relationship-detail/create-contact" \
+    -H "$AUTH" -H "Accept: application/json" \
+    -F "customer_id=1" \
+    -F "contact_type_id=1" \
+    -F "follow_date=2026-07-30" \
+    -F "time_start=09:00" -F "time_end=10:30" \
+    -F "contact_detail=นัดเข้าพบลูกค้าเพื่อเสนอราคา" \
+    -F "visit_pic=@/path/to/photo.jpg" | jq
+  ```
+
+  ### ผลลัพธ์ — `201`
+
+  ```json
+  {
+    "success": true,
+    "customer_id": 1,
+    "message": "บันทึกข้อมูลการวางแผนการติดต่อสำเร็จ",
+    "visit_pic": null
+  }
+  ```
+
+  ### อธิบายตัวแปรใน response ทุกตัว
+
+  | ฟิลด์ | ชนิด | ค่าที่เป็นไปได้ | อธิบาย |
+  |---|---|---|---|
+  | `success` | boolean | `true` | บอกว่าบันทึกสำเร็จ — ⚠️ **เชื่อไม่ได้ 100%** เพราะตอน validation ล้มเหลว (422) ก็คืน `true` เหมือนกัน ให้ดู HTTP status แทน |
+  | `customer_id` | integer \| null | id ลูกค้าที่ส่งมา | echo ค่าที่บันทึกจริงกลับมา ใช้ยืนยันว่านัดหมายไปผูกกับลูกค้าถูกคน และเอาไปใช้ redirect กลับหน้ารายละเอียดลูกค้าได้เลย |
+  | `message` | string | `"บันทึกข้อมูลการวางแผนการติดต่อสำเร็จ"` | ข้อความภาษาไทยเอาไปโชว์ toast ได้ตรง ๆ · ข้อความคงที่ ไม่เปลี่ยนตามข้อมูล |
+  | `visit_pic` | string \| null | `"crm/visit_pics/1786425354-e2033526-....jpg"` | **path ดิบบน S3 ไม่ใช่ URL** เอาไปใส่ `<img src>` ตรง ๆ ไม่ขึ้น (bucket เป็น private) · ไม่ได้แนบรูป = `null` · อยากได้รูปต้องไปดึง `visit_pic_url` จากเส้นอ่าน ([9](#9-get-apiv1relationship-detailedit-contactid), [13](#13-get-apiv1relationship-detaillate-statusid), [15](#15-get-apiv1relationship-detailid), [16](#16-get-apiv1getcustomerdetailbyidid)) |
+
+  > ⚠️ **ไม่คืน `id` ของนัดหมายที่เพิ่งสร้าง** — response มีแค่ 4 ตัวข้างบน
+  > ถ้าแอปต้องใช้ `relationship_detail_id` ต่อทันที ให้ยิง
+  > [`GET getcustomer/detail/byid/{customer_id}`](#16-get-apiv1getcustomerdetailbyidid) ซ้ำแล้วหยิบใบล่าสุดจาก `relationship_details_scheduled`
+
+  ### ค่าที่ระบบเซ็ตให้เอง (ไม่ได้คืนมาใน response แต่ถูกบันทึกลงฐานข้อมูล)
+
+  | คอลัมน์ | ค่าที่ได้ | อธิบาย |
+  |---|---|---|
+  | `id` | auto increment | id ของนัดหมาย — ต้องไปดึงจากเส้นอ่าน |
+  | `visit_number` | `VIS202607-0004` | เลขครั้งที่ติดต่อ gen เอง `VIS` + ปี + เดือน + running 4 หลัก · รันใหม่ทุกเดือน · เกิน 9999 ใบ/เดือน → **500** |
+  | `mode` | `"scheduled"` | ฟิกซ์เสมอ — เส้นนี้สร้างได้แค่นัดหมายที่ยังไม่ปิดงาน |
+  | `created_by` | id ผู้ใช้ที่ล็อกอิน | ถ้า token ไม่มี user (เคสหลุด) จะ fallback ไปใช้ `customers.user_id` หรือ `customers.created_by` แทน |
+  | `relationship_id` | `null` | ⚠️ **ไม่ผูกกับแผน (relationships) ใด ๆ** ทำให้รายการนี้ไม่มี `relationship_topic` ในปฏิทิน |
+  | `follow_status_id` | `0` | ค่า default ของคอลัมน์ (0 = ยังไม่ดำเนินการ) — API ชุดนี้ไม่ได้ใช้ฟิลด์นี้เลย |
+  | `occasion` | `null` | คะแนน/โอกาสปิดการขาย — ถูก comment ออกจาก validator แล้ว ส่งมาก็ไม่บันทึก |
+  | `is_delete` | `false` | ค่า default |
+  | `created_at` / `updated_at` | เวลาปัจจุบัน | — |
+
+  ### กติกาที่ต้องรู้
+
+  - **`follow_date` รับปี พ.ศ. ได้** — ถ้าปี > 2400 ระบบลบ 543 ให้อัตโนมัติก่อนบันทึก (`2569-07-30` → `2026-07-30`)
+    แต่เส้นปิดงาน ([11](#11-post-apiv1relationship-detailsubmit-contactid)) **ไม่มีการแปลงนี้** ส่ง ค.ศ. ให้เหมือนกันทุกเส้นปลอดภัยกว่า
+  - **แจ้งเตือน** — แจ้งแอดมิน **ทุกครั้ง** ที่มีการวางแผนนัดหมาย · แจ้งเซลส์เจ้าของ **เฉพาะนัดที่ตรงกับวันนี้**
+    แจ้งเตือนพังไม่ทำให้การบันทึกล้ม (แค่เขียนลง log)
+  - **ไม่ตรวจสิทธิ์เจ้าของ** — ส่ง `customer_id` ของลูกค้าที่เซลส์คนอื่นถืออยู่ก็สร้างนัดหมายให้ได้
+  - 🐞 รูปของเส้นนี้อัปโหลดด้วย `visibility: public` ขณะที่เส้นอื่น (update/submit/late-request) ใช้ `private` — ไม่สม่ำเสมอ แต่ฝั่งอ่านคืน signed URL ให้อยู่ดี
+
+  ### Error

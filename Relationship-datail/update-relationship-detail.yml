@@ -1,0 +1,87 @@
+info:
+  name: update-relationship-detail
+  type: http
+  seq: 2
+
+http:
+  method: POST
+  url: "{{sale_uat}}/api/v1/relationship-detail/create-contact"
+  body:
+    type: json
+    data: |
+      {
+          "customer_id": 1,
+          "contact_type_id": 1,
+          "relationship_status_id": 1,
+          "visit_conclusion_id": 1,
+          "follow_date": "2026-07-31",
+          "time_start": "09:00",
+          "time_end": "10:30",
+          "contact_detail": "นัดเข้าพบลูกค้าเพื่อเสนอราคา",
+          "latitude": 13.7563,
+          "longitude": 100.5018
+        }
+  auth:
+    type: bearer
+    token: "{{token}}"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+
+docs: |-
+  ## 10. `POST /api/v1/relationship-detail/update-contact/{id}`
+
+  แก้ไขนัดหมาย — **`{id}` = `relationship_detail_id`** · ฟิลด์เหมือนเส้น 8 แต่ **`customer_id` กลายเป็นบังคับจริง ๆ ในระดับ validator**
+
+  | ฟิลด์ | บังคับ | ความสำคัญ | หมายเหตุ |
+  |---|:---:|:---:|---|
+  | `customer_id` | ✅ | 🔴 | ต้องมีอยู่จริง — ส่งผิดคือย้ายนัดหมายไปอยู่กับลูกค้าคนอื่น |
+  | `contact_type_id` | ✅ | 🔴 | ไม่ตรวจว่ามีจริง (ส่งเลขมั่ว → FK error 500) |
+  | `follow_date` | ✅ | 🔴 | รับปี พ.ศ. ได้ (ลบ 543 ให้อัตโนมัติ) |
+  | `time_start` / `time_end` | | 🟡 | ต้องเป็น `H:i` — ค่าที่อ่านมาจากเส้น 9 เป็น `HH:MM:SS` **ต้องตัดวินาทีทิ้งก่อนส่ง** |
+  | `contact_detail` · `latitude` · `longitude` | | 🟡 | เหมือนเส้น 8 |
+  | `relationship_status_id` · `visit_conclusion_id` · `visit_pic` | | 🟢 | ปกติยังไม่กรอกตอนนี้ รอไปกรอกตอนปิดงาน |
+
+  ```bash
+  curl -s -X POST "$BASE/relationship-detail/update-contact/88" \
+    -H "$AUTH" -H "Accept: application/json" \
+    -F "customer_id=12" \
+    -F "contact_type_id=1" \
+    -F "follow_date=2026-08-26" \
+    -F "time_start=13:00" -F "time_end=14:00" \
+    -F "contact_detail=เลื่อนนัดเป็นบ่าย" | jq
+  ```
+
+  ```json
+  {
+    "success": true,
+    "message": "แก้ไขข้อมูลการนัดหมายสำเร็จ",
+    "customer_id": 12,
+    "image_path": "crm/visit_pics/1786425354-....jpg"
+  }
+  ```
+
+  ### อธิบายตัวแปรใน response ทุกตัว
+
+  | ฟิลด์ | ชนิด | ความสำคัญ | อธิบาย |
+  |---|---|:---:|---|
+  | `success` | boolean | 🔴 | `true` = แก้ไขสำเร็จ · เคส error เส้นนี้ **ไม่มีคีย์ `success`** แต่คืน `error` + `message` แทน |
+  | `message` | string | 🟡 | `"แก้ไขข้อมูลการนัดหมายสำเร็จ"` เอาไปโชว์ toast |
+  | `customer_id` | integer | 🟡 | id ลูกค้าหลังแก้ไข ใช้ redirect กลับหน้ารายละเอียดลูกค้า |
+  | `image_path` | string \| null | 🟡 | **path ดิบบน S3 ของรูปที่เพิ่งอัปในรอบนี้เท่านั้น** · ไม่ได้แนบรูปใหม่ = `null` **แม้ว่านัดหมายจะมีรูปเดิมอยู่ก็ตาม** — อย่าเอาไปตัดสินว่า "ไม่มีรูป" · ไม่ใช่ URL แสดงรูปไม่ได้ ต้องดึง `visit_pic_url` จากเส้นอ่าน |
+
+  > response **ไม่คืนแถวที่อัปเดตกลับมา** ถ้าหน้าจอต้องรีเฟรชค่าให้ยิง [เส้น 9](#9-get-apiv1relationship-detailedit-contactid) ซ้ำ
+
+  > ⚠️ เส้นนี้ **บังคับ `mode = 'scheduled'` เสมอ** — เอาไปยิงทับใบที่ปิดงานไปแล้ว จะทำให้ใบนั้น "กลับไปเป็นยังไม่เสร็จ"
+  > ถ้าต้องการปิดงานให้ใช้ [เส้น 11 submit-contact](#11-post-apiv1relationship-detailsubmit-contactid) แทน
+
+  > ⚠️ ฟิลด์ที่ **ไม่ส่งมา จะถูกเขียนทับเป็น `null`** (ไม่ใช่ partial update) — ต้องส่งค่าเดิมกลับมาทั้งชุดเสมอ
+
+  > 🐞 ตอนอัปรูปใหม่ โค้ดลบรูปเก่าด้วย path `crm/visit_pics/crm/visit_pics/xxx.jpg` (ต่อ prefix ซ้ำ) จึงลบไม่โดน — รูปเก่าค้างบน S3
+
+  `image_path` เป็น **path ดิบบน S3** ไม่ใช่ URL · ไม่ได้อัปรูปใหม่จะเป็น `null` · ไม่พบ `{id}` → **500**
+
+  ---

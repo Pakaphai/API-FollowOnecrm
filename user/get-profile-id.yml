@@ -1,0 +1,181 @@
+info:
+  name: get-profile-id
+  type: http
+  seq: 2
+
+http:
+  method: GET
+  url: https://nicharpn.uat-followonecrm.com/api/v1/profilelist/4
+  auth:
+    type: bearer
+    token: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwczovL25pY2hhcnBuLnVhdC1mb2xsb3dvbmVjcm0uY29tL2FwaS92MS9sb2dpbiIsImlhdCI6MTc4NTM4NDc3MywiZXhwIjoxNzg1Mzg4MzczLCJuYmYiOjE3ODUzODQ3NzMsImp0aSI6IjF2TTYxRXhsdmRzOVZ3NTEiLCJzdWIiOiI0IiwicHJ2IjoiMjNiZDVjODk0OWY2MDBhZGIzOWU3MDFjNDAwODcyZGI3YTU5NzZmNyJ9.7j81yFTdAeVI61zO6sxFw04MTH0NJY_LVU0oPKOfkgY
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+
+docs: |-
+  ## 1. `GET /api/v1/profilelist/{id}`
+
+  โปรไฟล์เต็มของพนักงานคนหนึ่ง พร้อมยอดขายสะสม ระดับ rank และข้อมูลบริษัท — เป็นเส้นที่ให้ข้อมูลเยอะที่สุดในกลุ่มนี้
+
+  ```
+  GET /api/v1/profilelist/4
+  Authorization: Bearer <token>
+  Accept: application/json
+  ```
+
+  | | |
+  |---|---|
+  | Controller | [`Api\ApiUserController::getProfileList_api()`](../app/Http/Controllers/Api/ApiUserController.php) |
+  | `{id}` | **user_id** ของพนักงานที่ต้องการดู |
+
+  ### พารามิเตอร์
+
+  **ไม่มี query param** — มีแค่ `{id}` ใน path (ตรงกับที่เห็นใน Postman ว่า Query ว่างเปล่า)
+
+  ### Response — `200 OK`
+
+  ```json
+  {
+    "users": {
+      "id": 4,
+      "sale_code": "SALE-202607-0003",
+      "username": "saleofficer0002",
+      "firstname": "นิชาพร",
+      "lastname": "พินิจนันท์",
+      "email": "nicha@example.com",
+      "phone": "0812345678",
+      "level": 2,
+      "position_id": 3,
+      "address": "...", "province": "10", "district": "1003", "subdistrict": "100301",
+      "tax_id": null,
+      "bukkhon_id": null,
+      "has_logged_in": true,
+      "is_delete": false,
+
+      "province_name": "กรุงเทพมหานคร",
+      "district_name": "บางรัก",
+      "subdistrict_name": "สีลม",
+      "zip_code": "10500",
+      "positions_name": "พนักงานขาย",
+      "responsible_name": "สมชาย ใจดี",
+
+      "profile_img_url": "https://...&X-Amz-Expires=600&...",
+      "signature_image_url": null,
+
+      "is_bukkhon_connected": false,
+      "bukkhon_connection": {
+        "connected": false,
+        "bukkhon_id": null,
+        "provider": "google",
+        "status_text": "ยังไม่เชื่อม Google",
+        "message": "ยังไม่ได้เชื่อม Google account",
+        "name": null,
+        "email": null
+      }
+    },
+
+    "positions": [ { "id": 1, "department_id": 1, "name": "...", "access_id": 2 } ],
+
+    "totalsByUserOrder": "45000.00",
+    "orderCount": 12,
+
+    "userRank": {
+      "id": 3, "name": "Gold", "code": "GOLD",
+      "image_url": "https://...", "min_sales": 100000, "max_sales": 499999,
+      "description": "..."
+    },
+    "userRanks": "Gold",
+    "rankImage": "https://...",
+
+    "company": {
+      "company_name": "บริษัท ตัวอย่าง จำกัด",
+      "tax_id": "0105500000000",
+      "phone": "021234567", "email": "info@example.com",
+      "address": "...",
+      "province_name": "กรุงเทพมหานคร",
+      "district_name": "บางรัก",
+      "subdistrict_name": "สีลม",
+      "zip_code": "10500",
+      "company_logo_url": "https://..."
+    }
+  }
+  ```
+
+  ### `users` — ทั้งแถวจากตาราง `users`
+
+  select ด้วย `users.*` จึงได้ **ทุกคอลัมน์** ยกเว้นที่ถูก `unset()` ทิ้ง:
+
+  | ถูกลบออกจาก response | เหตุผล |
+  |---|---|
+  | `password` · `remember_token` | ความปลอดภัย |
+  | `profile_img` · `signature_image` | ส่ง path ดิบไม่มีประโยชน์ — ใช้ `*_url` แทน |
+
+  ฟิลด์ที่ join เพิ่มมา:
+
+  | ฟิลด์ | ที่มา |
+  |---|---|
+  | `province_name` · `district_name` · `subdistrict_name` · `zip_code` | join จากตารางที่อยู่ (คอลัมน์ในตาราง `users` เก็บเป็น **code** ไม่ใช่ชื่อ) |
+  | `positions_name` | join `positions` |
+  | `responsible_name` | ชื่อเต็มของหัวหน้า/ผู้รับผิดชอบ (join `users` กับตัวเอง) |
+
+  **รูปภาพ** — `profile_img_url` และ `signature_image_url` เป็น **presigned อายุ 10 นาที** เป็น `null` ถ้าไม่มีรูป
+
+  ### `bukkhon_connection` — สถานะเชื่อมบัญชี Google
+
+  ระบบถือว่า "เชื่อมแล้ว" เมื่อคอลัมน์ `users.bukkhon_id` มีค่า (เงื่อนไขเดียวกับหน้าเว็บ)
+
+  | ฟิลด์ | เมื่อเชื่อมแล้ว | เมื่อยังไม่เชื่อม |
+  |---|---|---|
+  | `connected` | `true` | `false` |
+  | `bukkhon_id` | ค่าจริง | `null` |
+  | `provider` | `"google"` | `"google"` |
+  | `status_text` | `"เชื่อม Google แล้ว"` | `"ยังไม่เชื่อม Google"` |
+  | `message` | ข้อความยาวพร้อมแสดง | ข้อความยาวพร้อมแสดง |
+  | `name` · `email` | ชื่อ/อีเมลของผู้ใช้ | `null` |
+
+  `is_bukkhon_connected` เป็นค่าเดียวกับ `bukkhon_connection.connected` (ซ้ำซ้อน เก็บไว้เพื่อความสะดวก)
+
+  > จัดการการเชื่อม/ยกเลิกได้ที่ `POST connect/google` — ดู [api-login-google.md](api-login-google.md)
+
+  ### ยอดขายและ rank
+
+  | ฟิลด์ | ชนิด | ความหมาย |
+  |---|---|---|
+  | `totalsByUserOrder` | **string** `"45000.00"` | ยอดขายสะสม**ตลอดกาล** (บาท, **ไม่มีคอมมา**) |
+  | `orderCount` | int | จำนวนบิลที่ปิดจบแล้ว |
+
+  ทั้งคู่นับเฉพาะ `orders.status = 'completed'` **และ** `payment_status = 'paid'` ของลูกค้าที่ `customers.user_id = {id}`
+
+  **`userRank`** — ระดับที่ได้จากยอดขายสะสม ผ่าน `RankModel::findByTotal()`
+  ```sql
+  WHERE min_sales <= ยอดขาย
+    AND (max_sales IS NULL OR max_sales >= ยอดขาย)
+  ORDER BY min_sales DESC LIMIT 1
+  ```
+  เป็น `null` ถ้ายอดขายไม่เข้าช่วงไหนเลย (เช่นยังไม่มียอด และไม่มี rank ที่ `min_sales = 0`)
+
+  > `userRanks` (string) และ `rankImage` เป็น **ฟิลด์เก่าเพื่อ backward-compat กับแอปเวอร์ชันเดิม** — โค้ดใหม่ให้ใช้ `userRank` object
+
+  ### `company` — ข้อมูลบริษัท
+
+  แถวแรกของตาราง company ที่ `is_delete = false` เติมชื่อจังหวัด/อำเภอ/ตำบล + รหัสไปรษณีย์ให้
+
+  **`company_logo_url` มี fallback** — ถ้าบริษัทไม่ได้อัปโหลดโลโก้ จะใช้โลโก้ระบบ `crm/icon/aw_followonecrm-01.png` (presigned **120 นาที**) แทน จึงไม่มีทางเป็น `null`
+
+  เป็น `null` ทั้งก้อนเฉพาะกรณีที่ยังไม่มีข้อมูลบริษัทเลย (ยังไม่ได้ทำหน้าตั้งค่าระบบ)
+
+  ### Error
+
+  | HTTP | เงื่อนไข | body |
+  |:---:|---|---|
+  | `401` | token ไม่ผ่าน (จาก middleware) | `{status:"error", code:"token_..."}` |
+  | `404` | ไม่พบ user id นั้น | `abort(404, 'ไม่พบข้อมูลที่ระบุ')` — **เป็น HTML ถ้าไม่แนบ `Accept: application/json`** |
+  | `500` | DB ล่ม — **ไม่มี try/catch** | error ของ Laravel |
+
+  > **ไม่กรอง `is_delete`** — ส่ง id ของพนักงานที่ถูกปิดใช้งานไปแล้วก็ยังดึงข้อมูลได้
+
+  ---

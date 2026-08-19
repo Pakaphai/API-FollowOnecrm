@@ -1,0 +1,136 @@
+info:
+  name: contact_type_api
+  type: http
+  seq: 1
+
+http:
+  method: GET
+  url: "{{sale_uat}}/api/v1/contact-type"
+  auth:
+    type: bearer
+    token: "{{token}}"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+
+docs: |-
+  ## 1. `GET /api/v1/contact-type`
+
+  ประเภทการติดต่อที่เปิดใช้งานอยู่ ใช้เติม dropdown "ช่องทางการติดต่อ" ในฟอร์มนัดหมาย/บันทึกการเข้าพบ
+
+  ```
+  GET /api/v1/contact-type
+  Authorization: Bearer <token>
+  Accept: application/json
+  ```
+
+  | | |
+  |---|---|
+  | Route | [`routes/api/api_v1.php`](../routes/api/api_v1.php) |
+  | Controller | [`Api\ApiRelationshipController::contact_type_api()`](../app/Http/Controllers/Api/ApiRelationshipController.php) |
+  | Model | [`ContactTypeModel`](../app/Models/ContactTypeModel.php) → ตาราง `contact_types` |
+
+  ### พารามิเตอร์
+
+  **ไม่มีเลย** — ไม่รับทั้ง query string, path param และ body ส่งอะไรมาก็ถูกเมิน
+
+  ### Request
+
+  ```bash
+  curl -s "$BASE/contact-type" -H "$AUTH" -H "Accept: application/json" | jq
+  ```
+
+  ### Response — `200 OK`
+
+  ```json
+  {
+    "contact_types": [
+      {
+        "id": 1,
+        "name": "โทรศัพท์ (Phone Call)",
+        "icon": "crm/icon/phonr.png",
+        "icon_url": "https://inet-s3-object-gw.inet.co.th/.../phonr.png?X-Amz-Expires=1800&..."
+      },
+      {
+        "id": 2,
+        "name": "อีเมล (Email)",
+        "icon": "crm/icon/email.png",
+        "icon_url": "https://..."
+      }
+    ]
+  }
+  ```
+
+  | ฟิลด์ | ชนิด | ความหมาย |
+  |---|---|---|
+  | `id` | int | ค่าที่ต้องส่งกลับเป็น `contact_type_id` ตอนบันทึกนัดหมาย/การติดต่อ |
+  | `name` | string | ชื่อพร้อมแสดง (ไทย + อังกฤษในวงเล็บ) |
+  | `icon` | string\|null | **path ดิบบน S3** — แอปเปิดตรง ๆ ไม่ได้ (bucket เป็น private) |
+  | `icon_url` | string | **presigned URL อายุ 30 นาที** — ตัวที่แอปต้องใช้ |
+
+  > `icon` กับ `icon_url` มาคู่กันเสมอ เพราะ controller `select('id','name','icon')` ส่วน `icon_url` มาจาก `$appends` ของโมเดล **ใช้ `icon_url` เท่านั้น** `icon` มีไว้ให้ฝั่ง server อ้างอิง
+
+  ### ตัวกรองที่ระบบใส่ให้เอง
+
+  ```php
+  ->where('is_delete', false)
+  ->where('is_active', true)
+  ```
+
+  เส้นนี้คืนเฉพาะประเภทที่ **ยังไม่ถูกลบ และเปิดใช้งานอยู่** — แอดมินปิด/เปิดแต่ละประเภทได้จากหน้าตั้งค่าฝั่งเว็บ ดังนั้น **จำนวนรายการที่ได้ต่างกันไปตามแต่ละบริษัท**
+
+  ### ค่าเริ่มต้นของระบบ — 11 ประเภท เปิดใช้ 5
+
+  ทุกบริษัทถูก seed ด้วยชุดนี้ ([`TenantDatabaseSeeder`](../database/seeders/TenantDatabaseSeeder.php)) โดย **id 1–5 เปิดใช้งาน ส่วน 6–11 ปิดไว้**
+
+  | id | `name` | `icon` | เปิดใช้ |
+  |:---:|---|---|:---:|
+  | 1 | โทรศัพท์ (Phone Call) | `crm/icon/phonr.png` | ✅ |
+  | 2 | อีเมล (Email) | `crm/icon/email.png` | ✅ |
+  | 3 | พบลูกค้า (In-person Meeting) | `crm/icon/meetting person.png` | ✅ |
+  | 4 | วิดีโอคอล (Video Call) | `crm/icon/video call.png` | ✅ |
+  | 5 | ไลน์ (Line) | `crm/icon/line.png` | ✅ |
+  | 6 | เฟสบุ๊ค (Facebook) | `crm/icon/facebook.png` | — |
+  | 7 | อินสตาแกรม (Instagram) | `crm/icon/instagram.png` | — |
+  | 8 | ติ๊กต๊อก (TikTok) | `crm/icon/tiktok.png` | — |
+  | 9 | วีแชท (WeChat) | `crm/icon/wechat.png` | — |
+  | 10 | เข้าร่วมงาน (Job Interview) | `crm/icon/job interview.png` | — |
+  | 11 | อื่นๆ (Other) | `crm/icon/other contact.png` | — |
+
+  **บริษัทที่เพิ่งสมัครใหม่จึงได้ 5 รายการ** ไม่ใช่ 11 — อย่า hardcode จำนวนไว้ในแอป
+
+  > ชื่อไฟล์ไอคอนบางตัวสะกดผิดตั้งแต่ต้น (`phonr.png` ไม่ใช่ `phone.png`, `meetting person.png` มีช่องว่างและตัว t เกิน) — เป็นชื่อจริงบน S3 อย่าไป "แก้ให้ถูก"
+
+  ### Error
+
+  | HTTP | เงื่อนไข |
+  |:---:|---|
+  | `401` | token หาย/หมดอายุ/ผิด — ดูรหัสใน field `code` ([api-login.md](api-login.md#รหส-error-ตอนใช-token--apiauth-middleware)) |
+  | `403` | แพ็กเกจบริษัทหมดอายุ (`subscription_expired`) — **ปิดไว้อยู่** |
+  | `404` | subdomain ไม่มีในระบบ (HTML abort) |
+
+  เส้นนี้ไม่มี validation จึง **ไม่มีทางได้ 422** และไม่มี try/catch — ถ้า DB ล่มจะได้ 500 จาก handler กลางของ Laravel
+
+  ### วิธีใช้ในแอป
+
+  ```dart
+  // เรียกครั้งเดียวตอนเปิดแอป แล้ว cache ตัว list ไว้
+  final types = await api.getContactTypes();   // {contact_types: [...]}
+
+  DropdownButton<int>(
+    items: types.map((t) => DropdownMenuItem(
+      value: t.id,
+      child: Row(children: [
+        Image.network(t.iconUrl, width: 24, height: 24),   // ← icon_url ไม่ใช่ icon
+        Text(t.name),
+      ]),
+    )).toList(),
+  );
+  ```
+
+  ⚠️ **`icon_url` หมดอายุใน 30 นาที** — cache ตัวรายการ (id/name) ได้นาน แต่ URL รูปต้องดึงใหม่เมื่อกลับเข้าแอปหลังทิ้งไว้นาน ไม่งั้นรูปจะโหลดไม่ขึ้น
+
+  ---

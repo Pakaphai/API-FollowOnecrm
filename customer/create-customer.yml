@@ -1,0 +1,181 @@
+info:
+  name: create-customer
+  type: http
+  seq: 1
+
+http:
+  method: POST
+  url: "{{sale_uat}}/api/v1/create-customer"
+  body:
+    type: json
+    data: |
+      {
+        "business_type_id": 3,
+        "customer_name": "อนัญพร",
+        "contact_name": "อนัญพร เหล่าสุวรรณณา ",
+        "customer_tel": "038598585",
+        "tax_id": "7689509876855",
+        "customer_address": "123/45 ถนนเจริญกรุง",
+        "province": 10,
+        "district": 1001,
+        "subdistrict": 100101,
+        "latitude": 13.75,
+        "longitude": 100.4917,
+        "credit": 0,
+        "credit_type": 1,
+        "customer_detail":"อนัญพร เหล่าสุวรรณณา",
+        "customer_scope" :""
+      }
+  auth:
+    type: bearer
+    token: "{{token}}"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+
+docs: |-
+  ## 1. `POST /api/v1/create-customer`
+
+  ```
+  POST /api/v1/create-customer
+  Authorization: Bearer <token>
+  Content-Type: application/json
+  Accept: application/json
+  ```
+
+  ### พารามิเตอร์
+
+  | ฟิลด์ | บังคับ | กติกา |
+  |---|:---:|---|
+  | `customer_name` | ✅ | ≤255 + **จำกัดจำนวนไบต์** (`MaxBytes` 255 ไบต์) |
+  | `contact_name` | ✅ | ≤255 + **ตัวอักษรเท่านั้น** (ห้ามตัวเลข/อักขระพิเศษ) + MaxBytes |
+  | `customer_tel` | ✅ | รูปแบบเบอร์ไทย (`ThaiPhone::RULE`) |
+  | `tax_id` | | **13 หลักพอดี** — ขีดกลางถูกตัดออกให้อัตโนมัติก่อนตรวจ |
+  | `business_type_id` | | ไม่ส่ง/ส่งค่าว่าง = **7** · ไม่มีในระบบ = **404** |
+  | `customer_scope` | | `domestic` \| `international` — ค่าว่างจะกลายเป็น `domestic` |
+  | `customer_detail` | | ≤2000 |
+  | `customer_address` | | ≤255 |
+  | `province` · `district` · `subdistrict` | | integer — เป็น **code** ไม่ใช่ id |
+  | `latitude` | | `-90` ถึง `90` |
+  | `longitude` | | `-180` ถึง `180` |
+  | `credit` | | `0` \| `30` \| `60` \| `90` เท่านั้น |
+  | `credit_type` | | `0` \| `1` — ⚠️ **ค่าที่ส่งมาถูกเมิน** ดูด้านล่าง |
+
+  ```bash
+  curl -s -X POST "$BASE/create-customer" \
+    -H "$AUTH" -H "Accept: application/json" -H "Content-Type: application/json" \
+    -d '{
+      "business_type_id": 3,
+      "customer_name": "อนัญพร",
+      "contact_name": "อนัญพร เหล่าสุวรรณา",
+      "customer_tel": "038598585",
+      "tax_id": "7689509876855",
+      "customer_address": "123/45 ถนนเจริญกรุง",
+      "province": 10, "district": 1001, "subdistrict": 100101,
+      "latitude": 13.75, "longitude": 100.4917,
+      "credit": 0, "credit_type": 1,
+      "customer_detail": "อนัญพร เหล่าสุวรรณา",
+      "customer_scope": ""
+    }'
+  ```
+
+  ### ค่าที่เซิร์ฟเวอร์ตัดสินใจเอง — ส่งมาก็ไม่มีผล
+
+  | ฟิลด์ | เซิร์ฟเวอร์ทำอะไร |
+  |---|---|
+  | `customer_code` | gen เอง รูปแบบ `CUS-YYYYMM-0001` (running 4 หลักต่อเดือน) |
+  | `user_id` | = ผู้ใช้ที่ login (เจ้าของลูกค้า) |
+  | `created_by` | = ผู้ใช้ที่ login |
+  | **`credit_type`** | **คำนวณจาก `credit` ใหม่เสมอ** — `credit == 0 → 0` มิฉะนั้น `1` |
+  | `customer_rate` | ไม่ส่ง = `0` |
+
+  ⚠️ **`credit_type` ที่ส่งมาถูกเขียนทับ** — จากตัวอย่างข้างบนส่ง `credit: 0, credit_type: 1` มา แต่ response คืน `credit_type: 0` เพราะ `credit` เป็น 0
+
+  ```php
+  $credit = $request->has('credit') ? (int) $request->credit : 0;
+  $credit_type = ($credit === 0) ? 0 : 1;   // ← ไม่สนใจ credit_type ที่ส่งมา
+  ```
+
+  **ฝั่งแอปส่งแค่ `credit` ก็พอ** ไม่ต้องส่ง `credit_type`
+
+  ### Response — `200 OK`
+
+  > ⚠️ เป็น **200 ไม่ใช่ 201** ต่างจากเส้นสร้างอื่น ๆ ในระบบ (เช่น `create-contact` ที่คืน 201)
+
+  ```json
+  {
+    "success": true,
+    "message": "บันทึกข้อมูลสำเร็จ",
+    "data": {
+      "id": 10,
+      "user_id": 4,
+      "customer_code": "CUS-202608-0003",
+      "business_type_id": 3,
+      "customer_scope": "domestic",
+      "customer_detail": "อนัญพร เหล่าสุวรรณา",
+      "tax_id": "7689509876855",
+      "customer_name": "อนัญพร",
+      "contact_name": "อนัญพร เหล่าสุวรรณา",
+      "customer_address": "123/45 ถนนเจริญกรุง",
+      "province": 10, "district": 1001, "subdistrict": 100101,
+      "customer_tel": "038598585",
+      "latitude": 13.75, "longitude": 100.4917,
+      "customer_rate": 0,
+      "credit": 0,
+      "credit_type": 0,
+      "created_by": 4,
+      "created_at": "2026-08-04T05:45:54.000000Z",
+      "updated_at": "2026-08-04T05:45:54.000000Z",
+
+      "formatted_name": "บริษัท อนัญพร จำกัด",
+      "customer_scope_label": "ลูกค้าภายในประเทศ"
+    }
+  }
+  ```
+
+  ### 2 ฟิลด์ที่โมเดลเติมให้ (`$appends`)
+
+  | ฟิลด์ | ที่มา |
+  |---|---|
+  | `formatted_name` | ชื่อบริษัทเติมคำนำหน้าตาม `business_type_id` |
+  | `customer_scope_label` | ชื่อไทยของ `customer_scope` |
+
+  **รูปแบบชื่อตามประเภทธุรกิจ**
+
+  | `business_type_id` | รูปแบบ |
+  |:---:|---|
+  | 2 | `ห้างหุ้นส่วนจำกัด {ชื่อ}` |
+  | 3 | `บริษัท {ชื่อ} จำกัด` |
+  | 4 | `บริษัท {ชื่อ} จำกัด (มหาชน)` |
+  | 5 | `สหกรณ์ {ชื่อ} จำกัด` |
+  | 6 | `ห้างหุ้นส่วนสามัญ {ชื่อ}` |
+  | อื่น ๆ (รวม 7) | `{ชื่อ}` ตรง ๆ |
+
+  `customer_scope_label`: `domestic → "ลูกค้าภายในประเทศ"` · `international → "ลูกค้าต่างประเทศ"` (ค่าที่ไม่รู้จักตกไปเป็น domestic)
+
+  ### Error
+
+  | HTTP | เงื่อนไข | body |
+  |:---:|---|---|
+  | `401` | token ไม่ผ่าน | `{error:"Unauthenticated", message:"ไม่สามารถระบุผู้ใช้งานจาก token ได้"}` |
+  | `422` | ผิดกติกา | `{message:"Validation failed.", errors:{...}}` |
+  | `422` | ที่อยู่ไม่สัมพันธ์กัน | `{message:"ที่อยู่ไม่ถูกต้อง"}` |
+  | `404` | `business_type_id` ไม่มีในระบบ | `{message:"ไม่พบ business type id "}` |
+  | `500` | exception อื่น | `{error:"เกิดข้อผิดพลาด...", message:"..."}` |
+
+  ### ตรวจที่อยู่ให้สัมพันธ์กัน
+
+  ถ้าส่ง `province` + `district` + `subdistrict` **มาครบทั้ง 3 ตัว** ระบบตรวจว่าเป็นชุดที่ถูกต้องจริง (ตำบลอยู่ในอำเภอนั้น อำเภออยู่ในจังหวัดนั้น) ถ้าไม่ตรงจะได้ 422 `"ที่อยู่ไม่ถูกต้อง"`
+
+  **ส่งไม่ครบทั้ง 3 = ข้ามการตรวจ** — ส่งแค่จังหวัดกับตำบลที่ไม่เกี่ยวกันก็บันทึกได้
+
+  ### 💡 ข้อจำกัดไบต์ของ PostgreSQL
+
+  `varchar(255)` เก็บได้ **255 ไบต์ ไม่ใช่ 255 ตัวอักษร** ภาษาไทยกินตัวละ ~3 ไบต์ จึงเก็บได้จริง ~85 ตัวอักษร — ระบบจึงใช้ `App\Rules\MaxBytes` คู่กับ `max:255` ที่ `customer_name` และ `contact_name`
+
+  ถ้าเกิน จะได้ 422 พร้อมข้อความที่ระบุชื่อฟิลด์เป็นภาษาไทย
+
+  ---

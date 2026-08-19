@@ -1,0 +1,133 @@
+info:
+  name: contact_customer_store
+  type: http
+  seq: 1
+
+http:
+  method: POST
+  url: "{{sale_uat}}/api/v1/customer/contact/customer/store"
+  body:
+    type: multipart-form
+    data:
+      - name: customer_id
+        type: text
+        value: "1"
+      - name: contact_type_id
+        type: text
+        value: "1"
+      - name: relationship_status_id
+        type: text
+        value: "2"
+      - name: visit_conclusion_id
+        type: text
+        value: "1"
+      - name: follow_date
+        type: text
+        value: 2026-07-30
+      - name: time_start
+        type: text
+        value: 09:00
+        disabled: true
+      - name: time_end
+        type: text
+        value: 10:45
+        disabled: true
+      - name: contact_detail
+        type: text
+        value: เข้าพบเรียบร้อย
+      - name: latitude
+        type: text
+        value: "13.7563"
+      - name: longitude
+        type: text
+        value: "100.5018"
+      - name: visit_pic
+        type: file
+        value:
+          - C:\Users\Softa-P\Pictures\Screenshots\Screenshot 2026-07-24 232801.png
+        contentType: image/png
+  auth:
+    type: bearer
+    token: "{{token}}"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+
+docs: |
+  ## 6. `POST /api/v1/customer/contact/customer/store`
+
+  **บันทึกการติดต่อด่วน** — สำหรับเคสที่เซลส์เจอลูกค้าแล้วบันทึกย้อนหลังเลย ไม่ได้นัดล่วงหน้า
+
+  เส้นนี้ทำ 2 อย่างในครั้งเดียว
+  1. สร้าง `relationships` ใหม่ให้อัตโนมัติ `topic = "บันทึกการติดต่อ(ด่วน)"` · `relationship_date = วันนี้`
+  2. สร้าง `relationship_details` ที่ **`mode = 'completed'` ทันที** · `time_start = time_end = เวลาปัจจุบัน (Asia/Bangkok)`
+
+  ```
+  POST /api/v1/customer/contact/customer/store
+  Content-Type: multipart/form-data
+  ```
+
+  | ฟิลด์ | บังคับ | กติกา |
+  |---|:---:|---|
+  | `customer_id` | ✅ | ต้องมีอยู่จริง |
+  | `contact_type_id` | ✅ | numeric |
+  | `product_type_id` | | ต้องมีอยู่จริง (ว่างได้) |
+  | `relationship_status_id` | | numeric |
+  | `visit_conclusion_id` | | numeric |
+  | `visit_pic` | | image ≤ **5MB** · `jpeg,png,jpg,gif,svg,webp` |
+  | `contact_detail` | | string ≤255 |
+  | `latitude` / `longitude` | | numeric |
+
+  ```bash
+  curl -s -X POST "$BASE/customer/contact/customer/store" \
+    -H "$AUTH" -H "Accept: application/json" \
+    -F "customer_id=12" \
+    -F "contact_type_id=1" \
+    -F "product_type_id=3" \
+    -F "relationship_status_id=2" \
+    -F "visit_conclusion_id=1" \
+    -F "contact_detail=แวะส่งเอกสารและคุยเรื่องราคา" \
+    -F "latitude=13.75" -F "longitude=100.4917" \
+    -F "visit_pic=@/path/to/photo.jpg" | jq
+  ```
+
+  ### ผลลัพธ์ — `201`
+
+  ```json
+  {
+    "success": true,
+    "message": "เพิ่มการติตด่อด่วนสำเร็จ",
+    "data": {
+      "id": 91,
+      "customer_id": 12,
+      "mode": "completed",
+      "visit_number": "VIS202608-0007",
+      "follow_date": "2026-08-18T04:11:02.000000Z",
+      "time_start": "11:11", "time_end": "11:11",
+      "visit_pic": "crm/visit_pics/1786425354-e2033526-....jpg",
+      "...": "..."
+    }
+  }
+  ```
+
+  **สิ่งที่เกิดขึ้นเบื้องหลัง**
+  - `visit_number` gen เอง รูปแบบ `VIS` + ปี + เดือน + `-` + running 4 หลัก เช่น `VIS202608-0007`
+    รันใหม่ทุกเดือน · **เกิน 9999 ใบต่อเดือนจะ 500** `"ไม่สามารถสร้างเลขครั้งที่ติดต่อได้ (ลำดับเต็ม)"`
+  - รูปอัปขึ้น S3 ที่ `crm/visit_pics/<timestamp>-<uuid>.<ext>` · คืนมาเป็น **path ดิบ ไม่ใช่ URL**
+    ต้องไปดึง `visit_pic_url` (signed URL อายุ 10 นาที) จากเส้นอ่าน เช่น เส้น 9, 13, 15, 16
+  - ยิง notification: **แจ้งแอดมินทุกครั้ง** และแจ้งเซลส์เจ้าของด้วยถ้าเป็นนัดหมายของวันนี้
+    แจ้งเตือนพังไม่กระทบการบันทึก (แค่ลง log)
+  - ⚠️ detail ที่สร้างจากเส้นนี้ **ไม่ได้เซ็ต `relationship_id`** ทั้งที่เพิ่งสร้าง relationship ไป
+    ฉะนั้นมันจะไม่โผล่ในรายงานที่ join ผ่าน `relationship_id` (เช่น `global_schedule.relationship_topic` จะเป็น `null`)
+
+  ### Error
+
+  | HTTP | เงื่อนไข |
+  |:---:|---|
+  | `422` | `{"success": false, "message": "Validation failed.", "errors": {...}}` |
+  | `500` | ลำดับ `visit_number` เต็ม / error อื่น (คืน `line`, `file` มาด้วย) |
+
+  ---

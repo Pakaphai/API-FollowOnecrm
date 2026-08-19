@@ -1,0 +1,371 @@
+info:
+  name: login
+  type: http
+  seq: 1
+
+http:
+  method: POST
+  url: https://nicharpn.uat-followonecrm.com/api/v1/login
+  body:
+    type: json
+    data: |-
+      {
+        "username": "saleofficer0002",
+        "password": "saleofficer0002"
+      }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+
+docs: |
+  # API — เข้าสู่ระบบ (Login) และวงจรอายุ Token
+
+  เส้นทางเข้าระบบของฝั่งแอปมือถือ ตั้งแต่ระบุบริษัท → login → ใช้ token → ต่ออายุ → ออกจากระบบ
+
+  ```
+  POST /api/v1/login
+  Content-Type: application/json
+  Accept: application/json
+  ```
+
+  เป็น **public endpoint** ไม่ต้องแนบ token — อยู่นอกกลุ่ม `middleware('auth_api')`
+
+  | | |
+  |---|---|
+  | Route | [`routes/api/api_v1.php`](../routes/api/api_v1.php) |
+  | Controller | [`Auth\ApiAuthController::login()`](../app/Http/Controllers/Auth/ApiAuthController.php) — อยู่ใน namespace `Auth` ไม่ใช่ `Api` |
+  | Auth driver | JWT (`tymon`-fork `php-open-source-saver/jwt-auth`), guard `api` |
+
+  ---
+
+  ## 1. Base URL — ต้องยิงเข้า subdomain ของบริษัท
+
+  Tenant ถูกระบุจาก **subdomain** ของ request ไม่ใช่จากพารามิเตอร์ใน body
+
+  ```bash
+  # dev เครื่องตัวเอง
+  BASE="http://sunnypop.localhost:8000/api/v1"
+
+  # UAT / production
+  BASE="https://nicharpn.uat-followonecrm.com/api/v1"
+  ```
+
+  [`InitializeTenancyIfSubdomain`](../app/Http/Middleware/InitializeTenancyIfSubdomain.php) ถูก `prependToGroup('api')` ใน [`bootstrap/app.php`](../bootstrap/app.php) จึงทำงาน **ก่อน** controller เสมอ:
+
+  ```
+  nicharpn.uat-followonecrm.com
+  └─ ตัด subdomain = "nicharpn"
+     └─ Tenant::where('code', 'nicharpn')->first()
+        └─ tenancy()->initialize($tenant)
+           └─ สลับ search_path เป็น tenant_<id>,public
+  ```
+
+  ทุก query หลังจากนี้ (`User::where(...)`) จึงวิ่งเข้า schema ของบริษัทนั้นอัตโนมัติ
+
+  | กรณี | ผลลัพธ์ |
+  |---|---|
+  | subdomain ไม่มีใน `tenants` | `abort(404)` — ไม่ทันเข้า controller (ได้ HTML ไม่ใช่ JSON) |
+  | ยิงที่ central domain (`followonecrm.com`) | ข้ามการ init → query ชี้ schema กลาง หา user ไม่เจอ |
+  | `APP_MODE=standalone` | resolve tenant คงที่จาก `STANDALONE_TENANT_CODE` ไม่สน host — ดู [standalone-mode.md](standalone-mode.md) |
+
+  > **หา base URL จาก company code:** `GET /api/v1/verify-company-code/{code}` คืน `{success, data:{is_valid, url}}` — โหมด standalone จะคืน host ของตัวเอง แอปจึงข้ามหน้ากรอก company code ได้
+
+  ---
+
+  ## 2. Request
+
+  ```bash
+  curl -s -X POST "$BASE/login" \
+    -H "Accept: application/json" \
+    -H "Content-Type: application/json" \
+    -d '{"username":"saleofficer0002","password":"saleofficer0002"}'
+  ```
+
+  | ฟิลด์ | บังคับ | ชนิด | หมายเหตุ |
+  |---|:---:|---|---|
+  | `username` | ✅ | string | **ไม่ case-sensitive** — ระบบ `strtolower()` ก่อนค้นเสมอ |
+  | `password` | ✅ | string | เทียบกับ bcrypt hash ในคอลัมน์ `password` |
+
+  > ต้องแนบ `Accept: application/json` ทุกครั้ง ไม่งั้น error 422/500 จะกลับมาเป็นหน้า HTML แทน JSON
+
+  ---
+
+  ## 3. Response — `200 OK`
+
+  ```json
+  {
+    "message": "เข้าสู่ระบบสำเร็จ",
+    "user_detail": {
+      "id": 4,
+      "sale_code": "SALE-202607-0003",
+      "username": "saleofficer0002",
+      "firstname": "นิชาพร",
+      "lastname": "พินิจนันท์",
+      "level": 2,
+      "profile_img": "https://inet-s3-object-gw.inet.co.th/...&X-Amz-Expires=600&X-Amz-Signature=...",
+      "has_logged_in": true,
+      "is_first_login": false
+    },
+    "first_login": {
+      "is_first_login": false,
+      "should_change_password": false,
+      "should_complete_profile": false,
+      "must_run_system_setup": false,
+      "message": null
+    },
+    "token": {
+      "access_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...",
+      "token_type": "bearer",
+      "expires_in": 3600
+    }
+  }
+  ```
+
+  ### `user_detail`
+
+  | ฟิลด์ | ชนิด | ความหมาย |
+  |---|---|---|
+  | `id` | int | PK ใน schema ของบริษัทนี้ — **ไม่ unique ข้ามบริษัท** |
+  | `sale_code` | string | รหัสพนักงานที่ระบบ generate |
+  | `username` | string | พิมพ์เล็กเสมอ |
+  | `firstname` / `lastname` | string | ชื่อ-นามสกุล |
+  | `level` | int | ระดับสิทธิ์ — ดูตารางด้านล่าง |
+  | `profile_img` | string\|null | **presigned URL อายุ 10 นาที** (`X-Amz-Expires=600`), `null` ถ้าไม่มีรูป |
+  | `has_logged_in` | bool | สถานะ **ก่อน** login ครั้งนี้ — `false` = ยังไม่เคยเข้าใช้บัญชีนี้ |
+  | `is_first_login` | bool | ตรงข้ามกับ `has_logged_in` เสมอ (ให้เลือกใช้ตัวที่อ่านง่ายกว่า) |
+
+  **ระดับสิทธิ์ (`level`)**
+
+  | ค่า | บทบาท |
+  |:---:|---|
+  | `0` | เจ้าของบริษัท |
+  | `1` | ผู้ดูแลระบบ (แอดมิน) |
+  | `2` | เซลส์ |
+  | `3` | บัญชี |
+  | `4` | คลังสินค้า |
+
+  > ⚠️ `profile_img` หมดอายุใน 10 นาที **ห้าม cache ยาว** — ถ้ารูปโหลดไม่ขึ้นให้ดึงใหม่จาก `GET /api/v1/profileUser`
+
+  ### `first_login` — ธงสำหรับ onboarding
+
+  มาจาก `ApiAuthController::firstLoginHints()` ถ้า **ไม่ใช่** การเข้าใช้ครั้งแรก จะคืน `false` ทั้งก้อนและ `message: null` (ไม่คำนวณอะไรเลย)
+
+  | ฟิลด์ | เป็น `true` เมื่อ | แอปควรทำอะไร |
+  |---|---|---|
+  | `is_first_login` | `has_logged_in` เดิมเป็น false | แสดงหน้าต้อนรับ |
+  | `should_change_password` | `level ∈ {0,1,2}` | ระบบตั้ง password เริ่มต้น = username → ชวนตั้งรหัสใหม่ (**แนะนำ ไม่บังคับ**) ผ่าน `POST /api/v1/update-password` |
+  | `should_complete_profile` | `level ∈ {2,3,4}` | พาไปหน้ากรอกข้อมูลโปรไฟล์ให้ครบ |
+  | `must_run_system_setup` | แอดมินคนแรกของบริษัทที่ข้อมูลบริษัทยังไม่ครบ | พาไปหน้าตั้งค่าข้อมูลบริษัท |
+
+  `must_run_system_setup` คำนวณจาก [`User::mustRunSystemSetup()`](../app/Models/User.php) — เป็น `true` ก็ต่อเมื่อครบทุกข้อ:
+  1. เป็น level 0 หรือ 1 และ `has_logged_in` ยังเป็น false
+  2. ไม่มีแอดมินคนอื่นที่ `has_logged_in = true` แล้ว
+  3. ข้อมูลบริษัทยังไม่ครบ (ต้องมี `tax_id`, `company_name`, `phone`, `email`, `address`, `province`, `district`, `subdistrict`)
+
+  > ธงทั้ง 3 ตัวอิงพฤติกรรมเดียวกับฝั่งเว็บ (`Auth\AuthController::signin` + `HomeController::dashboard`)
+  > และ **จริงแค่ครั้งเดียวตลอดอายุบัญชี** — พอ login สำเร็จระบบตั้ง `has_logged_in = true` ทันที ครั้งถัดไปได้ `false` หมด
+
+  ### `token`
+
+  | ฟิลด์ | ค่า | หมายเหตุ |
+  |---|---|---|
+  | `access_token` | JWT (HS256) | payload มีแค่ `sub` = user id + claim มาตรฐาน (`iat`, `exp`, `jti`) — `getJWTCustomClaims()` คืน `[]` |
+  | `token_type` | `"bearer"` | |
+  | `expires_in` | `3600` | วินาที = `JWT_TTL` (60 นาที) × 60 |
+
+  ---
+
+  ## 4. ลำดับการทำงานภายใน
+
+  ```
+  1. InitializeTenancyIfSubdomain  →  resolve tenant จาก subdomain, สลับ schema
+  2. validate                      →  username, password required   (ไม่ผ่าน = 422)
+  3. User::where(username, is_delete=0)->first()                    (ไม่เจอ  = 404)
+  4. JWTAuth::attempt()            →  เทียบ bcrypt + ออก token ในครั้งเดียว (ผิด = 401)
+  5. tenant()->isAccessBlocked()   →  บล็อกถ้าแพ็กเกจเลยกำหนด        (โดน  = 403)
+  6. จำ $isFirstLogin  →  สร้าง firstLoginHints  →  ค่อยตั้ง has_logged_in = true
+  7. ออก presigned URL ของรูปโปรไฟล์ (10 นาที)
+  8. คืน JSON 200
+  ```
+
+  **จุดที่ต้องรู้**
+
+  - **ขั้น 3 กับ 4 เป็นคนละ query** — ขั้น 3 มีไว้แยกข้อความ error `"ไม่พบผู้ใช้"` ออกจาก `"รหัสผ่านไม่ถูกต้อง"` เท่านั้น ส่วน `attempt()` ทำทั้งตรวจรหัสและออก token ในครั้งเดียว (ของเดิมเรียกซ้ำ 2 รอบ ทำให้ hash bcrypt สองครั้งต่อการ login — แก้แล้ว)
+  - **ลำดับขั้น 6 จงใจ** — `mustRunSystemSetup()` อ่าน `has_logged_in` อยู่ข้างใน ถ้าอัปเดตค่าก่อนสร้าง hint จะได้ผลผิด
+  - **ขั้น 5 ไม่ทำงานตอนนี้** — [`Tenant::isAccessBlocked()`](../app/Models/Tenant.php) ถูกปิดไว้ (`return false;` ตายตัว) เพราะมีบริษัทที่เลยกำหนดแล้วแต่ยังต้องใช้งานต่อได้
+
+  ---
+
+  ## 5. Error ที่เป็นไปได้
+
+  | HTTP | `code` / เงื่อนไข | body |
+  |:---:|---|---|
+  | `404` | subdomain ไม่มีใน `tenants` | HTML abort ของ Laravel (ไม่ใช่ JSON) |
+  | `422` | ไม่ส่ง `username` หรือ `password` | `{message, errors}` (ValidationException ของ Laravel) |
+  | `404` | ไม่พบ username หรือถูกลบ (`is_delete = 1`) | `{"success": false, "message": "ไม่พบผู้ใช้."}` |
+  | `401` | รหัสผ่านไม่ถูกต้อง | `{"success": false, "message": "รหัสผ่านไม่ถูกต้อง."}` |
+  | `403` | `subscription_expired` — แพ็กเกจหมดอายุ (**ปิดไว้**) | `{"success": false, "message": "บัญชีหมดอายุ...", "code": "subscription_expired"}` |
+  | `500` | exception อื่น ๆ (เขียน log ไว้แล้ว) | `{"message": "มีบางอย่างผิดพลาด."}` |
+
+  > ⚠️ **response ตอนสำเร็จไม่มี key `success`** — กรณี error ทุกแบบมี `"success": false` แต่ตอนสำเร็จไม่มี `"success": true`
+  > แอปต้องเช็ค **HTTP status code** ไม่ใช่ `body.success` (ถ้าเช็ค `success` จะแปลผลสำเร็จเป็น falsy)
+
+  ---
+
+  ## 6. วงจรอายุ Token
+
+  ```
+  POST /login                          →  access_token (อายุ 60 นาที)
+     │
+     ├─ ใช้งาน: แนบ header ทุก request
+     │     Authorization: Bearer <access_token>
+     │
+     ├─ หมดอายุ (401 code=token_expired)
+     │     └─ GET /refresh  →  ได้ token ใหม่  (ทำได้ภายใน 14 วันนับจากออก token แรก)
+     │           └─ เกิน 14 วัน  →  401 code=refresh_expired  →  ต้อง login ใหม่
+     │
+     └─ GET /logout  →  blacklist token ทันที + เคลียร์ fcm_token
+  ```
+
+  | ค่า | env | ค่าปัจจุบัน |
+  |---|---|---|
+  | อายุ access token | `JWT_TTL` | 60 นาที |
+  | ต่ออายุได้ถึง | `JWT_REFRESH_TTL` | 20160 นาที = **14 วัน** |
+  | blacklist | `JWT_BLACKLIST_ENABLED` | `true` — logout แล้ว token เดิมใช้ไม่ได้ทันที |
+
+  ### รหัส error ตอนใช้ token — [`ApiAuth` middleware](../app/Http/Middleware/ApiAuth.php)
+
+  middleware parse token เองแทนที่จะเรียก `Auth::guard('api')->user()` ตรง ๆ เพราะ JWTGuard จะกลืน exception แล้วคืน `null` ทุกกรณี ทำให้แอปแยกไม่ออกว่าควร refresh หรือ re-login
+
+  | `code` | HTTP | ความหมาย | แอปควรทำ |
+  |---|:---:|---|---|
+  | `token_absent` | 401 | ไม่ได้แนบ header มาเลย | ไปหน้า login |
+  | `token_expired` | 401 | หมดอายุ 60 นาที | **เรียก `/refresh`** |
+  | `token_blacklisted` | 401 | logout ไปแล้ว | ไปหน้า login |
+  | `token_invalid` | 401 | ผิดรูปแบบ / ลายเซ็นไม่ถูก | ไปหน้า login |
+  | `user_not_found` | 401 | token ถูกต้องแต่หา user ไม่เจอ (ถูกลบ / คนละ tenant) | ไปหน้า login |
+  | `subscription_expired` | 403 | แพ็กเกจบริษัทหมดอายุ (**ปิดไว้**) | แสดงหน้าต่ออายุ |
+
+  ### `GET /api/v1/refresh`
+
+  เป็น **GET** และอยู่ **นอก** `auth_api` (จัดการ token exception เอง) — แนบ `Authorization: Bearer <token เดิม>` มาได้เลยแม้หมดอายุแล้ว
+
+  ```bash
+  curl -s "$BASE/refresh" -H "Authorization: Bearer $TOKEN" -H "Accept: application/json"
+  ```
+
+  ```json
+  { "access_token": "eyJ0eXAi...", "token_type": "bearer", "expires_in": 3600 }
+  ```
+
+  > ⚠️ **โครงสร้างต่างจาก `/login`** — เส้นนี้คืนแบบ **flat** ส่วน `/login` ห่อไว้ใน `token: {...}` แอปต้อง parse คนละแบบ
+
+  ### `GET /api/v1/logout`
+
+  ต้องแนบ token (อยู่ใน `auth_api`) — เคลียร์ `fcm_token` ของ user ทิ้งด้วย เพื่อกันไม่ให้ push notification ส่งไปเครื่องที่ออกจากระบบแล้ว และกัน token ชนกันเมื่อมีคนอื่น login เครื่องเดียวกัน
+
+  ```json
+  { "message": "Successfully logged out" }
+  ```
+
+  คืน 200 เสมอแม้ภายในจะ error (จับ exception แล้วเขียน log)
+
+  ---
+
+  ## 7. Flow ที่แอปควรทำหลัง login
+
+  ```dart
+  final res = await api.login(username, password);
+
+  // 1) เก็บ token
+  await storage.save('access_token', res.token.accessToken);
+
+  // 2) onboarding ตามธง first_login
+  if (res.firstLogin.mustRunSystemSetup) {
+    goTo(CompanySetupPage());            // แอดมินคนแรก — ต้องทำก่อน
+  } else if (res.firstLogin.shouldCompleteProfile) {
+    goTo(CompleteProfilePage());
+  } else if (res.firstLogin.shouldChangePassword) {
+    showDialog(ChangePasswordPrompt());  // แนะนำ ข้ามได้
+  }
+
+  // 3) ดึงสถานะแพ็กเกจมาแสดงแถบวันใช้งาน / ปิดปุ่มถ้าหมดอายุ
+  final sub = await api.getSubscriptionStatus();   // ดู api-subscription-status.md
+
+  // 4) ส่ง FCM token ขึ้นเซิร์ฟเวอร์
+  await api.updateDeviceToken(fcmToken);           // POST /api/v1/device-token
+  ```
+
+  ---
+
+  ## 8. เส้นที่เกี่ยวข้อง
+
+  | Method | Path | Auth | ใช้ทำอะไร |
+  |---|---|:---:|---|
+  | `GET` | `verify-company-code/{code}` | — | ตรวจ company code → คืน base URL ของบริษัท |
+  | `POST` | `login` | — | เข้าสู่ระบบด้วย username/password |
+  | `POST` | `login/google` | — | เข้าสู่ระบบผ่าน Google OAuth (BukkhonID) — **คืนโครงสร้างเดียวกับ `/login`** |
+  | `GET` | `refresh` | token | ต่ออายุ token (คืนแบบ flat) |
+  | `GET` | `logout` | ✅ | ออกจากระบบ + เคลียร์ fcm_token |
+  | `POST` | `update-password` | ✅ | เปลี่ยนรหัสผ่าน (`new_password` ≥ 8 ตัว + `new_password_confirmation`) |
+  | `POST` | `connect/google` | ✅ | เชื่อม/ยกเลิกการเชื่อมบัญชี Google กับผู้ใช้ปัจจุบัน |
+  | `GET` | `profileUser` | ✅ | ดึงโปรไฟล์ + presigned URL รูปใหม่ |
+  | `POST` | `device-token` | ✅ | บันทึก FCM token ของเครื่อง |
+  | `GET` | `subscription/status` | ✅ | สถานะแพ็กเกจ + วันใช้งาน — ดู [api-subscription-status.md](api-subscription-status.md) |
+
+  ### `POST /api/v1/login/google`
+
+  ```json
+  { "id_token": "<Google ID Token>", "device_id": "<uuid ไม่บังคับ>" }
+  ```
+
+  ส่ง `id_token` ไปให้ BukkhonID ยืนยัน → ได้ email กลับมา → หา user ใน schema ของบริษัทด้วย `email` หรือ `bukkhon_id` → ออก JWT ให้ (ไม่ได้สร้าง user ใหม่ ถ้าไม่มีบัญชีจะได้ 404 `"ไม่พบบัญชีผู้ใช้ในระบบที่ตรงกับอีเมลนี้"`)
+
+  | HTTP | เกิดเมื่อ |
+  |:---:|---|
+  | `422` | ไม่ส่ง `id_token` / `device_id` ไม่ใช่ UUID / BukkhonID ปฏิเสธ / ดึง email ไม่ได้ |
+  | `401` | BukkhonID ตอบ 401 |
+  | `404` | ไม่มี user ที่ email ตรงในบริษัทนี้ |
+
+  > ใน `APP_ENV=local` ส่ง `id_token = "MOCK_GOOGLE_TOKEN"` เพื่อ login เป็นแอดมินคนแรกที่ active สำหรับทดสอบ flow
+
+  ---
+
+  ## 9. ข้อควรทราบ
+
+  **1. ไม่ได้ตรวจคอลัมน์ `status`**
+  login กรองแค่ `is_delete = 0` ส่วน `status` (1 = ใช้งานได้ ตั้งตอนสร้าง user) ไม่ถูกตรวจ — ผู้ใช้ที่ถูกปิดใช้งานด้วย `status = 0` จึงยัง login ได้ ฝั่งเว็บ (`Auth\AuthController`) ก็เป็นเหมือนกัน **ถ้าตั้งใจให้ `status` มีผลจริงต้องเพิ่มเงื่อนไขทั้งสองที่พร้อมกัน**
+
+  **2. JWT ไม่ผูกกับ tenant**
+  token มีแค่ `sub` = user id, `JWT_SECRET` ใช้ร่วมกันทุกบริษัท และ `ApiAuth` ก็แค่ `parseToken()->authenticate()` โดยไม่ตรวจว่า token ออกมาจากบริษัทไหน เมื่อแต่ละบริษัทมี schema แยกและ id เริ่มนับใหม่ **token ของ user id 4 จากบริษัท A ยิงไปที่ subdomain ของบริษัท B จะ authenticate สำเร็จเป็น user id 4 ของบริษัท B**
+
+  วิธีปิดช่องนี้:
+  ```php
+  // app/Models/User.php
+  public function getJWTCustomClaims()
+  {
+      return ['tid' => tenant()?->id];
+  }
+
+  // app/Http/Middleware/ApiAuth.php — หลัง authenticate()
+  if (JWTAuth::getPayload()->get('tid') !== tenant()?->id) {
+      return response()->json([
+          'status' => 'error', 'message' => 'Unauthorized', 'code' => 'tenant_mismatch',
+      ], 401);
+  }
+  ```
+  > token เก่าที่ออกไปแล้วจะไม่มี claim `tid` — ต้องวางแผน migration (ยอมรับ token ไม่มี `tid` ชั่วคราว หรือบังคับ re-login ทุกคน)
+
+  **3. รหัสผ่านเริ่มต้น = username**
+  ระบบตั้งค่าเริ่มต้นแบบนี้ (เห็นได้จากตัวอย่างในหน้านี้ `saleofficer0002` / `saleofficer0002`) ธง `should_change_password` มีไว้ชวนเปลี่ยน **แต่ไม่บังคับ** — ถ้าต้องการบังคับต้องเพิ่ม gate ฝั่งเซิร์ฟเวอร์เอง
+
+  **4. `expires_in` เป็นวินาที**
+  `JWTAuth::factory()->getTTL()` คืนค่าเป็น**นาที** โค้ดจึงคูณ 60 ก่อนส่งออก — อย่าสับสนกับหน่วยเดิม
+
+  ---
+
+  *เอกสารที่เกี่ยวข้อง: [api-subscription-status.md](api-subscription-status.md) · [api-late-appointment.md](api-late-appointment.md) · [standalone-mode.md](standalone-mode.md)*

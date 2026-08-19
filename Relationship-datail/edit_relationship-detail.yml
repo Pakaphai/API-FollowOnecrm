@@ -1,0 +1,100 @@
+info:
+  name: edit_relationship-detail
+  type: http
+  seq: 4
+
+http:
+  method: GET
+  url: "{{sale_uat}}/api/v1/relationship-detail/edit-contact/3"
+  auth:
+    type: bearer
+    token: "{{token}}"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+
+docs: |-
+  ## 9. `GET /api/v1/relationship-detail/edit-contact/{id}`
+
+  ข้อมูลนัดหมาย **1 ใบ** สำหรับเปิดฟอร์มแก้ไข — **`{id}` = `relationship_detail_id`**
+
+  ```bash
+  curl -s "$BASE/relationship-detail/edit-contact/88" -H "$AUTH" -H "Accept: application/json" | jq
+  ```
+
+  ```json
+  {
+    "detail": {
+      "id": 88,
+      "customer_id": 12,
+      "customer_name": "ร้านกาแฟบ้านสวน",
+      "contact_name": "คุณสมชาย",
+      "business_type_id": 3,
+      "formatted_name": "บริษัท ร้านกาแฟบ้านสวน จำกัด",
+      "contact_type_id": 1,   "contact_type_name": "เข้าพบ",
+      "relationship_status_id": 2, "relationship_status_name": "กำลังเจรจา",
+      "visit_conclusion_id": 1,    "visit_conclusion_name": "สนใจ",
+      "follow_date": "2026-08-25",
+      "time_start": "09:30", "time_end": "10:30",
+      "mode": "scheduled",
+      "visit_pic_url": "https://inet-s3-object-gw.inet.co.th/...?X-Amz-Signature=..."
+    }
+  }
+  ```
+
+  ### อธิบายตัวแปรใน response ทุกตัว
+
+  response มีคีย์เดียวคือ `detail` (object) ข้างในประกอบด้วย 3 กลุ่ม
+
+  **กลุ่ม 1 — คอลัมน์ของนัดหมายเอง (`relationship_details.*`)**
+
+  | ฟิลด์ | ชนิด | ความสำคัญ | อธิบาย |
+  |---|---|:---:|---|
+  | `id` | integer | 🔴 | id ของนัดหมาย เอาไปใช้กับเส้น update/submit/delete |
+  | `customer_id` | integer | 🔴 | ลูกค้าเจ้าของนัดหมาย — ต้องส่งกลับไปตอนอัปเดต (เป็นฟิลด์บังคับ) |
+  | `mode` | string | 🔴 | `scheduled` = ยังไม่ปิดงาน · `completed` = ปิดแล้ว — ใช้ตัดสินว่าจะเปิดฟอร์มแก้ไขหรือฟอร์มปิดงาน |
+  | `follow_date` | datetime | 🔴 | วันนัด — เอาไปเทียบกับวันนี้เพื่อรู้ว่าล่าช้าไหม |
+  | `visit_number` | string | 🟡 | เลขครั้งที่ติดต่อ ใช้โชว์หัวฟอร์ม แก้ไม่ได้ |
+  | `contact_type_id` | integer | 🔴 | ค่าที่ต้อง preselect ใน dropdown ประเภทการติดต่อ |
+  | `relationship_status_id` | integer \| null | 🟡 | ค่า preselect ของ dropdown สถานะความสัมพันธ์ |
+  | `visit_conclusion_id` | integer \| null | 🟡 | ค่า preselect ของ dropdown สรุปผลการเข้าพบ |
+  | `time_start` / `time_end` | string \| null | 🟡 | เวลานัด รูปแบบ `HH:MM:SS` — **ตอนส่งกลับต้องตัดเหลือ `HH:MM`** ไม่งั้นติด validate `date_format:H:i` |
+  | `contact_detail` | string \| null | 🟡 | บันทึกย่อ |
+  | `latitude` / `longitude` | string \| null | 🟡 | พิกัด คืนมาเป็น string ต้อง `parseFloat` ก่อนใช้ |
+  | `occasion` | integer \| null | 🟢 | ไม่ได้ใช้แล้ว |
+  | `relationship_id` | integer \| null | 🟢 | แผนที่ผูกอยู่ — `null` ถ้าสร้างจากเส้น 6 หรือ 8 |
+  | `follow_status_id` | integer | 🟢 | ค่า default `0` ระบบไม่ได้ใช้ |
+  | `created_by` / `updated_by` / `created_at` / `updated_at` / `is_delete` | — | 🟢 | ข้อมูล audit ตามปกติ |
+
+  **กลุ่ม 2 — ข้อมูลลูกค้าที่ join มา**
+
+  | ฟิลด์ | ชนิด | อธิบาย |
+  |---|---|---|
+  | `customer_name` | string | ชื่อลูกค้าดิบ ๆ ยังไม่เติมคำนำหน้า |
+  | `contact_name` | string | ชื่อผู้ติดต่อ |
+  | `business_type_id` | integer | ประเภทนิติบุคคล ใช้เป็นตัวเลือกรูปแบบของ `formatted_name` |
+  | `formatted_name` | string | 🔴 **ชื่อเต็มพร้อมคำนำหน้า** ที่ระบบประกอบให้แล้ว — `บริษัท X จำกัด`, `ห้างหุ้นส่วนจำกัด X`, `สหกรณ์ X จำกัด` ฯลฯ · ประเภทที่ไม่รู้จักจะคืนชื่อเดิม เอาไปแสดงได้เลยไม่ต้อง map เอง |
+
+  **กลุ่ม 3 — ชื่อภาษาไทยของ dropdown (join มาให้พร้อมแสดง)**
+
+  | ฟิลด์ | คู่กับ id ตัวไหน |
+  |---|---|
+  | `contact_type_name` | `contact_type_id` |
+  | `relationship_status_name` | `relationship_status_id` |
+  | `visit_conclusion_name` | `visit_conclusion_id` |
+
+  ทั้ง 3 ตัวเป็น `null` ได้ถ้า id ที่อ้างถึงว่างหรือถูกลบไปแล้ว
+
+  **กลุ่มพิเศษ — รูปภาพ**
+
+  | ฟิลด์ | อธิบาย |
+  |---|---|
+  | `visit_pic` | ⚠️ **ถูกลบออกจาก response ของเส้นนี้** (`unset`) — ต่างจากเส้น 13/16 ที่คืนทั้ง path และ URL |
+  | `visit_pic_url` | 🔴 **signed URL อายุ 10 นาที** เอาไปแสดงรูปได้ทันที · อย่า cache ยาว ต้องดึงใหม่ทุกครั้งที่เปิดหน้า · ไม่มีรูป = `null` |
+
+  ไม่พบข้อมูล → **404** `{"message": "ไม่พบข้อมูล"}` (คีย์เดียว ไม่มี `success`)
+
+  ---

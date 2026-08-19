@@ -1,0 +1,69 @@
+info:
+  name: update-customer
+  type: http
+  seq: 2
+
+http:
+  method: POST
+  url: "{{sale_uat}}/api/v1/customer/update/1215"
+  body:
+    type: json
+    data: |
+      {
+        "business_type_id": 3,
+        "customer_name": "อนัญพร",
+        "contact_name": "อนัญพร เหล่าสุวรรณณา ",
+        "customer_tel": "038598585",
+        "tax_id": "7689509876855",
+        "customer_address": "123/45 ถนนเจริญกรุง111",
+        "province": 10,
+        "district": 1001,
+        "subdistrict": 100101,
+        "latitude": 13.75,
+        "longitude": 100.4917,
+        "credit": 0,
+        "credit_type": 0,
+        "customer_detail":"ลูกค้ารายใหญ่ ชำระตรงเวลา ติดต่อฝ่ายบัญชีคุณสมศรี",
+        "customer_scope" :""
+      }
+  auth:
+    type: bearer
+    token: "{{token}}"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+
+docs: |-
+  ## 2. `POST /api/v1/customer/update/{id}`
+
+  พารามิเตอร์ **เหมือน `create-customer` ทุกตัว** แต่พฤติกรรมภายในต่างกันมาก — อ่าน [หมายเหตุ](#-หมายเหตุ) ก่อนใช้
+
+  ```json
+  { "success": true, "message": "บันทึกข้อมูลสำเร็จ", "data": { ...ลูกค้าหลังอัปเดต... } }
+  ```
+
+  | HTTP | เงื่อนไข |
+  |:---:|---|
+  | `401` | `{error:"ไม่พบผู้ใช้หรือ token หมดอายุ"}` |
+  | `404` | ไม่พบลูกค้า (`findOrFail`) หรือ `business_type_id` ไม่มีในระบบ |
+  | `422` | ผิดกติกา |
+  | `500` | exception อื่น |
+
+  ### ⚠️ ต่างจาก `create` 5 จุด — ทุกจุดคือบั๊ก
+
+  | | `create` | `update` |
+  |---|---|---|
+  | `customer_code` | gen ใหม่ (ถูกต้อง) | **gen ใหม่ทับของเดิม** ← [ข้อ 1](#1-แกไขลกคาแลว-customer_code-เปลยน) |
+  | `user_id` | = ผู้สร้าง | **= คนที่กดแก้** ← [ข้อ 2](#2-แกไขลกคาแลวเจาของถกโอน) |
+  | `credit_type` | คำนวณจาก `credit` | ใช้ค่าที่ส่งมาตรง ๆ ← [ข้อ 3](#3-credit_type-ไมสอดคลองกนระหวาง-create-กบ-update) |
+  | ตรวจที่อยู่ | ✅ `validateAddress()` | ❌ **ไม่ตรวจ** |
+  | `customer_rate` | ตั้งค่าให้ | ไม่แตะ (คงค่าเดิม) |
+
+  **ฟิลด์ที่คงค่าเดิมได้ถ้าไม่ส่งมา** มีแค่ 2 ตัว: `customer_detail` (ใช้ `$request->has()`) และ `customer_scope` (มี fallback เป็นค่าเดิม)
+
+  ฟิลด์อื่นทั้งหมดถูกเขียนด้วย `$request->x` ตรง ๆ — **ไม่ส่งมา = กลายเป็น `null`** เหมือนกรณี [`user/update/{id}`](api-user-profile.md#-สงไมครบ--ขอมลเดมถกลบ)
+
+  ---

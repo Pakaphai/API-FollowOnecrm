@@ -1,0 +1,157 @@
+info:
+  name: sub mit-late-request copy
+  type: http
+  seq: 9
+
+http:
+  method: POST
+  url: "{{sale_uat}}/api/v1/relationship-detail/late-request/8"
+  body:
+    type: multipart-form
+    data:
+      - name: reason
+        type: text
+        value: "ลูกค้าเลื่อนนัดกะทันหัน เข้าพบไม่ทันตามกำหนด  "
+      - name: visit_pic
+        type: file
+        value:
+          - C:\Users\Softa-P\Downloads\S__5283846.jpg
+        contentType: image/jpeg
+      - name: relationship_status_id
+        type: text
+        value: "3"
+      - name: visit_conclusion_id
+        type: text
+        value: "3"
+      - name: contact_detail
+        type: text
+        value: "นัดใหม่สัปดาห์หน้า   "
+  auth:
+    type: bearer
+    token: "{{token}}"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+
+docs: |-
+  ## 12. `POST /api/v1/relationship-detail/late-request/{id}`
+
+  เซลส์ยื่นคำขออนุมัตินัดหมายล่าช้า เมื่อนัดหมายเลยวันนัดแล้วจนกดปิดงานเองไม่ได้
+
+  **ใช้เมื่อไร** — ยิง [เส้น 13](#13-get-apiv1relationship-detaillate-statusid) แล้วได้ `can_request_late: true`
+  หรือยิง [เส้น 11](#11-post-apiv1relationship-detailsubmit-contactid) แล้วโดนตีกลับพร้อม `require_late_request: true`
+
+  ### ต้องส่งอะไรบ้าง
+
+  **1. Path parameter**
+
+  | ส่วน | ค่า | อธิบาย |
+  |---|---|---|
+  | `{id}` | 🔴 `relationship_detail_id` | id ของ**นัดหมาย**ที่จะขออนุมัติ ไม่ใช่ `customer_id` และไม่ใช่ id ของคำขอ |
+
+  **2. Header**
+
+  | Header | จำเป็น | ค่า |
+  |---|:---:|---|
+  | `Authorization` | 🔴 | `Bearer <access_token>` — ระบบใช้ token นี้หา user เพื่อเช็คสิทธิ์และบันทึกเป็นผู้ยื่น |
+  | `Accept` | 🔴 | `application/json` ไม่ใส่แล้ว error จะกลับมาเป็น HTML |
+  | `Content-Type` | | `multipart/form-data` เมื่อแนบรูป · `application/json` เมื่อส่งแค่เหตุผล |
+
+  **3. Body — รับแค่ 2 ฟิลด์**
+
+  | ฟิลด์ | บังคับ | ความสำคัญ | กติกา / อธิบาย |
+  |---|:---:|:---:|---|
+  | `reason` | ✅ | 🔴 | **เหตุผลที่ล่าช้า** — เป็นข้อมูลเดียวที่แอดมินใช้ตัดสินใจอนุมัติ/ตีกลับ · string ≤ **1000 ตัวอักษร** · คอลัมน์เป็น `text` รองรับภาษาไทยยาว ๆ ได้ |
+  | `visit_pic` | | 🟡 | **รูปหลักฐานการเข้าพบ** — ไม่บังคับ แต่ควรแนบเพราะช่วยให้แอดมินอนุมัติง่ายขึ้น · image ≤ **5MB** · `jpeg, png, jpg, gif, svg, webp` (รับนามสกุลกว้างกว่าเส้น 8/10/11) |
+
+  > **รับแค่ 2 ฟิลด์นี้เท่านั้น** — `relationship_status_id`, `visit_conclusion_id`, `contact_detail`, `follow_date`, เวลา, พิกัด
+  > **ส่งมาก็ไม่มีผล** ระบบจะ snapshot ค่าเดิมของนัดหมายไปเก็บไว้ในคำขอเอง
+  > ถ้าต้องแก้ข้อมูลพวกนั้นด้วย ต้องรอแอดมินอนุมัติก่อนแล้วค่อยแก้ผ่านเส้นอื่น
+
+  ### ตัวอย่าง — multipart (แนบรูป)
+
+  ```bash
+  curl -s -X POST "$BASE/relationship-detail/late-request/88" \
+    -H "$AUTH" -H "Accept: application/json" \
+    -F "reason=ลืมบันทึก แต่เข้าพบลูกค้าจริงตามนัด" \
+    -F "visit_pic=@/path/to/photo.jpg" | jq
+  ```
+
+  ### ตัวอย่าง — JSON (ส่งแค่เหตุผล ใช้รูปเดิมของนัดหมาย)
+
+  ```bash
+  curl -s -X POST "$BASE/relationship-detail/late-request/88" \
+    -H "$AUTH" -H "Accept: application/json" -H "Content-Type: application/json" \
+    -d '{"reason":"ลืมบันทึก แต่เข้าพบลูกค้าจริงตามนัด"}' | jq
+  ```
+
+  ### ผลลัพธ์ — `201`
+
+  ```json
+  {
+    "success": true,
+    "message": "ส่งคำขออนุมัตินัดหมายล่าช้าให้ผู้ดูแลระบบเรียบร้อยแล้ว",
+    "customer_id": 12,
+    "image_path": "crm/visit_pics/1786425354-....jpg",
+    "late_request": { "id": 9, "status": "pending", "late_days": 11, "reason": "ลืมบันทึก..." }
+  }
+  ```
+
+  ### อธิบายตัวแปรใน response ทุกตัว
+
+  | ฟิลด์ | ชนิด | ความสำคัญ | อธิบาย |
+  |---|---|:---:|---|
+  | `success` | boolean | 🔴 | `true` = ยื่นคำขอสำเร็จ · เคส 403/422/500 คืน `false` พร้อม `message` บอกเหตุผล |
+  | `message` | string | 🔴 | ตอนสำเร็จเป็นข้อความยืนยัน · **ตอน 422 คือเหตุผลที่ยื่นไม่ได้** เช่น `"นัดหมายนี้ยังไม่ล่าช้า สามารถกดบันทึกได้ตามปกติ"` เอาไปโชว์ได้ตรง ๆ |
+  | `customer_id` | integer \| null | 🟡 | ลูกค้าเจ้าของนัดหมาย |
+  | `image_path` | string \| null | 🟡 | path รูปที่ใช้กับคำขอนี้ · ⚠️ **ต่างจากเส้น 10/11** — ถ้าไม่ได้แนบรูปใหม่จะคืน **path รูปเดิม** ของนัดหมาย ไม่ใช่ `null` |
+  | `late_request` | object | 🔴 | ข้อมูลคำขอที่เพิ่งสร้าง — คืนมาแค่ 4 ฟิลด์ (ก้อนเต็มอยู่ที่ [เส้น 13](#13-get-apiv1relationship-detaillate-statusid)) |
+  | `errors` | object | 🟢 | **มีเฉพาะตอน validation ไม่ผ่าน** — map `ชื่อฟิลด์ → array ข้อความ` |
+
+  **ฟิลด์ใน `late_request`**
+
+  | ฟิลด์ | ชนิด | อธิบาย |
+  |---|---|---|
+  | `id` | integer | id ของคำขอ ใช้อ้างอิงตอนคุยกับแอดมิน |
+  | `status` | string | `"pending"` เสมอตอนเพิ่งยื่น — เปลี่ยนเป็น `approved` / `rejected` เมื่อแอดมินพิจารณา |
+  | `late_days` | integer | 🔴 **ล่าช้ากี่วัน** นับจาก `follow_date` ถึงวันนี้ · เป็น snapshot ณ ตอนยื่น ไม่อัปเดตตามเวลา |
+  | `reason` | string | เหตุผลที่ส่งไป (echo กลับมา) |
+
+  ### เงื่อนไขที่ทำให้ยื่นไม่ได้ (ระบบเช็คตามลำดับนี้)
+
+  | ลำดับ | HTTP | `message` ที่ได้ | แปลว่า / แอปควรทำอะไร |
+  |:---:|:---:|---|---|
+  | 1 | `422` | `"กรุณาระบุเหตุผลที่นัดหมายล่าช้า"` | ไม่ได้ส่ง `reason` — โฟกัสช่องกรอกเหตุผล |
+  | 1 | `422` | `"เหตุผลที่ล่าช้ายาวเกินกำหนด (สูงสุด 1000 ตัวอักษร)"` | `reason` เกิน 1000 ตัว |
+  | 1 | `422` | `"ไฟล์ที่เลือกต้องเป็นชนิดรูปภาพเท่านั้น"` / `"รองรับเฉพาะไฟล์นามสกุล: jpeg, png, jpg, gif, svg, webp"` / `"ขนาดไฟล์ใหญ่เกินไป..."` | ไฟล์ไม่ผ่านเกณฑ์ |
+  | 2 | `403` | `"คุณไม่มีสิทธิ์เข้าถึงบันทึกนี้"` | ไม่ใช่ลูกค้าของตัวเอง — **เส้นนี้ตรวจสิทธิ์จริง** (แอดมิน level 0/1 ผ่านหมด) |
+  | 3 | `422` | `"นัดหมายนี้ปิดงานไปแล้ว ไม่ต้องขออนุมัติอีก"` | `mode = completed` แล้ว ปิด modal ได้เลย |
+  | 4 | `422` | `"นัดหมายนี้ยังไม่ล่าช้า สามารถกดบันทึกได้ตามปกติ"` | ยังไม่เลยวันนัด ให้เด้งไปเส้น 11 แทน |
+  | 5 | `422` | `"คำขอของนัดหมายนี้อยู่ระหว่างรอผู้ดูแลระบบพิจารณาอยู่แล้ว"` | ยื่นไปแล้วรออยู่ — โชว์ปุ่ม "รออนุมัติ" แบบ disable |
+  | — | `500` | ข้อความที่ระบบแปลงให้อ่านง่ายแล้ว | ไม่พบ `{id}` หรือ error อื่น |
+
+  ก้อน error หน้าตาแบบนี้ทุกกรณี
+
+  ```json
+  {
+    "success": false,
+    "message": "นัดหมายนี้ยังไม่ล่าช้า สามารถกดบันทึกได้ตามปกติ",
+    "errors": { "reason": ["กรุณาระบุเหตุผลที่นัดหมายล่าช้า"] }
+  }
+  ```
+
+  `errors` มีเฉพาะกรณี validation (ลำดับ 1) เท่านั้น · เคสอื่นมีแค่ `success` + `message`
+
+  ### สิ่งที่เกิดขึ้นเบื้องหลัง
+
+  | เกิดอะไร | รายละเอียด |
+  |---|---|
+  | อัปรูป | รูปที่แนบมา **บันทึกทับลง `relationship_details.visit_pic`** (ลบไฟล์เก่าบน S3 ทิ้งจริง) แล้ว copy path ไปเก็บที่คำขอด้วย เพื่อย้อนดูได้ว่าตอนยื่นแนบรูปไหน · ไม่แนบรูป = ใช้รูปเดิมของนัดหมาย |
+  | สร้างคำขอ | บันทึก snapshot ลง `late_appointment_requests` — `follow_date` (แปลง พ.ศ. เป็น ค.ศ. แล้ว), `late_days`, `relationship_status_id`, `visit_conclusion_id`, `reason`, `visit_pic`, `status = pending`, `created_by` |
+  | นัดหมาย | `mode` **ยังเป็น `scheduled`** จนกว่าแอดมินจะกดอนุมัติ — อนุมัติแล้วระบบตั้งเป็น `completed` ให้เอง · อัปเดตแค่ `visit_pic`, `updated_by`, `updated_at` |
+  | แจ้งเตือน | ส่งหาแอดมินทุกคนทันที พร้อมชื่อลูกค้า ชื่อเซลส์ วันนัด (แสดงเป็น **ปี พ.ศ.**) จำนวนวันที่ล่าช้า และเหตุผล · แจ้งเตือนพังไม่ทำให้คำขอล้ม |
+
+  ---

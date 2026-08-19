@@ -1,0 +1,51 @@
+info:
+  name: update_quotation
+  type: http
+  seq: 2
+
+http:
+  method: POST
+  url: "{{sale_uat}}/api/v1/quotation/update/3"
+  body:
+    type: json
+    data: |
+      {
+        "customer_id": 2,
+        "quotation_date": "2026-07-30",
+        "header_discount": 0,
+        "price_mode": "price",
+        "note": "ใบเสนอราคาหลายรายการ",
+        "quotation_lines": [
+          {
+            "product_id": 1,
+            "qty": 3,
+            "manual_discount": 0,
+            "discount_type": "amount",
+            "uom_code": "EA"
+          },
+          {
+            "product_id": 2,
+            "qty": 11,
+            "manual_discount": 10,
+            "discount_type": "amount",
+            "uom_code": "EA"
+          },
+          {
+            "product_id": 2,
+            "qty": 6,
+            "manual_discount": 0,
+            "discount_type": "amount",
+            "uom_code": "EA"
+          }
+        ],
+        "conditions": []
+      }
+  auth:
+    type: bearer
+    token: "{{token}}"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

@@ -1,0 +1,45 @@
+info:
+  name: show-all-customer-page
+  type: http
+  seq: 5
+
+http:
+  method: GET
+  url: "{{sale_uat}}/api/v1/getCustomer-detail"
+  auth:
+    type: bearer
+    token: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwczovL25pY2hhcnBuLnVhdC1mb2xsb3dvbmVjcm0uY29tL2FwaS92MS9sb2dpbiIsImlhdCI6MTc4NTkwMzU5NiwiZXhwIjoxNzg1OTA3MTk2LCJuYmYiOjE3ODU5MDM1OTYsImp0aSI6IkxlclV3Z3dnejNxajlIN1QiLCJzdWIiOiI0IiwicHJ2IjoiMjNiZDVjODk0OWY2MDBhZGIzOWU3MDFjNDAwODcyZGI3YTU5NzZmNyJ9.ZC9QyFHvVnJ7yzRwtjq-2ezZFx_f1hpWkAu-yJ8H9qI
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+
+docs: |-
+  ## 5. `GET /api/v1/getCustomer-detail`
+
+  รายชื่อลูกค้า **ของตัวเองทั้งหมด** เรียงตาม `customer_code` — ไม่แบ่งหน้า
+
+  ```json
+  { "datas": [ {...}, {...} ], "user": 4 }
+  ```
+
+  แต่ละแถวมีฟิลด์คำนวณเพิ่ม 3 ตัว:
+
+  | ฟิลด์ | ความหมาย |
+  |---|---|
+  | `customer_name_full` | ชื่อเติมคำนำหน้าตามประเภทธุรกิจ (ตรรกะเดียวกับ `formatted_name`) |
+  | `customer_scope_label` | ชื่อไทยของประเภทลูกค้า |
+  | `is_address_incomplete` | `true` = ที่อยู่ไม่ครบ (ขาด address / province / district / subdistrict) — ใช้ขึ้นป้ายเตือนให้ผู้ใช้ไปกรอกเพิ่ม |
+
+  พร้อม `business_type_name` จาก join และชื่อจังหวัด/อำเภอ/ตำบล
+
+  | HTTP | เงื่อนไข |
+  |:---:|---|
+  | `401` | `{success:false, message:"Token expired or invalid"}` |
+  | `500` | `{status:"error", message:"..."}` |
+
+  > ⚠️ **ไม่แบ่งหน้า** — บริษัทที่มีลูกค้าหลายพันรายจะได้ payload ก้อนใหญ่มากในครั้งเดียว ควรเพิ่ม pagination ถ้าเริ่มช้า
+
+  ---

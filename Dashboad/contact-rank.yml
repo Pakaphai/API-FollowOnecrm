@@ -1,0 +1,70 @@
+info:
+  name: contact-rank
+  type: http
+  seq: 4
+
+http:
+  method: GET
+  url: "{{sale_uat}}/api/v1/contact-rank"
+  auth:
+    type: bearer
+    token: "{{token}}"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+
+docs: |-
+  ## 4. `GET /api/v1/contact-rank`
+
+  อันดับจำนวนครั้งที่ติดต่อลูกค้า **แยกตามช่องทาง** ในเดือนที่เลือก
+
+  **query:** `date` — ไม่ส่ง = เดือนปัจจุบัน
+
+  ```json
+  {
+    "success": true,
+    "month": "2026-08",
+    "data": {
+      "โทรศัพท์": [
+        { "user_id": 4, "firstname": "นิชาพร", "lastname": "พินิจนันท์",
+          "profile_img_url": "https://...", "total_contacts": 27, "is_current_user": true },
+        { "user_id": 7, "firstname": "ไม่ระบุตัวตน", "lastname": null,
+          "profile_img_url": "https://.../1.png", "total_contacts": 19, "is_current_user": false }
+      ],
+      "อีเมล": [ ... ],
+      "พบลูกค้า": [ ... ]
+    }
+  }
+  ```
+
+  ### ⚠️ `data` เป็น object ที่ **key เป็นชื่อช่องทางภาษาไทย**
+
+  key มาจาก `contact_types.name` ที่**ตัดวงเล็บออกแล้ว**:
+
+  ```
+  "โทรศัพท์ (Phone Call)"  →  key = "โทรศัพท์"
+  "พบลูกค้า (In-person Meeting)"  →  key = "พบลูกค้า"
+  ```
+
+  **อย่า hardcode key ในแอป** — แอดมินแก้ชื่อช่องทางได้จากหน้าตั้งค่า key จะเปลี่ยนตาม ให้วนอ่าน key ทั้งหมดแทน
+
+  จำนวน key = จำนวน contact type ที่ `is_active = true` (ดีฟอลต์ 5 ตัว — ดู [api-master-data.md](api-master-data.md)) และ**มีทุก key เสมอแม้จะไม่มีข้อมูล** (จะเป็น array ว่าง)
+
+  ### ปกปิดตัวตนคนอื่น — จงใจ
+
+  | ฟิลด์ | ตัวเอง | คนอื่น |
+  |---|---|---|
+  | `firstname` | ชื่อจริง | `"ไม่ระบุตัวตน"` |
+  | `lastname` | นามสกุลจริง | `null` |
+  | `profile_img_url` | รูปจริง (presigned 10 นาที) | avatar กลาง `crm/icon/1.png` (5 นาที) |
+  | `total_contacts` | ตัวเลขจริง | **ตัวเลขจริง** |
+  | `is_current_user` | `true` | `false` |
+
+  เห็นอันดับและตัวเลขของคนอื่นได้ แต่ไม่รู้ว่าเป็นใคร — ใช้ `is_current_user` หาแถวของตัวเองเพื่อไฮไลต์
+
+  > นับจาก `relationship_details.created_at` (วันที่บันทึก) ไม่ใช่ `follow_date` (วันนัด)
+
+  ---

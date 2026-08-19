@@ -1,0 +1,182 @@
+info:
+  name: submit-contact copy
+  type: http
+  seq: 11
+
+http:
+  method: POST
+  url: "{{sale_uat}}/api/v1/relationship-detail/submit-contact/1"
+  auth:
+    type: bearer
+    token: "{{token}}"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+
+docs: |
+  ## 11. `POST /api/v1/relationship-detail/submit-contact/{id}`
+
+  **ปิดงานนัดหมาย** — ตั้ง `mode = 'completed'` · **`{id}` = `relationship_detail_id`**
+
+  ### ด่านแรก: เช็คความล่าช้า (ก่อน validate)
+
+  ถ้านัดหมายนี้ **เลยวันนัดไปแล้ว** (`mode = scheduled` และ `follow_date < วันนี้`)
+  และ **ยังไม่มีคำขอล่าช้าที่แอดมินอนุมัติ** → ถูกบล็อกทันที
+
+  ```json
+  {
+    "success": false,
+    "message": "นัดหมายนี้ล่าช้าแล้ว ไม่สามารถบันทึกเองได้ กรุณาส่งเหตุผลและรูปภาพให้ผู้ดูแลระบบอนุมัติ",
+    "require_late_request": true
+  }
+  ```
+  **HTTP 422** → แอปเจอ `require_late_request: true` ให้เด้ง modal ไปยิง [เส้น 12](#12-post-apiv1relationship-detaillate-requestid) แทน
+
+  **ด่านนี้เช็คเฉพาะใบที่ยังไม่ปิดงาน** — เงื่อนไขคือ `mode = scheduled` เท่านั้น
+  ใบที่ `mode = completed` ไปแล้ว ต่อให้ `follow_date` เลยมานานแค่ไหนก็ **ยิงซ้ำได้ไม่โดนบล็อก** (ระบบถือว่าเสร็จแล้วจึงไม่ต้องขออนุมัติอีก)
+  เป็นช่องที่ทำให้แก้ข้อมูลใบที่ปิดงานแล้วย้อนหลังได้เรื่อย ๆ — ถ้าไม่อยากให้เกิด ต้องล็อกฝั่งแอปเอง
+
+  ### Content-Type ใช้ได้ 2 แบบ
+
+  | แบบ | ใช้เมื่อ |
+  |---|---|
+  | `multipart/form-data` | **ปกติใช้แบบนี้** เพราะการปิดงานมักแนบรูปการเข้าพบ (`visit_pic`) |
+  | `application/json` | ปิดงานโดยไม่แนบรูป |
+
+  ```
+  POST /api/v1/relationship-detail/submit-contact/3
+  Authorization: Bearer <token>
+  Content-Type: multipart/form-data
+  Accept: application/json
+  ```
+
+  ### พารามิเตอร์ — อันไหนสำคัญ อันไหนไม่
+
+  | ฟิลด์ | บังคับ | ความสำคัญ | กติกา / อธิบาย |
+  |---|:---:|:---:|---|
+  | `{id}` (ใน URL) | ✅ | 🔴 | **`relationship_detail_id`** ของนัดหมายที่จะปิดงาน — ไม่ใช่ `customer_id` · ไม่พบ → **500** |
+  | `customer_id` | ✅ | 🔴 | ต้องมีอยู่จริงใน `customers` · ส่งผิดคือย้ายนัดหมายไปอยู่กับลูกค้าคนอื่นทันที |
+  | `contact_type_id` | ✅ | 🔴 | integer · ⚠️ **ไม่ตรวจว่ามีจริง** ส่งเลขมั่วผ่าน validator แต่ไปตายที่ foreign key เป็น **500** |
+  | `follow_date` | ✅ | 🔴 | `Y-m-d` — วันที่เข้าพบจริง · ⚠️ **เส้นนี้ไม่แปลงปี พ.ศ. ให้** (ต่างจากเส้น 8/10) ต้องส่ง ค.ศ. เท่านั้น |
+  | `relationship_status_id` | | 🔴 | **ควรส่งทุกครั้งตอนปิดงาน** — สถานะความสัมพันธ์หลังเข้าพบ เป็นข้อมูลที่รายงานและ dashboard ใช้ · ไม่ส่ง = ถูกเขียนทับเป็น `null` |
+  | `visit_conclusion_id` | | 🔴 | **ควรส่งทุกครั้งตอนปิดงาน** — สรุปผลการเข้าพบ (สนใจ / ขอใบเสนอราคา / ปฏิเสธ) · ไม่ส่ง = ถูกเขียนทับเป็น `null` |
+  | `visit_pic` | | 🟡 | รูปหลักฐานการเข้าพบ · image ≤ **5MB** · `jpeg, jpg, png` เท่านั้น · ไม่ส่ง = ใช้รูปเดิม (ไม่ถูกล้าง) |
+  | `time_start` / `time_end` | | 🟡 | `H:i` เช่น `09:00` — **ห้ามมีวินาที** ค่าที่อ่านมาจากเส้น 9 เป็น `09:00:00` ต้องตัดก่อนส่ง |
+  | `contact_detail` | | 🟡 | สรุปสิ่งที่คุยกับลูกค้า · validator จำกัด 255 ตัวอักษร |
+  | `latitude` / `longitude` | | 🟡 | พิกัดที่เข้าพบจริง ใช้ยืนยันว่าไปถึงหน้างาน · numeric · เก็บทศนิยม 6 ตำแหน่ง |
+
+  **ฟิลด์ที่ส่งมาก็ไม่มีผล** — `mode` (ฟิกซ์เป็น `completed` เสมอ), `visit_number` (ใช้ค่าเดิมของใบนั้น), `relationship_id`, `occasion`, `created_by`, `id`
+
+  > ⚠️ **ไม่ใช่ partial update** — ฟิลด์ที่ไม่ส่งมาถูกเขียนทับเป็น `null` ทั้งหมด (ยกเว้น `visit_pic` และ `visit_number`)
+  > ฉะนั้นตอนปิดงานต้องส่งข้อมูลเดิมกลับมาให้ครบทุกช่อง ไม่ใช่ส่งเฉพาะช่องที่แก้
+
+  > ⚠️ ข้อความ validation ของเส้นนี้เป็น **ภาษาอังกฤษ** (`"The customer id field is required."`) เพราะไม่ได้ใส่ข้อความไทยกำกับไว้เหมือนเส้น 8 — แอปควรแปลเองจากชื่อฟิลด์ใน `errors`
+
+  ### ตัวอย่าง — multipart (แนบรูป)
+
+  ```bash
+  curl -s -X POST "$BASE/relationship-detail/submit-contact/3" \
+    -H "$AUTH" -H "Accept: application/json" \
+    -F "customer_id=1" \
+    -F "contact_type_id=1" \
+    -F "relationship_status_id=2" \
+    -F "visit_conclusion_id=1" \
+    -F "follow_date=2026-08-18" \
+    -F "time_start=09:00" -F "time_end=10:45" \
+    -F "contact_detail=เข้าพบเรียบร้อย" \
+    -F "latitude=13.7563" -F "longitude=100.5018" \
+    -F "visit_pic=@image33.png" | jq
+  ```
+
+  ### ตัวอย่าง — JSON (ไม่แนบรูป)
+
+  ```bash
+  curl -s -X POST "$BASE/relationship-detail/submit-contact/3" \
+    -H "$AUTH" -H "Accept: application/json" -H "Content-Type: application/json" \
+    -d '{
+      "customer_id": 1,
+      "contact_type_id": 1,
+      "relationship_status_id": 2,
+      "visit_conclusion_id": 1,
+      "follow_date": "2026-08-18",
+      "time_start": "09:00",
+      "time_end": "10:45",
+      "contact_detail": "เข้าพบเรียบร้อย",
+      "latitude": 13.7563,
+      "longitude": 100.5018
+    }' | jq
+  ```
+
+  ### ผลลัพธ์ — `200`
+
+  ก้อนจริงจากการยิง multipart ข้างบน
+
+  ```json
+  {
+    "success": true,
+    "message": "บันทึกการนัดหมายสำเร็จ",
+    "customer_id": "1",
+    "image_path": "crm/visit_pics/1787029535-9b9a734a-80c2-4f25-abdd-525c786e7813.png",
+    "relationship_status_id": {
+      "mode": "completed",
+      "customer_id": "1",
+      "contact_type_id": "1",
+      "relationship_status_id": "2",
+      "visit_conclusion_id": "1",
+      "follow_date": "2026-08-18",
+      "visit_number": "VIS202607-0003",
+      "time_start": "09:00",
+      "time_end": "10:45",
+      "longitude": "100.5018",
+      "latitude": "13.7563",
+      "contact_detail": "เข้าพบเรียบร้อย",
+      "updated_by": 4,
+      "updated_at": "2026-08-18T05:05:35.531581Z",
+      "visit_pic": "crm/visit_pics/1787029535-9b9a734a-80c2-4f25-abdd-525c786e7813.png"
+    }
+  }
+  ```
+
+  ### อธิบายตัวแปรใน response ทุกตัว
+
+  | ฟิลด์ | ชนิด | ความสำคัญ | อธิบาย |
+  |---|---|:---:|---|
+  | `success` | boolean | 🔴 | `true` = ปิดงานสำเร็จ · ถูกบล็อกเพราะล่าช้าจะได้ `false` + `require_late_request` |
+  | `message` | string | 🟡 | `"บันทึกการนัดหมายสำเร็จ"` เอาไปโชว์ toast ได้ตรง ๆ |
+  | `customer_id` | string \| integer | 🟡 | id ลูกค้า ใช้ redirect กลับหน้ารายละเอียด · ⚠️ **ยิง multipart จะได้ `"1"` เป็น string** เพราะ echo ค่าจาก request ที่ยังไม่ถูก cast — อย่าเทียบด้วย `===` |
+  | `image_path` | string \| null | 🟡 | path ดิบบน S3 ของรูปที่อัปในรอบนี้ · ไม่ได้แนบรูปใหม่ = `null` **แม้นัดหมายจะมีรูปเดิมอยู่** · ไม่ใช่ URL แสดงรูปไม่ได้ ต้องดึง `visit_pic_url` จากเส้นอ่าน |
+  | `relationship_status_id` | **object** | 🔴 | 🐞 **ชื่อผิดความหมาย** — ไม่ใช่ id สถานะ แต่เป็น **ก้อนข้อมูลทั้งชุดที่เพิ่งเขียนลงฐานข้อมูล** ใช้ตรวจว่าค่าอะไรถูกบันทึกไปบ้าง |
+  | `require_late_request` | boolean | 🔴 | **มีเฉพาะตอนถูกบล็อก (422)** — `true` = ให้แอปเด้ง modal ขออนุมัติล่าช้าแทน |
+
+  **ฟิลด์ข้างใน `relationship_status_id`** — คือ array `$data` ที่ controller เอาไป `update()` ตรง ๆ
+
+  | ฟิลด์ | ค่าจากตัวอย่าง | อธิบาย |
+  |---|---|---|
+  | `mode` | `"completed"` | 🔴 ฟิกซ์เสมอ — ยืนยันว่านัดหมายถูกปิดงานแล้ว |
+  | `customer_id` | `"1"` | ลูกค้าที่บันทึกไป |
+  | `contact_type_id` | `"1"` | ประเภทการติดต่อที่บันทึกไป |
+  | `relationship_status_id` | `"2"` | 🔴 **ตัวนี้แหละคือ id สถานะจริง** (ซ้อนอยู่ใน key ชื่อเดียวกัน) |
+  | `visit_conclusion_id` | `"1"` | สรุปผลการเข้าพบที่บันทึกไป |
+  | `follow_date` | `"2026-08-18"` | วันที่เข้าพบตามที่ส่งมา — **ทับค่าเดิมของนัดหมาย** |
+  | `visit_number` | `"VIS202607-0003"` | 🔴 **ค่าเดิมของใบนั้น ไม่ gen ใหม่** สังเกตว่าเป็นเดือน 07 ทั้งที่ปิดงานเดือน 08 เพราะเลขผูกกับตอนสร้าง |
+  | `time_start` / `time_end` | `"09:00"` / `"10:45"` | เวลาที่ส่งมา (ไม่มีวินาที ต่างจากตอนอ่านกลับที่จะมี `:00` ต่อท้าย) |
+  | `latitude` / `longitude` | `"13.7563"` / `"100.5018"` | ค่าดิบตามที่ส่งมา — **ยังไม่ถูกปัดเป็น 6 ตำแหน่ง** ตอนอ่านกลับจะกลายเป็น `"13.756300"` |
+  | `contact_detail` | `"เข้าพบเรียบร้อย"` | บันทึกสรุปที่ส่งมา |
+  | `updated_by` | `4` | 🟢 id ผู้ใช้ที่กดปิดงาน — **เป็น integer จริง** (มาจาก token ไม่ได้มาจาก request) |
+  | `updated_at` | `"2026-08-18T05:05:35.531581Z"` | 🟢 เวลาที่ปิดงาน (ISO 8601 UTC) |
+  | `visit_pic` | `"crm/visit_pics/1787029535-....png"` | 🟡 **มีเฉพาะตอนแนบรูปใหม่** — ไม่แนบก็จะไม่มี key นี้ในก้อนเลย (ไม่ใช่ `null`) |
+
+  > ⚠️ **ค่าในก้อนนี้เป็น string เกือบทั้งหมด** เพราะเป็นค่าที่รับมาจาก multipart form แล้ว echo กลับตรง ๆ ยังไม่ผ่านการ cast ของฐานข้อมูล
+  > ถ้ายิงแบบ JSON จะได้ชนิดตามที่ส่งไป (number ก็เป็น number) — **อย่าเอาก้อนนี้ไปใช้เป็นข้อมูลอ้างอิง** ให้ยิงเส้นอ่านซ้ำแทน
+
+  > 🐞 **`relationship_status_id` ในผลลัพธ์คืนก้อน `$data` ทั้งอัน** ไม่ใช่ตัวเลข — ชื่อ key ไม่ตรงกับค่า
+  > อย่า parse เป็น int เด็ดขาด ถ้าต้องการค่าจริงให้อ่านจาก `response.relationship_status_id.relationship_status_id`
+  > หรือยิงเส้นอ่านซ้ำจะปลอดภัยกว่า
+
+  > ⚠️ เส้นนี้ก็เขียนทับฟิลด์ที่ไม่ส่งมาเป็น `null` เหมือนเส้น 10 และมีบั๊กลบรูปเก่าไม่โดนแบบเดียวกัน
+  > ต่างกันตรงนี้บังคับ `mode = 'completed'` และ **ไม่ยิง notification**
+
+  ---
