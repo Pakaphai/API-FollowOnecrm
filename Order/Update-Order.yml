@@ -7,38 +7,67 @@ http:
   method: POST
   url: "{{sale_uat}}/api/v1/order/update-api/1"
   body:
-    type: json
-    data: |
-      {
-        "customer_id": 1,
-        "quotation_id": 1,
-        "order_date": "2026-07-27",
-        "price_mode": "price",
-        "header_discount": 150.00,
-        "note": "กรุณาจัดส่งก่อนเที่ยง",
-        "order_lines": [
-          {
-              "product_id": 3,
-              "qty": 3,
-              "discount_type": "amount",
-              "manual_discount": 0,
-              "uom_code": "EA",
-              "unit_price": 160,
-              "discount": 0,
-              "total_line": 480
-          },
-          {
-              "product_id": 1,
-              "qty": 1,
-              "discount_type": "amount",
-              "manual_discount": 0,
-              "uom_code": "EA",
-              "unit_price": 100,
-              "discount": 0,
-              "total_line": 100
-          }
-        ]
-      }
+    type: multipart-form
+    data:
+      - name: customer_id
+        type: text
+        value: "4"
+      - name: quotation_id
+        type: text
+        value: "9"
+      - name: order_date
+        type: text
+        value: 2026-08-19
+      - name: price_mode
+        type: text
+        value: price
+      - name: note
+        type: text
+        value: ""
+        disabled: true
+      - name: quotation_lines[0][product_id]
+        type: text
+        value: "119"
+      - name: quotation_lines[0][qty]
+        type: text
+        value: "11"
+      - name: quotation_lines[0][uom_code]
+        type: text
+        value: EA
+      - name: quotation_lines[0][manual_discount]
+        type: text
+        value: "0"
+      - name: quotation_lines[0][discount_type]
+        type: text
+        value: amount
+      # ── ราคาต่อหน่วย ─────────────────────────────────────────────────────────
+      # ส่งได้อย่างใดอย่างหนึ่ง — usd_price มาแล้ว unit_price จะถูกมองข้ามทั้งหมด
+      #
+      #   unit_price  หน่วยบาท  ถูกบีบไม่ให้ต่ำกว่าราคาขายขั้นต่ำของสินค้า
+      #   usd_price   หน่วยดอลลาร์  เซิร์ฟเวอร์คิดเป็นบาทให้เอง:
+      #               ceil(usd) x อัตราขาย ธปท. ที่ปัดขึ้นเป็นบาทเต็ม
+      #
+      # ราคานี้ต้อง "รวมราคาตัวเลือกสินค้าแล้ว" — เซิร์ฟเวอร์ไม่บวกให้อัตโนมัติ
+      - name: quotation_lines[0][usd_price]
+        type: text
+        value: "116685"
+      # บริษัทที่ขายเป็นเงินบาท ใช้ช่องนี้แทน แล้วลบ usd_price ออก
+      # - name: quotation_lines[0][unit_price]
+      #   type: text
+      #   value: "3850605"
+      # ตัวเลือกสินค้าที่ลูกค้าเลือก — ส่งเฉพาะ id (ดู product_options ใน quotation/preload)
+      # ไม่ส่งคีย์นี้ = คงตัวเลือกเดิมของบรรทัดนั้นไว้
+      - name: quotation_lines[0][option_ids][]
+        type: text
+        value: "2"
+      - name: quotation_lines[0][option_ids][]
+        type: text
+        value: "6"
+      - name: quotation_image
+        type: file
+        value:
+          - C:\Users\Softa-P\Pictures\Screenshots\imageee2.png
+        contentType: image/png
   auth:
     type: bearer
     token: "{{token}}"
@@ -48,3 +77,443 @@ settings:
   timeout: 0
   followRedirects: true
   maxRedirects: 5
+
+docs: |
+  # API — ข้อมูลใบสั่งขายสำหรับฟอร์มแก้ไข (Order Edit)
+
+  ดึงใบสั่งขาย 1 ใบพร้อมรายการสินค้า ลูกค้า ราคาสินค้า และเงื่อนไข — ครบสำหรับเปิดหน้าแก้ไขในครั้งเดียว
+
+  ```
+  GET /api/v1/order/edit-api/{id}
+  Authorization: Bearer <token>
+  Accept: application/json
+  ```
+
+  | | |
+  |---|---|
+  | Route | [`routes/api/api_v1.php`](../routes/api/api_v1.php) — อยู่ในกลุ่ม `auth_api` |
+  | Controller | [`Api\ApiOrderController::order_edit_api()`](../app/Http/Controllers/Api/ApiOrderController.php) |
+  | ตารางหลัก | `orders` + `order_lines` + `quotation_headers` + `customers` + `product_prices` + `conditions` |
+  | เส้นคู่กัน | `POST order/update-api/{id}` (ข้อ 7) · [ใบเสนอราคาต้นทาง](api-quotation-update.md) |
+
+  > `{id}` คือ **`orders.id`** ไม่ใช่เลขที่เอกสาร `PO-…`
+
+  ---
+
+  ## 1. ภาพรวม response
+
+  ข้อมูลแต่ละอย่างอยู่ที่เดียว ไม่มีคีย์ซ้ำ เรียงจากที่ต้องใช้ก่อนไปหาที่ใช้ทีหลัง
+
+  ```json
+  {
+    "success": true,
+    "message": "Order retrieved successfully",
+
+    "data": {
+      "quotation_header": {          // ทั้งใบอยู่ในก้อนนี้ — ดูข้อ 2
+        "id": 3,
+        "order_number": "PO-260819-0003",
+        "...": "ช่องข้อมูลหัวเอกสาร",
+        "quotation_lines": [ ... ]   // รายการสินค้า อยู่ท้ายสุด — ดูข้อ 3
+      }
+    },
+
+    "products":         [ ... ],   // สินค้าทั้งหมด + ราคาแยกหน่วยนับใน products[].prices
+    "customers":        [ ... ],   // ลูกค้าทั้งหมด (ให้เปลี่ยนลูกค้าได้)
+    "conditions":       [ ... ],   // เงื่อนไขทั้งหมดให้เลือก
+
+    "order_conditions": [ ... ],   // เงื่อนไขที่ใบนี้ติ๊กไว้แล้ว
+    "user":             { ... },   // ผู้ขายที่ล็อกอิน
+    "usd_pricing":      true,      // บริษัทนี้เปิดฟีเจอร์ราคา USD ไหม
+    "usd_rate":         { ... }    // อัตราปัจจุบัน
+  }
+  ```
+
+  **อ่านตามนี้ 3 บรรทัด:**
+
+  | อยากได้อะไร | อ่านที่ |
+  |---|---|
+  | หัวเอกสาร (เลขที่ · วันที่ · ลูกค้า · ยอดเงิน) | `data.quotation_header` |
+  | รายการสินค้าในใบ | `data.quotation_header.quotation_lines` |
+  | ราคาสินค้าไว้เติมตอนเพิ่มบรรทัดใหม่ | `products[].prices` |
+
+  > ⚠️ `data` เป็น **object ใบเดียว** ไม่ใช่ array · ถ้าไม่พบใบสั่งขายนั้นจะได้ `"data": null` พร้อม **`200`** ไม่ใช่ `404`
+
+  > 🔻 **Breaking change (2026-08-19)** — เดิมหัวเอกสารอยู่ที่ `data.*` แบบแบน · รายการสินค้าอยู่ที่ `data.quotation_lines` · ราคาอยู่ที่ `product_price` ระดับบนสุด **ทั้งสามตำแหน่งเปลี่ยนหมด** แอปต้องแก้ตามตารางข้างบน
+
+  ---
+
+  ## 2. `data.quotation_header` — หัวเอกสาร
+
+  **ยอดเงินในก้อนนี้เป็น "บาท"** (หารกลับให้แล้ว) ยกเว้น `vat_amount` — ดูคำเตือนในตาราง
+  เรียงตามลำดับที่ต้องใช้จริง
+
+  **1) ตัวระบุเอกสาร**
+
+  | ฟิลด์ | ความหมาย |
+  |---|---|
+  | `id` | รหัสใบสั่งขาย — ใช้เป็น `{id}` ของ `order/update-api/{id}` |
+  | `order_number` | เลขที่เอกสาร `PO-<YYMMDD>-<running>` |
+  | `order_date` | วันที่บนเอกสาร — ใช้ตัดสินว่าโปรโมชันตัวไหนใช้ได้ตอนบันทึก |
+  | `status` | สถานะ (`open` · `confirmed` · `completed` · `cancelled` …) |
+  | `quotation_id` | ใบเสนอราคาต้นทาง · `null` = ใบสั่งขายที่ไม่ได้ออกจากใบเสนอราคา |
+
+  **2) ลูกค้า**
+
+  | ฟิลด์ | ความหมาย |
+  |---|---|
+  | `customer_id` | รหัสลูกค้า — **ต้องส่งกลับไปตอนบันทึกแก้ไข** |
+  | `customer_name` | ชื่อลูกค้า**ประกอบคำนำหน้านิติบุคคลให้แล้ว** เช่น `"บริษัท ตัวอย่าง จำกัด"` |
+  | `customer_address` · `province_name` · `district_name` · `subdistrict_name` | ที่อยู่ลูกค้าสำหรับขึ้นหัวเอกสาร |
+
+  **3) ยอดเงิน**
+
+  | ฟิลด์ | ความหมาย |
+  |---|---|
+  | `price_mode` | โหมดภาษี `price` · `vat` · `novat` |
+  | `total_before_discount` | ยอดรวม**หลัง**หักส่วนลดรายบรรทัดแล้ว (ชื่อหลอก เหมือนฝั่งใบเสนอราคา) |
+  | `total_discount` | ผลรวมส่วนลดรายบรรทัด — ไม่รวมส่วนลดท้ายบิล |
+  | `header_discount` | ส่วนลดท้ายบิล |
+  | `vat_amount` | ⚠️ **หน่วยสตางค์ ไม่ได้หาร 100** — ฟิลด์เดียวในก้อนนี้ที่ไม่ใช่บาท |
+  | `total_after_discount` | ยอดสุทธิที่เก็บเงินจริง (ปัดขึ้นเป็นบาทเต็มตอนบันทึก) |
+
+  **4) USD**
+
+  | ฟิลด์ | ความหมาย |
+  |---|---|
+  | `usd_rate` | **อัตราที่ใบนี้ใช้** — มาจากใบเสนอราคาต้นทาง (ดูข้อ 4) |
+  | `total_after_discount_usd` | ยอดสุทธิเทียบ USD ปัดขึ้นเป็นดอลลาร์เต็ม · `null` = ใบนี้ไม่ได้ผูกกับอัตราใด |
+
+  **5) ข้อมูลประกอบ**
+
+  | ฟิลด์ | ความหมาย |
+  |---|---|
+  | `note` | หมายเหตุ |
+  | `quotation_image` | path บน S3 ของรูปที่แนบไว้กับใบเสนอราคาต้นทาง (`null` = ไม่มี) |
+  | `quotation_image_url` | **presigned URL อายุ 15 นาที** — อย่า cache ยาว |
+
+  **6) รายการสินค้า**
+
+  | ฟิลด์ | ความหมาย |
+  |---|---|
+  | `quotation_lines` | รายการสินค้าของใบนี้ — array อยู่ท้ายสุดของก้อน ดูข้อ 3 |
+
+  > ⚠️ **key ชื่อ `quotation_header` / `quotation_lines` ทั้งที่นี่คือใบสั่งขาย** — ตั้งชื่อตามฝั่งใบเสนอราคาเพื่อให้ฟอร์มฝั่งแอปใช้ตัวแปลงชุดเดียวกันได้ ไม่ใช่ความผิดพลาด
+
+  ---
+
+  ## 3. `data.quotation_header.quotation_lines[]` — รายการสินค้า
+
+  **ยอดเงินในก้อนนี้เป็น "บาท" ทั้งหมด** (ต่างจากฝั่งใบเสนอราคาที่คืนเป็นสตางค์) และ `qty` ก็หาร 100 มาแล้ว
+
+  | ฟิลด์ | หน่วย | ความหมาย |
+  |---|---|---|
+  | `id` | | รหัสบรรทัด (`order_lines.id`) |
+  | `options[]` | | ตัวเลือกสินค้าที่ลูกค้าเลือกไว้ในบรรทัดนี้ — `id` · `group_name` · `name` · `price` (บาท) · `usd` · ส่ง `id` กลับไปที่ `option_ids` ได้ตรง ๆ |
+  | `product_id` | | รหัสสินค้า — เป็นคีย์ที่ระบบใช้จับคู่แถวตอนบันทึก |
+  | `uom_code` | | หน่วยนับ ตัดช่องว่างให้แล้ว (`"EA"`) |
+  | `qty` | ชิ้น | จำนวน — `2` = 2 ชิ้น (หาร 100 มาแล้ว) |
+  | `unit_price` | บาท | ราคาต่อหน่วยที่บันทึกไว้ |
+  | `usd_price` | ดอลลาร์ | ราคาต่อหน่วยสกุล USD ถอดกลับจากราคาบาท ÷ อัตราของใบนี้ · **`null` = ใบนี้ไม่มีอัตราผูกอยู่** |
+  | `manual_discount` | บาท / % | ส่วนลดพิเศษ — ความหมายขึ้นกับ `discount_type` |
+  | `discount_type` | | `amount` · `percent` |
+  | `discount` | บาท | ส่วนลดรวมของบรรทัดที่คำนวณแล้ว (โปรโมชัน + ส่วนลดพิเศษ) |
+  | `total_line` | บาท | ยอดสุทธิของบรรทัด |
+  | `total_line_usd` | ดอลลาร์ | ยอดสุทธิของบรรทัดเทียบเป็น USD ปัดขึ้นเป็นดอลลาร์เต็ม |
+
+  คืนเฉพาะบรรทัดที่ `is_delete = false`
+
+  > `usd_price` ที่ได้จากเส้นนี้ **ส่งกลับไปที่ `order/update-api/{id}` ได้ตรง ๆ** เพื่อคงราคา USD ไว้ตอนแก้
+
+  ---
+
+  ## 4. อัตราแลกเปลี่ยนของใบสั่งขายมาจากไหน
+
+  ตาราง `orders` **ไม่มีคอลัมน์เก็บอัตรา** — อัตราถูกยึดไว้กับ **ใบเสนอราคาต้นทาง** ตอนที่ออกเอกสาร
+
+  ```
+  orders.quotation_id → quotation_headers.usd_rate_used → ใช้อัตรานี้คิด USD ของใบสั่งขาย
+  ```
+
+  ทำแบบนี้เพราะตัวเลข USD บนใบสั่งขายต้องตรงกับใบเสนอราคาที่ส่งลูกค้าไปแล้ว ไม่ใช่อัตราของวันที่เปิดดู (กติกาเดียวกับหน้าเว็บ)
+
+  | กรณี | `data.usd_rate` |
+  |---|---|
+  | ใบสั่งขายออกจากใบเสนอราคาที่บันทึกอัตราไว้ | อัตราของใบเสนอราคานั้น |
+  | ใบเสนอราคาต้นทางไม่ได้บันทึกอัตราไว้ (เอกสารเก่า) | `null` |
+  | ใบสั่งขายที่ไม่มี `quotation_id` | `null` |
+
+  `data.usd_rate` เป็น `null` เมื่อไร → `usd_price` และ `total_line_usd` ทุกบรรทัดจะเป็น `null` ตาม ให้แอปซ่อนส่วน USD ไป
+
+  ### `usd_rate` สองตัวในไฟล์เดียวกัน — คนละความหมาย
+
+  | ตำแหน่ง | คืออะไร | ใช้ทำอะไร |
+  |---|---|---|
+  | `data.usd_rate` | **อัตราที่ใบนี้ใช้** (จากใบเสนอราคาต้นทาง) | แสดงตัวเลข USD ของเอกสารใบนี้ |
+  | `usd_rate` (ระดับบนสุด) | **อัตราปัจจุบัน**ของวันนี้ | ใช้ตอนผู้ใช้เพิ่มสินค้าใหม่เข้าไปในใบ |
+
+  | ฟิลด์ในก้อนอัตรา | ความหมาย |
+  |---|---|
+  | `rate` | อัตราขายดิบตามที่ ธปท. ประกาศ — ไว้อ้างอิงเท่านั้น |
+  | `rate_used` | **อัตราที่ใช้คิดเงินจริง** ปัดขึ้นเป็นบาทเต็มแล้ว |
+  | `as_of` | งวดของอัตราที่หยิบมาใช้ |
+  | `last_updated` | วันที่ ธปท. ปรับปรุงชุดข้อมูล |
+  | `fetched_at` | เวลาที่ระบบดึงอัตรามา |
+  | `source` | `bot` = จาก ธปท. · `fallback` = อัตราสำรองใน `.env` |
+  | `display` | ข้อความพร้อมแสดง `"1 USD = ฿34.00"` |
+
+  ---
+
+  ## 5. ก้อนข้อมูลประกอบฟอร์ม
+
+  | key | คืออะไร |
+  |---|---|
+  | `customers` | ลูกค้าทั้งหมด (**ไม่กรองตามผู้ขาย** ต่างจาก `quotation/preload`) พร้อมชื่อจังหวัด/อำเภอ/ตำบล |
+  | `products` | สินค้าทั้งหมด — `id` · `code` · `name` · **`prices[]`** (ราคาแยกตามหน่วยนับของสินค้าตัวนั้น · `[]` = ยังไม่ได้ตั้งราคา) |
+  | `conditions` | เงื่อนไขทั้งหมดให้เลือก (`id` · `name` · `detail`) |
+  | `order_conditions` | เงื่อนไขที่ใบนี้ติ๊กไว้ — ⚠️ มีแค่ `name` · `detail` **ไม่มี `id`** จึงเทียบกับ `conditions` ได้ด้วยชื่อเท่านั้น |
+  | `user` | ผู้ขายที่ล็อกอิน (`firstname` · `lastname` · `phone`) |
+  | `usd_pricing` | บริษัทนี้เปิดฟีเจอร์ราคา USD ไว้หรือไม่ |
+  | `usd_rate` | อัตราปัจจุบัน (ดูข้อ 4) |
+
+  ### `products[].prices[]` แต่ละแถว
+
+  | ฟิลด์ | หน่วย | หมายเหตุ |
+  |---|---|---|
+  | `product_id` · `uom_code` | | |
+  | `uom_desc` | | ชื่อหน่วยนับภาษาไทย เช่น `"กล่อง"` |
+  | `product_price` | บาท | ราคาป้าย/ฐาน |
+  | `product_price_include_vat` | บาท | ราคารวม VAT |
+  | `product_price_exclude_vat` | บาท | ราคาก่อน VAT |
+  | `product_vat_amount` | บาท | ส่วนต่างภาษีของราคานั้น |
+  | `usd_price` | ดอลลาร์ | ราคาขายสกุล USD ที่ตั้งไว้ **ปัดขึ้นเป็นดอลลาร์เต็มมาแล้ว** (`505.6` → `506`) · `null` = ไม่ได้ตั้งราคา USD |
+
+  **คอลัมน์ราคาที่ต้องใช้ขึ้นกับ `price_mode`** — ตารางเดียวกับ [ใบเสนอราคา](api-quotation-create.md):
+
+  | `price_mode` | ป้ายบนหน้าจอ | คอลัมน์ที่เซิร์ฟเวอร์ใช้ |
+  |---|---|---|
+  | `price` | ไม่มีภาษี | `product_price` |
+  | `vat` | รวมภาษีมูลค่าเพิ่ม 7% | `product_price_exclude_vat` |
+  | `novat` | แยกภาษีมูลค่าเพิ่ม 7% | `product_price_include_vat` |
+
+  > ⚠️ ก้อนนี้ **ไม่มี** `min_price` / `min_unit_price` / กติกาการกรอกจำนวน (`qty_step` ฯลฯ) แบบที่ `quotation/preload` มี
+  > ถ้าต้องการ ให้เรียก `quotation/preload` มาประกอบเพิ่ม
+
+  ---
+
+  ## 6. ตัวอย่าง
+
+  ```bash
+  curl -s "$BASE/order/edit-api/3" -H "$AUTH" -H "Accept: application/json" \
+    | jq '{usd_rate: .data.quotation_header.usd_rate, total: .data.quotation_header.total_after_discount,
+           total_usd: .data.quotation_header.total_after_discount_usd,
+           lines: .data.quotation_header.quotation_lines}'
+  ```
+
+  ```json
+  {
+    "usd_rate": { "rate": 33.2264, "rate_used": 34, "as_of": "2026-08-17",
+                  "source": "bot", "display": "1 USD = ฿34.00" },
+    "total": 54944,
+    "total_usd": 1616,
+    "lines": [
+      { "id": 6, "product_id": 119, "uom_code": "EA", "qty": 2,
+        "unit_price": 1020, "usd_price": 30,
+        "manual_discount": 0, "discount_type": "amount", "discount": 0,
+        "total_line": 2040, "total_line_usd": 60 }
+    ]
+  }
+  ```
+
+  ---
+
+  ## 7. ส่งกลับไปบันทึกที่ `POST order/update-api/{id}`
+
+  | ฟิลด์ | บังคับ | หมายเหตุ |
+  |---|:---:|---|
+  | `customer_id` | ✅ | |
+  | `order_date` | ✅ | |
+  | `order_lines` | ✅* | array ≥1 — *`nullable` เมื่อเป็นใบแบบแนบรูป · ส่งชื่อ **`quotation_lines`** มาแทนก็ได้ (ชื่อเดียวกับที่ `edit-api` คืนมา) |
+  | `order_lines.*.product_id` | ✅ | |
+  | `order_lines.*.qty` | ✅ | ≥1 · หน่วยนับเป็นชิ้นต้องเป็นจำนวนเต็ม |
+  | `order_lines.*.uom_code` | ✅ | |
+  | `order_lines.*.usd_price` | | **ราคาต่อหน่วยสกุล USD** — ส่งมาแล้วใช้แทนราคาบาทของสินค้า |
+  | `order_lines.*.manual_discount` · `discount_type` | | |
+  | `order_lines.*.option_ids` | | array\<int\> — id ตัวเลือกสินค้า · **ไม่ส่ง = คงของเดิม** |
+  | `header_discount` · `price_mode` · `note` · `conditions` | | |
+  | `reduction` · `reduction_pdf` | | หักลดหนี้ + ไฟล์แนบ |
+  | `quotation_image` | | jpeg,png,jpg,gif,webp,**pdf** ≤5MB |
+
+  > 💡 `order/edit-api` คืนรายการสินค้าในชื่อ **`quotation_lines`** แต่ตอนบันทึกชื่อจริงคือ **`order_lines`**
+  > เส้นนี้รับทั้งสองชื่อแล้ว (ส่ง `order_lines` มาจะถูกใช้ก่อน) — ข้อความ error ยังอ้างเป็น `order_lines.N.xxx` เสมอ
+
+
+  ### ตัวเลือกสินค้า — `option_ids`
+
+  สินค้าที่มีตัวเลือก (ดู `product_options` ใน `quotation/preload`) เลือกได้**หลายหมวดหมู่**
+  และหมวดหนึ่ง**เลือกได้หลายตัวเลือก** ส่งเป็นอาเรย์ของ id รวมกันในบรรทัดเดียว
+
+  | เรื่อง | รายละเอียด |
+  |---|---|
+  | ส่งอะไร | **เฉพาะ id** — ชื่อกับราคาเซิร์ฟเวอร์อ่านจากฐานข้อมูลเอง ไม่รับค่าจากแอป |
+  | ลำดับ | เก็บตามลำดับที่ส่งมา แสดงผลตามนั้นทุกที่ |
+  | ราคา | **ไม่ได้บวกให้อัตโนมัติ** — แอปต้องบวกราคาตัวเลือกเข้ากับ `unit_price` / `usd_price` เอง |
+  | **ไม่ส่งคีย์นี้** | **คงตัวเลือกเดิมของบรรทัดนั้นไว้** — แอปเวอร์ชันเก่าที่ยังไม่รู้จักตัวเลือกจึงไม่ทำข้อมูลหาย |
+  | ส่ง `[]` | ล้างตัวเลือกของบรรทัดนั้นทิ้งทั้งหมด |
+
+  > ⚠️ ราคาที่บันทึกเป็น **สำเนา ณ วันที่ออกเอกสาร** ไม่ได้อ่านสดจากตัวสินค้า
+
+
+  ### แก้รูป + รายการสินค้า พร้อมกันในคำขอเดียวได้
+
+  ส่งเป็น `multipart/form-data` ใส่มาทั้งไฟล์และรายการสินค้าได้เลย ทำงานแยกกันคนละส่วน
+
+  ```
+  customer_id                     4
+  order_date                      2026-08-19
+  price_mode                      price
+  order_lines[0][product_id]      119
+  order_lines[0][qty]             2
+  order_lines[0][uom_code]        EA
+  order_lines[0][usd_price]       30
+  quotation_image                 <file>
+  ```
+
+  | ส่งอะไรมา | เกิดอะไรขึ้น |
+  |---|---|
+  | รูป + รายการสินค้า | เปลี่ยนรูปใหม่ **และ** ซิงก์รายการสินค้าทั้งชุด · ยอดคิดใหม่จากรายการที่ส่งมา |
+  | เฉพาะรายการสินค้า | รูปเดิมคงอยู่ |
+  | เฉพาะรูป (ไม่ส่ง `order_lines`) | เปลี่ยนแค่รูป **ไม่ไปแตะรายการสินค้าเดิม** · ยอดเดิมคงอยู่ครบ |
+
+  > รูปถูกเก็บที่ `quotation_headers.quotation_image` ของใบเสนอราคาต้นทาง (ตาราง `orders` ไม่มีคอลัมน์รูปของตัวเอง)
+  > ใบสั่งขายที่**ไม่ได้ออกจากใบเสนอราคา** จึงแนบรูปไม่ได้ → `422` `code: order_has_no_quotation`
+
+  ### รายการสินค้าเป็นการ "แทนที่ทั้งชุด" ไม่ใช่ "เพิ่มทีละรายการ"
+
+  `order_lines` ที่ส่งมาคือ**สถานะสุดท้ายที่ต้องการ** — สินค้าที่ไม่ได้อยู่ใน payload จะถูกลบออกจากใบ (soft delete ทั้ง `order_lines` และ `quotation_lines` ของใบเสนอราคาต้นทาง)
+
+  | อยากทำอะไร | ส่งอะไร |
+  |---|---|
+  | แก้จำนวน/ราคาบรรทัดเดิม | ส่งทุกบรรทัดที่ยังต้องการ รวมบรรทัดที่แก้ |
+  | ลบสินค้า 1 ตัวออก | ส่งเฉพาะบรรทัดที่เหลือ (ตัวที่ลบไม่ต้องส่ง) |
+  | เพิ่มสินค้าใหม่ | ส่งบรรทัดเดิมทั้งหมด + บรรทัดใหม่ |
+  | ไม่แตะรายการสินค้าเลย | **ไม่ต้องส่ง `order_lines` มาเลย** |
+
+  ⚠️ **ส่งมาแค่บรรทัดเดียวที่อยากแก้ = บรรทัดอื่นถูกลบทิ้งหมด** — ต้องส่งครบทุกบรรทัดที่ยังต้องการเสมอ
+
+  ระบบจับคู่บรรทัดด้วย **`product_id` + `uom_code`** — สินค้าตัวเดียวกันคนละหน่วยนับใส่ 2 บรรทัดได้
+
+  ```
+  order_lines[0][product_id]  119     order_lines[1][product_id]  119
+  order_lines[0][qty]         1       order_lines[1][qty]         3
+  order_lines[0][uom_code]    BX      order_lines[1][uom_code]    EA
+  ```
+
+  > ส่งสินค้า+หน่วยนับ**ซ้ำกันเป๊ะ ๆ** สองบรรทัดยังทับกันเหมือนเดิม — ถ้าต้องการรวมจำนวน ให้รวมเป็นบรรทัดเดียวก่อนส่ง
+
+  ### ⚠️ ไม่ส่ง `usd_price` = ราคาถูกรีเซ็ตเป็นราคาบาทของสินค้า
+
+  `order/update-api` **ไม่อ่าน `unit_price` / `total_line` ที่ส่งมาเลย** — คิดราคาจากคอลัมน์ราคาของสินค้าตาม `price_mode` ใหม่ทุกครั้ง แล้วบันทึกค่าที่คำนวณได้ลงบรรทัดสินค้า (ส่งมาก็ไม่ผิด แต่ไม่มีผล)
+
+  แปลว่าใบสั่งขายที่ขายเป็น USD ถ้าแก้แล้วไม่ส่ง `usd_price` กลับมาด้วย **ราคาจะเด้งกลับไปเป็นราคาบาทที่ตั้งไว้ที่สินค้า** โดยไม่มีอะไรเตือน
+
+  วิธีที่ถูก: หยิบ `usd_price` ที่ได้จาก `order/edit-api` ส่งกลับไปตรง ๆ
+
+  ```json
+  {"product_id": 119, "qty": 2, "usd_price": 30, "uom_code": "EA",
+   "manual_discount": 0, "discount_type": "amount"}
+  ```
+
+  อัตราที่ใช้คิด = อัตราของใบเสนอราคาต้นทาง ถ้าไม่มีจึงใช้อัตราปัจจุบัน · ส่ง `usd_price` มาแต่ใช้ไม่ได้ → `422` พร้อม `code` (`usd_pricing_disabled` / `usd_rate_unavailable`)
+
+  ### Response ของ update — เอกสารทั้งใบหลังบันทึก
+
+  รูปแบบ **เดียวกับ `order/edit-api` เป๊ะ ๆ** เอาไปวาดหน้าจอต่อได้เลย ไม่ต้องยิง `edit-api` ซ้ำเพื่อดูว่ายอดออกมาเท่าไรหรือบรรทัดไหนถูกลบไปบ้าง
+
+  ```json
+  {
+    "success": true,
+    "message": "แก้ไขข้อมูลสำเร็จ",
+    "data": {
+      "quotation_header": {
+        "id": 9,
+        "order_number": "PO-260819-0003",
+        "...": "ช่องข้อมูลหัวเอกสาร (ยอดเงิน · usd_rate · ลูกค้า · รูปแนบ)",
+        "quotation_lines": [ { "id": 10, "product_id": 119, "qty": 5, "...": "..." } ]
+      }
+    }
+  }
+  ```
+
+  > 🔻 **Breaking change (2026-08-19)** — เดิมคืนแค่ `{message, usd_rate, total_after_discount, total_after_discount_usd}` แบบแบน
+  > ตอนนี้ค่าทั้งสี่อยู่ใน `data.quotation_header` (`usd_rate` · `total_after_discount` · `total_after_discount_usd`) พร้อมข้อมูลที่เหลือของทั้งใบ
+
+  ---
+
+  ## 8. Error
+
+  | HTTP | เมื่อไหร่ |
+  |:---:|---|
+  | `401` | token หาย/หมดอายุ |
+  | `403` | แพ็กเกจหมดอายุ · หรือ (ตอน update) เอกสารไม่อยู่ในสถานะที่แก้ได้ |
+  | `200` + `"data": null` | ไม่พบใบสั่งขาย — **ไม่ใช่ `404`** ต้องเช็ค `data` เอง |
+  | `422` | (ตอน update) validation ไม่ผ่าน · ส่ง `usd_price` แต่ใช้ไม่ได้ · แนบรูปกับใบที่ไม่มีใบเสนอราคาต้นทาง (`order_has_no_quotation`) |
+  | `500` | ข้อผิดพลาดอื่น |
+
+  ---
+
+  ## 9. กับดัก
+
+  | # | เรื่อง | ต้องทำอะไร |
+  |:---:|---|---|
+  | 1 | key ชื่อ `quotation_lines` แต่เนื้อในคือรายการของใบสั่งขาย | ใช้ชื่อตามนั้น อย่าแก้ |
+  | 2 | **ยอดในเส้นนี้เป็นบาท** ต่างจาก `quotation/create` ที่คืนเป็นสตางค์ | อย่าหาร 100 ซ้ำ |
+  | 3 | `vat_amount` เป็น**สตางค์** ตัวเดียวในก้อน `data` | ต้องหาร 100 เอง |
+  | 4 | ไม่พบเอกสาร = `200` + `data: null` | เช็ค `data` ก่อนใช้ อย่าดูแค่ status code |
+  | 5 | **ไม่ส่ง `usd_price` ตอน update = ราคาเด้งกลับเป็นราคาบาทของสินค้า** | ส่ง `usd_price` ที่ได้จากเส้นนี้กลับไปด้วยเสมอ |
+  | 6 | `order_conditions` ไม่มี `id` | เทียบกับ `conditions` ได้ด้วยชื่อเท่านั้น |
+  | 7 | `quotation_image_url` หมดอายุ 15 นาที | เปิดหน้าค้างนานต้องโหลดใหม่ |
+  | 8 | `customers` ไม่ได้กรองตามผู้ขาย | ต่างจาก `quotation/preload` ที่กรองให้ |
+  | 9 | ไม่มีข้อมูลราคาขั้นต่ำ / กติกาจำนวน | ดึงจาก `quotation/preload` มาประกอบถ้าต้องใช้ |
+
+  ## 10. สิ่งที่แก้ไปแล้ว
+
+  ### 2026-08-19 — จัดโครง response ใหม่ ⚠️ **ต้องแก้ฝั่งแอป**
+
+  | เดิม | ตอนนี้ |
+  |---|---|
+  | `data` เป็นหัวเอกสารแบน ๆ ปนกับ `quotation_lines` | ทั้งใบรวมอยู่ใน `data.quotation_header` (รายการสินค้าอยู่ใน `.quotation_lines` ของก้อนนั้น) — **คีย์แบนถูกถอดออก** |
+  | ราคาสินค้าอยู่ที่ `product_price` ระดับบนสุด | ย้ายเข้า `products[].prices[]` — **`product_price` ถูกถอดออก** |
+  | ไม่มี `customer_id` ใน `data` ทั้งที่ต้องใช้ตอนบันทึกกลับ | เพิ่มให้แล้วที่ `quotation_header.customer_id` |
+  | คิวรี `products` ตัวแรก (join `product_prices` + `view_default_uoms`) ถูกเขียนทับทันทีในบรรทัดถัดไป — ยิงฟรีทุกคำขอ | ลบทิ้ง ไม่กระทบ response |
+
+  **`order/update-api` รอบเดียวกัน:**
+
+  | เดิม | ตอนนี้ |
+  |---|---|
+  | ลบสินค้าออกจากใบไม่ได้ — บรรทัดเก่าค้างอยู่ตลอดเพราะใช้ `updateOrCreate` อย่างเดียว ผลบวกของบรรทัดจึงไม่ตรงกับยอดรวมของใบ | สินค้าที่ไม่ได้อยู่ใน `order_lines` ถูก soft delete ทั้งใบสั่งขายและใบเสนอราคาต้นทาง |
+  | สินค้าที่เคยลบแล้วเพิ่มกลับ ยังติดธง `is_delete` อยู่ บันทึกสำเร็จแต่ไม่โผล่ในรายการ | ปลุกกลับมาให้ (`is_delete = false`) |
+  | `discount_type` ของ `order_lines` ใช้ค่าที่ค้างจากลูปคำนวณ — ทุกบรรทัดได้ค่าของ**บรรทัดสุดท้าย** | ใช้ค่าของบรรทัดตัวเอง |
+  | แถวจับคู่ด้วย `product_id` อย่างเดียว — สินค้าเดียวกันคนละหน่วยนับ บรรทัดหลังทับบรรทัดแรก | จับคู่ด้วย `product_id` + `uom_code` (แก้ทั้ง `order/update-api` และ `quotation/update`) |
+  | ส่งรูปมากับใบที่ไม่มีใบเสนอราคาต้นทาง = ไฟล์หายเงียบ ๆ ตอบ `200` | `422` `code: order_has_no_quotation` |
+  | อัปเดตเฉพาะรูป (ไม่ส่งยอดมาด้วย) = ยอดทั้งใบถูกเขียนทับเป็น `0` | ไม่ส่งยอดมา = คงยอดเดิมไว้ |
+  | ส่งรายการสินค้ามาในชื่อ `quotation_lines` (ชื่อที่ `edit-api` คืนมา) = ถูกมองข้ามทั้งก้อน ได้ `200` แต่สินค้าไม่เปลี่ยน | รับทั้ง `order_lines` และ `quotation_lines` |
+  | response คืนแค่ยอดสุทธิแบบแบน ต้องยิง `edit-api` ซ้ำเพื่อดูผลลัพธ์ | คืนเอกสารทั้งใบ รูปแบบเดียวกับ `edit-api` |
+  | **บรรทัดสินค้าบันทึก `unit_price` / `total_line` จากค่าที่ไคลเอนต์ส่งมา** — ไม่ส่งมา = บันทึกเป็น `0` ทั้งที่ยอดรวมของใบถูกต้อง ผลบวกของบรรทัดจึงไม่ตรงกับยอดรวม | บันทึกค่าที่เซิร์ฟเวอร์คำนวณเอง (ตรงกับที่ `quotation/update` ทำอยู่แล้ว) |
+
+  **สิ่งที่ต้องแก้ในแอป:** `data.xxx` → `data.quotation_header.xxx` (รวม `data.quotation_lines` → `data.quotation_header.quotation_lines`) · `product_price[id]` → หา product ใน `products` แล้วอ่าน `.prices`
+
+  ### 2026-08-18
+
+  | เดิม | ตอนนี้ |
+  |---|---|
+  | **รายการสินค้าเป็น array ว่างเสมอ** — โค้ดกรองด้วยคีย์ `quotation_line_id` ที่ไม่มีอยู่จริงใน select (alias จริงคือ `order_line_id`) | คืนรายการสินค้าครบตามจริง |
+  | ไม่มีข้อมูล USD เลย | เพิ่ม `usd_rate` · `total_after_discount_usd` · `usd_price` + `total_line_usd` รายบรรทัด · `usd_pricing` · `product_price[].usd_price` |
+  | `uom_code` มีช่องว่างต่อท้าย (`"EA "`) | ตัดให้แล้ว (`"EA"`) |
+  | `order/update-api` ไม่รับ `usd_price` — แก้ใบสั่งขายทีเดียวราคา USD หาย | รับแล้ว พร้อมบันทึกประวัติลง `usd_rate_logs` |
+
+  > ⚠️ ข้อแรกทำให้ `quotation_lines` เปลี่ยนจาก `[]` เป็นมีข้อมูล — แอปที่เคยเห็นว่าง ๆ จะเริ่มเห็นรายการสินค้า
+
+  ---
+
+  *อัปเดตล่าสุด: 2026-08-19 · อ้างอิงจาก [`ApiOrderController::order_edit_api()`](../app/Http/Controllers/Api/ApiOrderController.php)*

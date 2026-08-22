@@ -13,6 +13,1057 @@ config:
         username: ""
         password: ""
       bypassProxy: ""
+
+docs:
+  content: |
+    # API Reference — `/api/v1` ทั้งหมด
+
+    สารบัญเส้น API ของแอปมือถือทุกเส้นใน [`routes/api/api_v1.php`](../routes/api/api_v1.php) — **78 เส้น** จาก 14 controller
+
+    | เอกสารเจาะลึกรายหัวข้อ | |
+    |---|---|
+    | [api-login.md](api-login.md) | เข้าสู่ระบบ + วงจรอายุ token |
+    | [api-login-google.md](api-login-google.md) | Google OAuth ผ่าน BukkhonID |
+    | [api-subscription-status.md](api-subscription-status.md) | สถานะแพ็กเกจ / วันใช้งาน |
+    | [api-master-data.md](api-master-data.md) | ข้อมูลตั้งต้น — `contact-type`, `master-data` |
+    | [api-product-list.md](api-product-list.md) | รายการสินค้า + ราคาแยกหน่วยนับ |
+    | [api-quotation-preload.md](api-quotation-preload.md) | ข้อมูลตั้งต้นฟอร์มใบเสนอราคา — อธิบายทุกฟิลด์ |
+    | [api-quotation-create.md](api-quotation-create.md) | สร้างใบเสนอราคา — พารามิเตอร์ วิธีคิดยอด และ response |
+    | [api-quotation-update.md](api-quotation-update.md) | แก้ไขใบเสนอราคา — กติกาการลบบรรทัด และฟิลด์ USD |
+    | [api-order-edit.md](api-order-edit.md) | ใบสั่งขาย — ฟอร์มแก้ไข + อัตรา USD ที่ยืมจากใบเสนอราคา |
+    | [api-sales-document-setting.md](api-sales-document-setting.md) | ตั้งค่าเอกสารขาย — ปุ่มบันทึก + วิธีกรอกใบเสนอราคา |
+    | [api-dashboard.md](api-dashboard.md) | แดชบอร์ด, สรุปยอดขาย, อันดับ, ปฏิทิน |
+    | [api-user-profile.md](api-user-profile.md) | โปรไฟล์, แก้ไขผู้ใช้, รหัสผ่าน, FCM token |
+    | [api-customer.md](api-customer.md) | ลูกค้า — สร้าง/แก้ไข/ลบ/รายชื่อ |
+    | [api-late-appointment.md](api-late-appointment.md) | คำขออนุมัตินัดหมายล่าช้า |
+
+    ---
+
+    ## กติกาที่ใช้กับทุกเส้น
+
+    ### Base URL — ต้องยิงเข้า subdomain ของบริษัท
+
+    ```bash
+    BASE="https://nicharpn.uat-followonecrm.com/api/v1"
+    AUTH="Authorization: Bearer $TOKEN"
+    ```
+
+    [`InitializeTenancyIfSubdomain`](../app/Http/Middleware/InitializeTenancyIfSubdomain.php) resolve tenant จาก subdomain แล้วสลับ schema **ก่อน** เข้า controller — ยิงผิด subdomain = หาข้อมูลไม่เจอ, subdomain ไม่มีในระบบ = `abort(404)`
+
+    ### Header ที่ต้องมี
+
+    | Header | เมื่อไหร่ |
+    |---|---|
+    | `Accept: application/json` | **ทุกเส้น** — ไม่งั้น error 422/500 กลับมาเป็น HTML |
+    | `Authorization: Bearer <token>` | ทุกเส้นในกลุ่ม `auth_api` (ดูคอลัมน์ 🔒 ในตาราง) |
+    | `Content-Type: application/json` | เส้นที่ส่ง JSON body |
+    | *(ไม่ต้องตั้ง)* | เส้นที่อัปโหลดไฟล์ — ใช้ `multipart/form-data` ให้ client จัดการเอง |
+
+    ### รหัส error ของ token — [`ApiAuth`](../app/Http/Middleware/ApiAuth.php)
+
+    `token_absent` · `token_expired` (→ เรียก `/refresh`) · `token_blacklisted` · `token_invalid` · `user_not_found` ทั้งหมดคืน **401** ส่วน `subscription_expired` คืน **403**
+
+    ### ⚠️ รูปแบบ response ไม่เป็นมาตรฐานเดียวกัน
+
+    controller แต่ละตัวเขียนคนละยุค ทำให้ key ระดับบนสุดต่างกัน — **อย่าเขียน parser กลางตัวเดียวแล้วคาดว่าใช้ได้ทุกเส้น**
+
+    | รูปแบบ | ตัวอย่างเส้นที่ใช้ |
+    |---|---|
+    | `{status: "success", data: {...}}` | notifications, subscription, relationship-detail/{id} |
+    | `{status: true, message, data: {...}}` | dashboard ทั้งหมด, sale-summary-user |
+    | `{success: true, message, data}` | customer, quotation, debt-reduction |
+    | key เฉพาะกิจ (ไม่มี wrapper) | `master-data`, `quotation/preload`, `contact-type`, `billing/list` |
+    | array/object ดิบ | `debt-reduction/orders/{id}`, `api/order/details/{id}` |
+
+    **คำแนะนำ:** ตัดสินสำเร็จ/ล้มเหลวจาก **HTTP status code** เท่านั้น
+
+    ### การแบ่งหน้า (pagination)
+
+    เส้นที่คืน "รายการ" จะแบ่งหน้าเสมอ ใช้พารามิเตอร์และ meta ชุดเดียวกันทั้งหมด — ดู [`App\Support\ApiPagination`](../app/Support/ApiPagination.php)
+
+    | พารามิเตอร์ | ชนิด | ค่าเริ่มต้น |
+    |---|---|---|
+    | `page` | integer ≥1 | 1 |
+    | `per_page` | integer 1–200 | **20** |
+
+    ส่งค่าเกิน 200 จะได้ `422` พร้อมข้อความบอกว่าผิดที่ฟิลด์ไหน
+
+    meta ที่แนบกลับมาทุกครั้ง (อยู่ระดับเดียวกับ key ของรายการ ยกเว้น `productlist` ที่อยู่ใน `data`):
+
+    ```json
+    { "page": 1, "size": 20, "total_elements": 137, "total_pages": 7,
+      "has_next": true, "has_prev": false }
+    ```
+
+    เส้นที่แบ่งหน้า: `productlist` · `notifications` · `quotation/list` · `order/list` · `billing/list` · `debt-reduction/list` · `getCustomer-detail`
+
+    > 🔻 **Breaking (2026-08-21)** — 5 เส้นหลังในลิสต์เพิ่งเปลี่ยนมาแบ่งหน้า จากเดิมที่คืนทั้งตาราง
+    > แอปที่ยังไม่ได้แก้จะเห็นข้อมูลแค่ 20 แถวแรก ต้องวนดึงตาม `has_next` / `total_pages`
+
+    **เส้นที่ตั้งใจไม่แบ่งหน้า** เพราะแบ่งแล้วใช้งานไม่ได้:
+    - `calendar/all/customer` — ปฏิทินต้องมีนัดหมายครบทั้งช่วงถึงจะวาดได้ถูก
+    - `debt-reduction/list` → key `customers` — เป็นลิสต์ตัวเลือกตอนสร้างใบลดหนี้ ถ้าแบ่งหน้าจะเลือกลูกค้าที่อยู่หน้าอื่นไม่ได้ (เฉพาะ key `debtReductions` ที่แบ่งหน้า)
+
+    ### หน่วยของเงินและจำนวน
+
+    ทั้งระบบเก็บเงินเป็น **สตางค์ (จำนวนเต็ม ×100)** ใน DB — API ส่วนใหญ่หารกลับเป็นบาทให้แล้ว แต่ไม่ทุกเส้น ดูหมายเหตุรายเส้น จำนวนสินค้า (`qty`) ก็เก็บ ×100 เช่นกัน
+
+    ### ยอดรวมสุทธิถูกปัดขึ้นเป็นบาทเต็มจำนวน
+
+    `total_after_discount` ของใบเสนอราคาและใบสั่งขาย **ปัดขึ้นเป็นบาทเต็มเสมอ** — ฿54,943.60 → **฿54,944.00**
+    เพราะเป็นยอดที่เก็บเงินจริง เศษสตางค์ทำให้ยอดบนเอกสารกับที่โอนจริงไม่ตรงกัน (ดู [`CapsLineDiscount::ceilTotalCents()`](../app/Traits/CapsLineDiscount.php))
+
+    ยอดย่อย — `total_before_discount` · `total_discount` · `vat_amount` · `quotation_lines[].total_line` — **ยังคงเศษสตางค์ไว้ตามเดิม** เพื่อให้ตรวจย้อนได้ว่ายอดรวมมาจากไหน
+
+    > ⚠️ **ผลบวกของยอดย่อยจึงต่างจาก `total_after_discount` ได้ไม่เกิน 1 บาท** — อย่าเขียนเช็คว่าต้องเท่ากันเป๊ะ
+    > ข้อยกเว้น: เอกสารแบบ**แนบรูป** ที่ผู้ใช้พิมพ์ยอดเอง (`additional_amount`) จะไม่ถูกปัด เก็บตามที่กรอกมา
+
+    ### รูปภาพจาก S3
+
+    bucket เป็น private ทุกรูปคืนเป็น **presigned URL อายุ 5–10 นาที** (`visit_pic_url`, `profile_img`, `quotation_image_url`, ...) — **ห้าม cache ยาว** ต้องดึงใหม่เมื่อหมดอายุ
+
+    ---
+
+    ## ตารางสรุปทุกเส้น
+
+    🔒 = ต้องแนบ JWT (อยู่ในกลุ่ม `auth_api`)
+
+    ### 1. Auth & Session — 7 เส้น
+
+    | | Method | Path | ใช้ทำอะไร |
+    |:---:|---|---|---|
+    | | `POST` | `proxy/auth/login` | proxy login ไป BukkhonID ตรง ๆ (ใช้ฝั่งเว็บ) |
+    | | `GET` | `verify-company-code/{code}` | ตรวจ company code → คืน base URL ของบริษัท |
+    | | `POST` | `login` | เข้าสู่ระบบด้วย username/password |
+    | | `POST` | `login/google` | เข้าสู่ระบบด้วย Google (BukkhonID) |
+    | | `GET` | `refresh` | ต่ออายุ token |
+    | 🔒 | `GET` | `logout` | ออกจากระบบ + เคลียร์ fcm_token |
+    | 🔒 | `POST` | `update-password` | เปลี่ยนรหัสผ่าน |
+    | 🔒 | `POST` | `connect/google` | เชื่อม/ยกเลิกการเชื่อมบัญชี Google |
+
+    ### 2. User & Profile — 9 เส้น
+
+    | | Method | Path | ใช้ทำอะไร |
+    |:---:|---|---|---|
+    | 🔒 | `GET` | `profileUser` | โปรไฟล์ตัวเอง + ยอดขายสะสม |
+    | 🔒 | `POST` | `user/update/{id}` | แก้ไขโปรไฟล์ (อัปโหลดรูปได้) |
+    | 🔒 | `GET` | `profilelist/{id}` | โปรไฟล์ + rank + ข้อมูลบริษัท |
+    | 🔒 | `DELETE` | `delete-user/{id}` | ปิดใช้งานบัญชีพนักงาน |
+    | 🔒 | `POST` | `device-token` | บันทึก FCM token |
+    | 🔒 | `GET` | `user/dashboard` | แดชบอร์ดเซลส์ |
+    | 🔒 | `GET` | `user/dashboard/admin` | แดชบอร์ดแอดมิน (level 2 โดน 403) |
+    | 🔒 | `GET` | `sale-summary-user` | สรุปการขายของตัวเอง |
+    | 🔒 | `GET` | `contact-rank` | อันดับการติดต่อรายเดือน |
+    | 🔒 | `GET` | `sales-rank` | อันดับยอดขายรายเดือน |
+
+    ### 3. Notifications — 4 เส้น
+
+    | | Method | Path | ใช้ทำอะไร |
+    |:---:|---|---|---|
+    | 🔒 | `GET` | `notifications` | รายการแจ้งเตือน (paginate 20) |
+    | 🔒 | `GET` | `notifications/unread-count` | จำนวนที่ยังไม่อ่าน |
+    | 🔒 | `POST` | `notifications/{id}/read` | ทำเครื่องหมายอ่านแล้ว 1 รายการ |
+    | 🔒 | `POST` | `notifications/read-all` | อ่านทั้งหมด |
+
+    ### 4. Subscription & Calendar — 3 เส้น
+
+    | | Method | Path | ใช้ทำอะไร |
+    |:---:|---|---|---|
+    | 🔒 | `GET` | `subscription/status` | สถานะแพ็กเกจ + วันใช้งาน + ธงปิดฟีเจอร์ |
+    | 🔒 | `GET` | `calendar` | ตารางนัดหมายเดือนปัจจุบันของตัวเอง |
+    | 🔒 | `GET` | `calendar/all/customer` | นัดหมายทั้งบริษัท (ทุกเซลส์) |
+
+    ### 5. Customer — 8 เส้น
+
+    | | Method | Path | ใช้ทำอะไร |
+    |:---:|---|---|---|
+    | 🔒 | `GET` | `master-data` | ข้อมูลตั้งต้นทั้งหมด + โลโก้/แบนเนอร์ |
+    | 🔒 | `GET` | `getCustomer-detail` | รายชื่อลูกค้าของตัวเอง |
+    | 🔒 | `POST` | `create-customer` | เพิ่มลูกค้า |
+    | 🔒 | `GET` | `customer/edit/{id}` | ข้อมูลลูกค้าสำหรับฟอร์มแก้ไข |
+    | 🔒 | `POST` | `customer/update/{id}` | แก้ไขลูกค้า |
+    | 🔒 | `DELETE` | `customer/delete/{id}` | ลบลูกค้า (soft delete) |
+    | 🔒 | `GET` | `api/customer/purchased-product/{id}` | สินค้าที่ลูกค้ารายนี้เคยซื้อ |
+    | 🔒 | `GET` | `contact-type` | ประเภทการติดต่อ |
+
+    ### 6. Relationship (แผนการติดต่อ) — 7 เส้น
+
+    | | Method | Path | ใช้ทำอะไร |
+    |:---:|---|---|---|
+    | 🔒 | `POST` | `customer/relationship/create/{id}` | สร้างแผนการติดต่อ (`{id}` = customer_id) |
+    | 🔒 | `POST` | `customer/relationship/update/{id}` | แก้ไขแผน |
+    | 🔒 | `GET` | `customer/relationship/edit/{id}` | ข้อมูลแผนสำหรับฟอร์มแก้ไข |
+    | 🔒 | `GET` | `customer/relationship/{id}` | แผน + นัดหมายทั้งหมดของลูกค้า |
+    | 🔒 | `DELETE` | `customer/relationship/delete/{id}` | ลบแผน (ลบ detail ที่ผูกด้วย) |
+    | 🔒 | `POST` | `customer/contact/customer/store` | **บันทึกการติดต่อด่วน** (ปิดงานทันที) |
+    | 🔒 | `GET` | `customer/contact/customer/{id}` | master data สำหรับฟอร์มติดต่อด่วน |
+
+    ### 7. Relationship Detail (นัดหมาย) — 9 เส้น
+
+    | | Method | Path | ใช้ทำอะไร |
+    |:---:|---|---|---|
+    | 🔒 | `POST` | `relationship-detail/create-contact` | สร้างนัดหมาย |
+    | 🔒 | `GET` | `relationship-detail/edit-contact/{id}` | ข้อมูลนัดหมายสำหรับฟอร์มแก้ไข |
+    | 🔒 | `POST` | `relationship-detail/update-contact/{id}` | แก้ไขนัดหมาย |
+    | 🔒 | `POST` | `relationship-detail/submit-contact/{id}` | **ปิดงานนัดหมาย** — ถูกบล็อกถ้าล่าช้า |
+    | 🔒 | `GET` | `relationship-detail/late-status/{id}` | เช็คว่าล่าช้าไหม / ควรโชว์ปุ่มอะไร |
+    | 🔒 | `POST` | `relationship-detail/late-request/{id}` | ยื่นคำขออนุมัติล่าช้า |
+    | 🔒 | `DELETE` | `relationship-detail/delete-contact/{id}` | ลบนัดหมาย |
+    | 🔒 | `GET` | `relationship-detail/{id}` | รายละเอียดนัดหมายเดี่ยว |
+    | 🔒 | `GET` | `getcustomer/detail/byid/{id}` | **นัดหมายทั้งหมดของลูกค้า พร้อม flag ปุ่ม** |
+
+    ### 8. Product & Promotion — 3 เส้น
+
+    | | Method | Path | ใช้ทำอะไร |
+    |:---:|---|---|---|
+    | 🔒 | `GET` | `productlist` | รายการสินค้า (paginate + ค้นหา + เรียง) |
+    | 🔒 | `GET` | `promotion/active` | โปรฯ ที่ active ทั้งหมด (แอปคำนวณเอง) |
+    | 🔒 | `GET` | `promotion/check` | เช็คโปรฯ ต่อสินค้า 1 บรรทัด (server คำนวณให้) |
+
+    ### 9. Quotation (ใบเสนอราคา) — 10 เส้น
+
+    | | Method | Path | ใช้ทำอะไร |
+    |:---:|---|---|---|
+    | 🔒 | `GET` | `quotation/preload` | ข้อมูลตั้งต้นสำหรับฟอร์มสร้างใบเสนอราคา |
+    | 🔒 | `POST` | `quotation/create` | สร้างใบเสนอราคา (แบบมีรายการสินค้า) |
+    | 🔒 | `POST` | `quotation/usd/create` | สร้างใบเสนอราคา **ที่ตั้งราคาเป็นสกุล USD** |
+    | 🔒 | `GET` | `quotation/list` | รายการใบเสนอราคาของตัวเอง |
+    | 🔒 | `GET` | `quotation/edit/{id}` | ข้อมูลสำหรับฟอร์มแก้ไข |
+    | 🔒 | `POST` | `quotation/update/{id}` | แก้ไขใบเสนอราคา |
+    | 🔒 | `POST` | `quotation/with-images/create` | สร้างแบบ **แนบรูปแทนรายการสินค้า** |
+    | 🔒 | `POST` | `quotation/with-images/update/{id}` | แก้ไขแบบแนบรูป |
+    | 🔒 | `POST` | `quotation/{id}/status/confirmed` | อนุมัติ → ใบสั่งขายเปลี่ยนตาม |
+    | 🔒 | `POST` | `quotation/{id}/status/cancelled` | ยกเลิก → ใบสั่งขายยกเลิกตาม |
+
+    ### 10. Order (ใบสั่งขาย) — 7 เส้น
+
+    | | Method | Path | ใช้ทำอะไร |
+    |:---:|---|---|---|
+    | 🔒 | `GET` | `order/list` | รายการใบสั่งขาย |
+    | 🔒 | `GET` | `order/edit-api/{id}` | ข้อมูลสำหรับฟอร์มแก้ไข |
+    | 🔒 | `POST` | `order/update-api/{id}` | แก้ไขใบสั่งขาย |
+    | 🔒 | `POST` | `order/uploade/slip/{id}` | อัปโหลดสลิปโอนเงิน (หลายไฟล์) |
+    | 🔒 | `POST` | `order/update/status/payment/{id}` | ⚠️ **เส้นนี้พัง — ดูหมายเหตุท้ายเอกสาร** |
+    | 🔒 | `GET` | `billing/list` | รายการติดตามเก็บเงิน |
+    | 🔒 | `GET` | `api/order/details/{id}` | รายละเอียดใบสั่งขาย |
+
+    ### 11. Debt Reduction (ใบลดหนี้) — 5 เส้น
+
+    | | Method | Path | ใช้ทำอะไร |
+    |:---:|---|---|---|
+    | 🔒 | `GET` | `debt-reduction/list` | รายการใบลดหนี้ + ลูกค้า |
+    | 🔒 | `GET` | `debt-reduction/orders/{customer_id}` | ใบสั่งขายของลูกค้ารายนั้น |
+    | 🔒 | `GET` | `debt-reduction/order-items/{order_id}` | รายการสินค้าในใบสั่งขาย |
+    | 🔒 | `POST` | `debt-reduction/store` | สร้างใบลดหนี้ |
+    | 🔒 | `DELETE` | `debt-reduction/delete/{id}` | ลบใบลดหนี้ |
+
+    ### 12. Exchange Rate (อัตราแลกเปลี่ยน ธปท.) — 2 เส้น
+
+    | | Method | Path | ใช้ทำอะไร |
+    |:---:|---|---|---|
+    | 🔒 | `GET` | `exchange-rate/usd` | อัตรา USD → THB ล่าสุดที่ระบบใช้คิดราคา |
+    | 🔒 | `GET` | `exchange-rate/usd/convert` | แปลง USD ⇄ บาท ตามสูตรของระบบ |
+
+    ### 13. Sales Document Setting (ตั้งค่าเอกสารขาย) — 2 เส้น
+
+    | | Method | Path | ใช้ทำอะไร |
+    |:---:|---|---|---|
+    | 🔒 | `GET` | `sales-document-setting` | ปุ่มบันทึก + วิธีกรอกที่บริษัทเปิดใช้ |
+    | 🔒 | `POST` | `sales-document-setting` | แก้ค่าตั้ง — **เฉพาะแอดมิน** (level 0/1) |
+
+    ---
+
+    # รายละเอียดรายเส้น
+
+    ## 1. Auth & Session
+
+    รายละเอียดเต็มอยู่ที่ [api-login.md](api-login.md) และ [api-login-google.md](api-login-google.md) — สรุปย่อ:
+
+    ### `GET verify-company-code/{code}`
+    ไม่ต้อง auth · คืน `{success, message, data:{is_valid, url}}` · ไม่พบ = **404** · โหมด standalone คืน host ตัวเอง
+
+    ### `POST login`
+    `{username, password}` → `{message, user_detail, first_login, token}` · ไม่พบ user = 404 · รหัสผิด = 401
+
+    ### `POST login/google`
+    `{id_token, device_id?}` → โครงสร้างเดียวกับ `/login`
+
+    ### `GET refresh`
+    แนบ token เดิม (หมดอายุแล้วก็ได้) → `{access_token, token_type, expires_in}` **แบบ flat** ไม่ห่อใน `token`
+
+    ### `POST update-password` 🔒
+    | ฟิลด์ | บังคับ | กติกา |
+    |---|:---:|---|
+    | `new_password` | ✅ | `min:8` + `confirmed` |
+    | `new_password_confirmation` | ✅ | ต้องตรงกับด้านบน |
+
+    → `{success, message}` · ไม่บังคับกรอกรหัสเดิม
+
+    ### `POST proxy/auth/login`
+    proxy ไป `{BUKKHONID_URL}/api/v1/auth/login` ตรง ๆ ด้วย `{email_or_phone, password, device_id?, program_code?}` แล้วคืน body ของ BukkhonID กลับมาทั้งก้อน (เติม `user.id`/`user.bukkhon_id` ให้ครบทั้งคู่) — **เส้นนี้ไม่ได้ออก JWT ของ CRM** ใช้ฝั่งเว็บ ไม่ใช่ mobile flow
+
+    ---
+
+    ## 2. User & Profile
+
+    ### `GET profileUser` 🔒
+    โปรไฟล์ตัวเอง — join จังหวัด/อำเภอ/ตำบล/ตำแหน่ง/แผนก
+
+    ```json
+    { "status": "success", "data": {...}, "orderCount": 12,
+      "totalsByUserOrder": { "4": "45000.00", "7": "38200.50" } }
+    ```
+
+    > ⚠️ `totalsByUserOrder` เส้นนี้เป็น **object map ยอดขายของพนักงานทุกคน** ไม่ใช่ของตัวเอง — ต่างจาก `profilelist/{id}` ที่เป็น string ตัวเดียว
+    > `profile_img_url` ใช้ `$disk->url()` (**URL ถาวร ไม่ใช่ presigned**) ต่างจาก `/login` ที่ใช้ presigned 10 นาที — ถ้า bucket เป็น private URL นี้จะเปิดไม่ได้
+    > รายละเอียดทั้งหมด: [api-user-profile.md](api-user-profile.md)
+
+    ### `POST user/update/{id}` 🔒 · `multipart/form-data`
+
+    | ฟิลด์ | กติกา |
+    |---|---|
+    | `profile_img` | `image` · jpeg,png,jpg · ≤ 2MB |
+    | `email` | `email` · ≤255 · **unique** (ยกเว้นตัวเอง) |
+    | `tax_id` | ≤255 · ขีดกลางถูกตัดออกอัตโนมัติ |
+    | `position_id` | integer |
+    | `address` / `subdistrict` / `district` / `province` | string ≤255 |
+
+    → `{success, message, data}` · ผิดกติกา = 422 พร้อม `errors`
+
+    ### `GET profilelist/{id}` 🔒
+    ```json
+    { "users": {...}, "positions": [...], "totalsByUserOrder": "...", "orderCount": 0,
+      "userRank": {...}, "userRanks": "ชื่อ rank", "rankImage": "...", "company": {...} }
+    ```
+    > `userRanks` / `rankImage` เป็นฟิลด์เก่า เก็บไว้เพื่อ backward-compat กับแอปเวอร์ชันเดิม — ของใหม่ใช้ `userRank`
+
+    ### `DELETE delete-user/{id}` 🔒
+    soft delete บัญชีพนักงาน (ลูกค้า/นัดหมายที่ผูกอยู่ยังคงอยู่)
+
+    | HTTP | เงื่อนไข |
+    |:---:|---|
+    | `404` | ไม่พบผู้ใช้ |
+    | `403` | เป็นแอดมินคนแรก **หรือ** ลบแล้วจะไม่เหลือแอดมินที่เคย login |
+    | `200` | `{success, message}` |
+
+    ### `POST device-token` 🔒
+    `{fcm_token}` (required) → `{status, message}`
+
+    ⚠️ มีตัวกันพลาด: ถ้าส่ง **JWT** มาแทน FCM token (ขึ้นต้น `eyJ` + 3 ส่วนคั่นจุด) จะได้ **422** `code: invalid_fcm_token`
+
+    ### `GET user/dashboard` 🔒
+    query: `date` (`YYYY-MM-DD`, ดีฟอลต์เดือนปัจจุบัน)
+
+    ```
+    {status: true, message, data: {
+      user_id, selected_month, selected_year, available_months,
+      customerCount, newCustomerCountThisMonth, repeatCustomers, existingCustomer,
+      top5ProductsByUser, top5ProductsByUserTotal, top5ProductTypeByUser, top5ProductTypeByUserTotal,
+      billingAmount, billingAmountCount, paidAmount, paidAmountCount,
+      openSalesOrder, confirmedSalesOrder, approvedCount, waitingForBilling,
+      shippingInProgress, accountingDocuments, completedCount, cancelledCount,
+      contactList, salesRank }}
+    ```
+
+    ### `GET user/dashboard/admin` 🔒
+    query: `month` + `year` (ส่งคู่กัน) · **level 2 (เซลส์) โดน 403**
+
+    ```
+    {status: true, message, data: {
+      sales_users:{total,percent}, customers:{total,percent}, products:{total,percent},
+      order_summary:{openSalesOrder, confirmedSalesOrder, approvedCount, pending_billing_Count,
+                     pending_dispatch_Count, shippedCount, completedCount, cancelledCount},
+      relationship_type_by_user, top6_user_sales_order, total_all_sales }}
+    ```
+
+    ### `GET sale-summary-user` 🔒
+    ```
+    {status: true, message, data: {chartData, salesThisYear, salesThisMonth, receivedAmount,
+     outstandingAmount, totalCreditNoteThisMonth, successfulReturningCustomers,
+     totalNewCustomersThisMonth, totalNewCustomers}}
+    ```
+
+    ### `GET contact-rank` / `GET sales-rank` 🔒
+    query: `date` → `{success, month: "YYYY-MM", data: [...]}`
+
+    ---
+
+    ## 3. Notifications 🔒
+
+    | Path | Response |
+    |---|---|
+    | `GET notifications` | `{status:"success", data: <paginator 20/หน้า>}` |
+    | `GET notifications/unread-count` | `{status:"success", data:{unread_count}}` |
+    | `POST notifications/{id}/read` | `{status:"success", message}` · ไม่พบ = **404** |
+    | `POST notifications/read-all` | `{status:"success", message}` |
+
+    ใช้ Laravel notifications มาตรฐาน (`user->notifications()`) — `{id}` เป็น **UUID** ไม่ใช่ integer
+
+    ---
+
+    ## 4. Subscription & Calendar 🔒
+
+    ### `GET subscription/status`
+    ดู [api-subscription-status.md](api-subscription-status.md) — คืน `plan`, `usage`, `days_remaining`, `features`, `notice`
+
+    ### `GET calendar`
+    นัดหมาย **เดือนปัจจุบัน** ของลูกค้าที่ตัวเองรับผิดชอบ (`c.user_id = me`)
+
+    ```json
+    { "status": "success", "year": 2026, "month": "สิงหาคม", "count": 5, "data": [...] }
+    ```
+
+    > ⚠️ **ยึดเดือนปัจจุบันตายตัว** — โค้ดอ่าน `Carbon::now()` ไม่ได้รับ query param ส่ง `?month=` มาก็ไม่มีผล
+
+    ### `GET calendar/all/customer`
+    นัดหมาย **ทั้งบริษัท** ทุกเซลส์ ไม่กรองเดือน → `{global_schedule: [...]}` แต่ละแถวมี `formatted_name` (ชื่อบริษัทเติมคำนำหน้าตาม `business_type_id`) และ `visit_pic_url` (presigned 10 นาที)
+
+    ---
+
+    ## 5. Customer 🔒
+
+    ### `GET master-data`
+    ข้อมูลตั้งต้นก้อนเดียวสำหรับฟอร์มทั้งแอป — เรียกครั้งเดียวตอนเปิดแอปแล้ว cache ไว้
+
+    ```
+    {contact_types, relationship_status, visit_conclusions, business_types, product_types,
+     logo_aw_followonecrm_01..04, branner_1..4}
+    ```
+
+    > โลโก้/แบนเนอร์เป็น presigned URL **อายุแค่ 5 นาที** — cache ตัว list ได้ แต่ URL รูปต้องดึงใหม่
+
+    ### `GET getCustomer-detail`
+    ลูกค้าของตัวเอง เรียงตาม `customer_code` — **แบ่งหน้า** (`page`, `per_page`)
+
+    ```json
+    { "datas": [...], "user": 4,
+      "page": 1, "size": 20, "total_elements": 42, "total_pages": 3,
+      "has_next": true, "has_prev": false }
+    ```
+
+    แต่ละแถวมีฟิลด์คำนวณเพิ่ม: `customer_name_full` (เติมคำนำหน้าตามประเภทธุรกิจ), `customer_scope_label` (ชื่อไทย), `is_address_incomplete` (ที่อยู่ไม่ครบ)
+
+    ### `POST create-customer` · `POST customer/update/{id}`
+
+    | ฟิลด์ | บังคับ | กติกา |
+    |---|:---:|---|
+    | `customer_name` | ✅ | ≤255 + **จำกัดจำนวนไบต์** (`MaxBytes`) |
+    | `contact_name` | ✅ | ≤255 + ตัวอักษรเท่านั้น (ห้ามตัวเลข/อักขระพิเศษ) + MaxBytes |
+    | `customer_tel` | ✅ | รูปแบบเบอร์ไทย (`ThaiPhone::RULE`) |
+    | `tax_id` | | `digits:13` — ขีดกลางถูกตัดออกให้อัตโนมัติ |
+    | `business_type_id` | | ไม่ส่ง = **7** (บุคคลธรรมดา) · ไม่มีในระบบ = 404 |
+    | `customer_scope` | | `domestic` \| `international` |
+    | `customer_detail` | | ≤2000 |
+    | `customer_address` | | ≤255 |
+    | `province` / `district` / `subdistrict` | | integer (**code** ไม่ใช่ id) — ถ้าส่งครบ 3 ตัวจะตรวจว่าสัมพันธ์กันจริง ไม่งั้น 422 `"ที่อยู่ไม่ถูกต้อง"` |
+    | `latitude` | | `-90..90` |
+    | `longitude` | | `-180..180` |
+    | `credit` | | `0` \| `30` \| `60` \| `90` |
+    | `credit_type` | | `0` = เงินสด/โอน · `1` = เครดิต — **คำนวณเองจาก `credit`** ตอนสร้าง (credit=0 → 0) |
+
+    `customer_code` ระบบ gen เอง (`CUS-YYYYMM-0001`) · เจ้าของ = user ที่ login
+
+    > `customer/update/{id}` ไม่แตะ `customer_code` และไม่โอนเจ้าของ (`user_id`) — บันทึกแค่ `updated_by` · `credit_type` คำนวณจาก `credit` เสมอทั้งสองเส้น
+
+    > 💡 **PostgreSQL SQL_ASCII**: `varchar(255)` เก็บได้ 255 **ไบต์** ภาษาไทยได้แค่ ~85 ตัว — จึงมี `MaxBytes` คู่กับ `max:255` เสมอ
+
+    ### `GET customer/edit/{id}`
+    คืนเฉพาะลูกค้าที่ `user_id = ตัวเอง` เท่านั้น (ไม่ใช่ = **404**) → `{customer, user_id}` · มี `province_name`/`district_name`/`subdistrict_name`/`subdistrict_zip_code` + `credit_type_name` + `customer_scope_label`
+
+    ### `DELETE customer/delete/{id}`
+    soft delete (`is_delete = true`) → `{success, message}`
+
+    > ⚠️ **ไม่เช็คความเป็นเจ้าของ** — ส่ง id ของลูกค้าเซลส์คนอื่นในบริษัทเดียวกันก็ลบได้
+
+    ### `GET api/customer/purchased-product/{id}`
+    สินค้าที่ลูกค้ารายนี้เคยซื้อ นับเฉพาะ order ที่ `status = completed` **และ** `payment_status = paid` — รวม qty ต่อสินค้า เรียงมากไปน้อย → `{success, data: [{product_name, product_code, total_qty, uom_name}]}`
+
+    ### `GET contact-type`
+    → `{contact_types: [...]}`
+
+    ---
+
+    ## 6. Relationship 🔒
+
+    รายละเอียดเต็ม ๆ พร้อมตัวอย่าง curl ที่ [api-relationship.md](api-relationship.md)
+
+    ### `POST customer/relationship/create/{id}`
+    `{id}` ใน URL = **customer_id**
+
+    | ฟิลด์ | บังคับ |
+    |---|:---:|
+    | `customer_id` | ✅ (ต้องมีจริง) |
+    | `product_type_id` | ✅ (ต้องมีจริง) |
+    | `topic` | ✅ |
+    | `relationship_date` | ✅ |
+
+    → `{success, message, customer_id, relationship_id}`
+
+    ### `POST customer/relationship/update/{id}`
+    `{id}` = **relationship_id** · ฟิลด์เดียวกับ create → `{success, message, customer_id, data}`
+
+    ### `GET customer/relationship/edit/{id}` · `DELETE customer/relationship/delete/{id}`
+    edit คืนข้อมูลแผน · delete ลบแผน **พร้อม detail ที่ผูกอยู่ทั้งหมด** → `{success, message}` · ไม่พบ = 404
+
+    ### `GET customer/relationship/{id}`
+    → `{customer, relationships, defaultRel, relationship_details, counts_relationship_details}`
+
+    ### `POST customer/contact/customer/store` · `multipart/form-data`
+    **บันทึกการติดต่อด่วน** — สร้าง detail ที่ `mode = 'completed'` ทันที (ไม่ต้องนัดล่วงหน้า)
+
+    | ฟิลด์ | บังคับ | กติกา |
+    |---|:---:|---|
+    | `customer_id` | ✅ | ต้องมีจริง |
+    | `contact_type_id` | ✅ | numeric |
+    | `product_type_id` | | ต้องมีจริง |
+    | `relationship_status_id` / `visit_conclusion_id` | | numeric |
+    | `visit_pic` | | image ≤5MB · jpeg,png,jpg,gif,svg,webp |
+    | `contact_detail` | | ≤255 |
+    | `latitude` / `longitude` | | numeric |
+
+    → **201** `{success, message, data}` · เลข `visit_number` gen เอง (เต็มลำดับ = 500)
+
+    ### `GET customer/contact/customer/{id}`
+    → `{relationship_status, visit_conclusions, customer}`
+
+    > ส่ง `{id}` ไม่ใช่ตัวเลข = **400** พร้อมข้อความเตือนให้เช็ค HTTP method
+
+    ---
+
+    ## 7. Relationship Detail 🔒
+
+    ฟีเจอร์นัดหมายล่าช้าดูเต็ม ๆ ที่ [api-late-appointment.md](api-late-appointment.md)
+    รายละเอียดทุกเส้นของกลุ่มนี้ที่ [api-relationship.md](api-relationship.md)
+
+    ### `POST relationship-detail/create-contact` · `multipart/form-data`
+
+    | ฟิลด์ | บังคับ | กติกา |
+    |---|:---:|---|
+    | `contact_type_id` | ✅ | integer |
+    | `follow_date` | ✅ | date |
+    | `customer_id` | | ต้องมีจริง |
+    | `time_start` / `time_end` | | `H:i` |
+    | `relationship_status_id` / `visit_conclusion_id` | | integer |
+    | `visit_pic` | | image ≤5MB · jpeg,jpg,png |
+    | `contact_detail` | | ≤255 |
+    | `latitude` / `longitude` | | numeric |
+
+    → **201** `{success, customer_id, message, visit_pic}`
+
+    > ⚠️ ตอน validation ล้มเหลวเส้นนี้คืน `"success": true` คู่กับ HTTP **422** (bug เล็ก ๆ) — เชื่อ status code
+
+    ### `POST relationship-detail/update-contact/{id}`
+    ฟิลด์เดียวกัน แต่ `customer_id` **บังคับ** → `{success, message, customer_id, image_path}`
+
+    ### `POST relationship-detail/submit-contact/{id}` — ปิดงาน
+    **เช็คความล่าช้าก่อน validate** — ถ้านัดเลยกำหนดและยังไม่มีคำขอที่อนุมัติแล้ว:
+
+    ```json
+    { "success": false, "message": "นัดหมายนี้ล่าช้าแล้ว...", "require_late_request": true }
+    ```
+    **422** → แอปเจอ `require_late_request: true` ให้เด้ง modal ขออนุมัติแทน
+
+    ผ่านแล้ว → `{success, message, customer_id, image_path, relationship_status_id}`
+
+    > `relationship_status_id` ในผลลัพธ์คืน **ทั้งก้อน `$data`** ไม่ใช่ตัวเลข — ชื่อ key ไม่ตรงกับค่าที่ส่ง
+
+    ### `GET relationship-detail/late-status/{id}`
+    ```json
+    { "success": true, "relationship_detail_id": 1, "mode": "scheduled",
+      "is_late": true, "can_submit": false, "can_request_late": true,
+      "visit_pic": "crm/visit_pics/...", "visit_pic_url": "https://...",
+      "late_request": { "id": 7, "status": "pending", "status_label": "รอพิจารณา", ... } }
+    ```
+    ไม่มีสิทธิ์ = **403** · `late_request` เป็น `null` ถ้าไม่เคยยื่น
+
+    ### `POST relationship-detail/late-request/{id}` · `multipart/form-data`
+    | ฟิลด์ | บังคับ | กติกา |
+    |---|:---:|---|
+    | `reason` | ✅ | ≤1000 |
+    | `visit_pic` | | image ≤5MB |
+
+    **รับแค่ 2 ฟิลด์นี้** — สถานะ/สรุปผล/รายละเอียดการติดต่อ ไม่รับแก้ตรงขั้นตอนนี้
+
+    | HTTP | เงื่อนไข |
+    |:---:|---|
+    | `403` | ไม่มีสิทธิ์เข้าถึงบันทึกนี้ |
+    | `422` | ปิดงานไปแล้ว / ยังไม่ล่าช้า / มีคำขอค้างอยู่ |
+    | `201` | `{success, message, customer_id, image_path, late_request:{id,status,late_days,reason}}` |
+
+    ### `DELETE relationship-detail/delete-contact/{id}` · `GET relationship-detail/{id}`
+    delete → `{success, message}` · get → `{status:"success", data:{details}}`
+
+    ### `GET getcustomer/detail/byid/{id}`
+    เส้นหลักของหน้ารายละเอียดลูกค้า `{id}` = **customer_id**
+
+    ```json
+    { "status": "success", "data": {
+        "customer": {...},
+        "relationship_details_completed": [...],
+        "relationship_details_scheduled": [...],
+        "global_schedule": [...] }}
+    ```
+    นัดหมายแต่ละรายการมี flag ให้แอปเรนเดอร์ปุ่มได้เลย: `is_late`, `can_submit`, `can_request_late`, `late_request_status`, `late_request_note`
+
+    ---
+
+    ## 8. Product & Promotion 🔒
+
+    ### `GET productlist`
+
+    | query | ค่า |
+    |---|---|
+    | `page` | ≥1 |
+    | `per_page` | 1–200 (ดีฟอลต์ 20) |
+    | `q` | ค้นหาจาก ชื่อสินค้า / รุ่น / แบรนด์ — ⚠️ **ส่งมาแล้ว 500** (อ้างคอลัมน์ `products.sku` ที่ไม่มีจริง) ดู [api-product-list.md](api-product-list.md) |
+    | `brand_id` · `model_id` | integer |
+    | `min_price` · `max_price` | numeric (หน่วย**สตางค์** — เทียบกับคอลัมน์ดิบ) |
+    | `sort` | `price_asc` · `price_desc` · `created_asc` · `created_desc` (ดีฟอลต์) |
+
+    คืน paginator มาตรฐาน แต่ละสินค้ามี `brand_name`, `model_name`, `product_price` (บาท), `stock_qty` (คงเหลือในสต๊อก ชิ้นเต็ม ติดลบได้), รูป (presigned 10 นาที เรียงรูปหลักก่อน) และรายการหน่วยนับพร้อมราคา/บาร์โค้ด/`usd_price` (หน่วยหลัก `is_current` มาก่อน)
+
+    > ระดับ `data` มี `usd_pricing` + `usd_rate` (ก้อนเดียวกับ `quotation/preload`) — `usd_pricing: false` เมื่อไรให้ซ่อนราคา USD ทิ้ง
+
+    > รูปดึงแยกหลังแบ่งหน้า **จงใจไม่ join** เพราะสินค้าที่มีหลายรูปจะกลายเป็นหลายแถว ทำให้ `total` เพี้ยน
+
+    ### `GET promotion/active`
+    query: `date` (ดีฟอลต์วันนี้)
+
+    ```json
+    { "success": true, "date": "2026-08-11", "count": 12,
+      "promotions": [...], "by_product": {...}, "by_product_type": {...} }
+    ```
+
+    **วิธีใช้:** เพิ่มสินค้า 1 บรรทัด → หาใน `by_product[product_id]` ที่ `uom_code` ตรงก่อน → ไม่มีค่อย fallback ไป `by_product_type[product_type_id]`
+
+    ### `GET promotion/check`
+    ให้ server คำนวณให้แทน (ผลตรงกับฝั่งเว็บ 100%)
+
+    | query | บังคับ | ค่า |
+    |---|:---:|---|
+    | `product_id` | ✅ | ต้องมีจริง |
+    | `uom_code` | ✅ | ≤3 ตัวอักษร |
+    | `qty` | | ดีฟอลต์ 1 |
+    | `price_mode` | | `price` · `vat` · `novat` (ดีฟอลต์ `price`) |
+    | `special_discount` | | ส่วนลดที่ผู้ใช้กรอกเอง |
+    | `discount_type` | | `amount` · `percent` |
+    | `quotation_date` | | ดีฟอลต์วันนี้ |
+
+    ```json
+    { "success": true, "has_promotion": true,
+      "promotion": {"source":"product","discount_type":"percent","discount_value":10,"min_qty":null},
+      "calculation": {"price_mode":"price","unit_price":100,"qty":2,"line_amount":200,
+                      "promo_discount":20,"special_discount":0,"total_discount":20,"net_price":180} }
+    ```
+
+    ไม่มีราคาสำหรับหน่วยนั้น = **422** · ทุกยอดคำนวณด้วย `bcmath` (ไม่ใช้ float) · `net_price` ไม่ติดลบ
+
+    ---
+
+    ## 9. Quotation 🔒
+
+    ### `GET quotation/preload`
+    → `{customers, products, user, product_price, pomotionLines, conditions, ...}` + รายการหน่วยนับที่ต้องกรอกจำนวนเป็นจำนวนเต็ม (ต้องตรงกับ `UomRules::WHOLE_NUMBER_CODES` — server ตรวจซ้ำตอนบันทึก)
+
+    > ราคาแยกตามหน่วยนับถูกฝังไว้ใน `products[].prices` แล้ว (แถวเดียวกับ `product_price[id]`) ส่วน `product_price` ระดับบนสุดยังส่งเหมือนเดิม
+
+    📄 **อธิบายทุกฟิลด์แบบละเอียด → [api-quotation-preload.md](api-quotation-preload.md)**
+
+    > key สะกดว่า `pomotionLines` (ตก r) — เป็นชื่อจริงใน response อย่าแก้ฝั่งแอปให้ถูก
+
+    ฟิลด์ที่เกี่ยวกับราคาสกุล USD:
+
+    | key | ความหมาย |
+    |---|---|
+    | `usd_pricing` | บริษัทนี้เปิดฟีเจอร์ราคา USD ไว้หรือไม่ — `false` = ซ่อนช่อง USD ทั้งหมด |
+    | `usd_rate` | อัตราปัจจุบัน `{rate, rate_used, as_of, source, display}` (`null` = ไม่มีอัตราให้ใช้) |
+    | `product_price[].usd_price` | ราคาขายสกุล USD ที่ตั้งไว้รายหน่วยนับ (ดอลลาร์ **ไม่ใช่สตางค์**) — **ปัดขึ้นเป็นดอลลาร์เต็มมาแล้ว** `505.6` → `506` · `null` = สินค้าตัวนี้ไม่ได้ตั้งราคา USD |
+
+    ### `POST quotation/create` · `multipart/form-data`
+
+    | ฟิลด์ | บังคับ | กติกา |
+    |---|:---:|---|
+    | `customer_id` | ✅ | ต้องมีจริง |
+    | `quotation_date` | ✅ | date + `DocumentDate` (ห้ามย้อน/ล่วงหน้าเกินกำหนด) |
+    | `quotation_lines` | | array ≥1 |
+    | `quotation_lines.*.product_id` | ✅ | ต้องมีจริง (บังคับเมื่อมีบรรทัดนั้น) |
+    | `quotation_lines.*.qty` | ✅ | ≥1 |
+    | `quotation_lines.*.unit_price` | | ≥0 |
+    | `quotation_lines.*.usd_price` | | ≥0 — ราคาต่อหน่วยสกุล USD **ส่งมาแล้วจะใช้แทน `unit_price` ของบรรทัดนั้น** |
+    | `quotation_lines.*.manual_discount` | | ≥0 |
+    | `quotation_lines.*.discount_type` | | `amount` · `percent` |
+    | `quotation_lines.*.uom_code` | ✅ | ≤3 + ต้องมีใน `uoms` |
+    | `status` | | `open` (ค่าเริ่มต้น) · `confirmed` — ค่าอื่นได้ 422 |
+    | `header_discount` · `vat_amount` · `additional_amount` · `total_after_discount` | | ≥0 (**ห้ามติดลบ**) |
+    | `quotation_image` | | image ≤5MB |
+    | `conditions` | | array ของ condition id |
+    | `note` · `price_mode` | | string |
+
+    ยอดเงินรับค่าที่มีคอมมาได้ (`normalizeMoneyInputs`) · server ตรวจราคาซ้ำอีกชั้น ผิดคืน 422 พร้อม `errors`
+
+    📄 **อธิบายทุกพารามิเตอร์ + วิธีคิดยอดทีละขั้น → [api-quotation-create.md](api-quotation-create.md)**
+
+    → `{success, message, data:{quotation:{id, quotation_number, quotation_date, status, ..., quotationLines:[...]}}}`
+
+    data ยังมี `usd_rate` (อัตราที่ใบนี้ยึดไว้) · `quotation.total_after_discount_usd` · `quotationLines[].usd_price` + `.total_line_usd`
+
+    > รายการสินค้าส่งมา **2 ที่ ชุดเดียวกันเป๊ะ** — `data.quotation.quotationLines` (ใช้ตัวนี้) และ `data.quotationLines` ตำแหน่งเดิมที่ยังส่งเหมือนเดิม
+
+    ### `POST quotation/usd/create` · `multipart/form-data`
+
+    ใบเสนอราคาที่ **ตั้งราคาเป็นสกุล USD** — พารามิเตอร์และ response เหมือน `quotation/create` ทุกอย่าง
+    ต่างกันแค่ **บังคับให้ทุกบรรทัดต้องมี `usd_price`** และตีกลับทันทีถ้าใช้ราคา USD ไม่ได้
+
+    ทิศทางการคำนวณ — **USD เป็นตัวตั้ง แล้วแปลงกลับเป็นบาท**:
+
+    ```
+    $42.50  → ปัดขึ้นเป็นดอลลาร์เต็ม $43
+            × อัตราขาย ธปท. ที่ปัดขึ้นเป็นบาทเต็ม ฿34 (จาก 33.2264)
+            = ฿1,462.00 ต่อหน่วย   ← ค่านี้คือ unit_price ที่ถูกบันทึกลงฐานข้อมูล
+    ```
+
+    - **ราคาขั้นต่ำเงินบาทของสินค้าไม่ถูกนำมาบีบ** บรรทัดที่ขายเป็น USD (ยึดตัวเลขที่เสนอลูกค้าเป็นหลัก) — ต่างจาก `quotation/create` ที่บรรทัดราคาบาทยังโดนบีบตามปกติ
+    - ส่วนลด / โปรโมชัน / VAT / ส่วนลดท้ายบิล คิดต่อจากราคาบาทที่แปลงแล้ว เหมือนใบปกติทุกประการ
+    - อัตราที่ใช้ถูก **ยึดไว้กับตัวเอกสาร** (`quotation_headers.usd_rate_used`) + บันทึกลง `usd_rate_logs` เปิดใบเดิมวันหลังจึงได้ตัวเลขชุดเดิมเสมอ ต่อให้อัตราวันนี้เปลี่ยนไปแล้ว
+
+    | HTTP | เงื่อนไข |
+    |:---:|---|
+    | `422` | บรรทัดไหนไม่มี `usd_price` → `errors["quotation_lines.N.usd_price"]` |
+    | `422` | บริษัทไม่ได้เปิดฟีเจอร์ → `{code: "usd_pricing_disabled"}` |
+    | `422` | ดึงอัตราจาก ธปท. ไม่ได้ → `{code: "usd_rate_unavailable"}` |
+    | `201` | เหมือน `quotation/create` |
+
+    > ส่ง `usd_price` ไปที่ `quotation/create` ตรง ๆ ก็ได้ผลเหมือนกัน — เส้นนี้ต่างตรงที่บังคับให้ครบทุกบรรทัด
+    > จึงไม่มีทางได้ใบที่ตั้งใจให้เป็น USD แต่บางบรรทัดกลับไปคิดเป็นราคาบาทของสินค้าแทน
+
+    ### `POST quotation/update/{id}`
+    เหมือน create แต่ **`quotation_lines` บังคับ** (`required|array|min:1`) — รับ `usd_price` รายบรรทัดเหมือนกัน และบันทึกอัตราใหม่ทับพร้อมเพิ่มแถวใน `usd_rate_logs`
+
+    ⚠️ **ไม่รองรับ partial update** — `quotation_lines` คือรายการทั้งหมดหลังแก้ **บรรทัดที่ไม่ได้ส่งมาจะถูกลบ** (`is_delete = true`)
+    เอกสารที่ยืนยัน/ยกเลิกแล้วแก้ไม่ได้ → `403` · สำเร็จแล้วสถานะกลับเป็น `open` เสมอ
+
+    📄 **อธิบายทุกพารามิเตอร์ + กติกาการลบบรรทัด → [api-quotation-update.md](api-quotation-update.md)**
+
+    ### `GET quotation/edit/{id}`
+    ข้อมูลสำหรับฟอร์มแก้ไข — `quotation_headers` มี `usd_rate` (**อัตราของใบนี้** ไม่ใช่อัตราวันนี้), `usd_rate_from_document` (`false` = ใบเก่าที่ไม่ได้บันทึกอัตราไว้ ระบบยืมอัตราปัจจุบันมาแสดง) และแต่ละบรรทัดมี `usd_price` ถอดกลับมาให้แล้ว — ส่งค่านี้กลับไปที่ `quotation/update/{id}` ได้ตรง ๆ
+
+    > `usd_price` รายบรรทัด**ถอดกลับมาให้เฉพาะใบที่บันทึกอัตราไว้กับตัวเอง** (`usd_rate_from_document: true`)
+    > ใบเก่าที่ยืมอัตราปัจจุบันมาแสดงจะได้ `null` เพราะถ้าถอดเป็น USD แล้วส่งกลับมาบันทึก
+    > ราคาจะถูกปัดขึ้นจนเพี้ยนไปจากราคาบาทเดิม (ฐานข้อมูลเก็บราคาเป็นบาท ไม่ได้เก็บ USD รายบรรทัด)
+
+    ### `GET quotation/list`
+    ใบเสนอราคาของลูกค้าที่ตัวเองรับผิดชอบ — จัดกลุ่ม header แล้วซ้อน lines + conditions เข้าไปข้างใน
+
+    **แบ่งหน้า** (`page`, `per_page`) — นับเป็น "ใบ" ไม่ใช่ "บรรทัดสินค้า" ใบหนึ่งจะไม่ถูกตัดครึ่งคาหน้า
+    เรียงจากใบใหม่ไปเก่า (`id` มากไปน้อย)
+
+    ```json
+    { "status": "success", "quotation_headers": [...],
+      "page": 1, "size": 20, "total_elements": 13, "total_pages": 1,
+      "has_next": false, "has_prev": false }
+    ```
+
+    แต่ละใบมี `total_after_discount_usd` (ยอดสุทธิเทียบ USD สำหรับแสดง `≈ $43.00` ใต้ยอดเงินบาท) + `usd_rate_used` + `usd_rate_from_document`
+
+    ### `POST quotation/with-images/create` · `.../update/{id}`
+    สำหรับใบเสนอราคาที่ **แนบรูปแทนการคีย์รายการสินค้า**
+
+    | ฟิลด์ | บังคับ |
+    |---|:---:|
+    | `customer_id` | ✅ |
+    | `quotation_date` | ✅ |
+    | `quotation_image` | (image ≤5MB) |
+    | `additional_amount` | ≥0 |
+    | `note` | |
+
+    ### `POST quotation/{id}/status/confirmed` · `.../cancelled`
+
+    เปลี่ยนสถานะใบเสนอราคา **และใบสั่งขายที่ผูกกันไปพร้อมกัน**
+
+    - `confirmed` → quotation + order = `confirmed`
+    - `cancelled` → quotation + order = `cancelled` และ **ตั้ง `is_delete` ให้ทุกบรรทัดสินค้า**
+
+    | HTTP | เงื่อนไข |
+    |:---:|---|
+    | `409` | สถานะปัจจุบันอยู่ใน `IRREVERSIBLE_STATUSES` (ปิดการขาย/ยกเลิกแล้ว) → `{success:false, final_status, message}` |
+    | `200` | `{message}` |
+
+    ---
+
+    ## 10. Order 🔒
+
+    ### `GET order/list`
+    → `{status:"success", orders:[...], page, size, total_elements, total_pages, has_next, has_prev}` · token ไม่ผ่าน = 401
+
+    **แบ่งหน้า** (`page`, `per_page`) — นับเป็น "ใบ" ไม่ใช่ "บรรทัดสินค้า" · เรียงจากใบใหม่ไปเก่า
+
+    ### `GET order/edit-api/{id}`
+    → `{success, message, data:{quotation_header:{..., quotation_lines:[...]}}, products, customers, conditions, order_conditions, user, usd_pricing, usd_rate}`
+
+    ทั้งใบอยู่ใน `data.quotation_header` — รายการสินค้าอยู่ที่ `.quotation_lines` ในก้อนนั้น (ชื่อ key หลอก ทั้งคู่ เนื้อในคือใบสั่งขาย)
+    ยอดเงินในเส้นนี้เป็น **บาท** ยกเว้น `vat_amount` ที่เป็นสตางค์ · ราคาสินค้าอยู่ใน `products[].prices`
+
+    > 🔻 **Breaking (2026-08-19)** — คีย์หัวเอกสารแบบแบนที่ `data.*` · `data.quotation_lines` · `product_price` ระดับบนสุด **ย้าย/ถอดออกแล้ว**
+    ไม่พบเอกสาร → `200` + `data: null` (ไม่ใช่ `404`)
+
+    📄 **อธิบายทุกฟิลด์ + เรื่องอัตรา USD → [api-order-edit.md](api-order-edit.md)**
+
+    ### `POST order/update-api/{id}` · `multipart/form-data`
+
+    **เช็คสถานะก่อน** — ใบสั่งขายที่ไม่อยู่ในสถานะแก้ไขได้ = **403**
+
+    แก้รูป (`quotation_image`) กับรายการสินค้า (`order_lines[]` — ส่งชื่อ `quotation_lines` มาก็ได้) พร้อมกันในคำขอเดียวได้ · รายการสินค้า = **แทนที่ทั้งชุด** สินค้าที่ไม่ได้ส่งมาถูกลบออกจากใบ · ไม่ส่งมาเลย = แตะแค่รูป ไม่ยุ่งกับสินค้าเดิม
+
+    → `{success, message, data:{quotation_header:{..., quotation_lines:[...]}}}` — เอกสารทั้งใบหลังบันทึก รูปแบบเดียวกับ `order/edit-api`
+
+    | ฟิลด์ | บังคับ | กติกา |
+    |---|:---:|---|
+    | `customer_id` | ✅ | ต้องมีจริง |
+    | `order_date` | ✅ | date |
+    | `order_lines` | ✅* | array ≥1 — *เป็น `nullable` ถ้าเป็นใบสั่งขายแบบแนบรูป |
+    | `order_lines.*.product_id` | ✅ | ต้องมีจริง |
+    | `order_lines.*.qty` | ✅ | ≥1 |
+    | `order_lines.*.uom_code` | ✅ | ต้องมีใน `uoms` |
+    | `order_lines.*.usd_price` | | ≥0 — ราคาต่อหน่วยสกุล USD **ส่งมาแล้วใช้แทนราคาบาทของสินค้า** |
+    | `order_lines.*.manual_discount` | | ≥0 |
+    | `order_lines.*.discount_type` | | `amount` · `percent` |
+    | `quotation_id` | | ต้องมีจริง |
+    | `header_discount` | | ≥0 |
+    | `price_mode` | | `price` · `vat` · `novat` |
+    | `reduction` | | ≥0 และ **≤ ยอดรวมของใบนั้น** |
+    | `reduction_pdf` | | jpg,jpeg,png,pdf ≤5MB |
+    | `quotation_image` | | jpeg,png,jpg,gif,webp,**pdf** ≤5MB |
+    | `conditions` | | array ของ condition id |
+
+    → `{message: "แก้ไขข้อมูลสำเร็จ", usd_rate, total_after_discount, total_after_discount_usd}`
+
+    ⚠️ เส้นนี้ **ไม่อ่าน `unit_price` ที่ส่งมา** — คิดราคาจากคอลัมน์ราคาของสินค้าใหม่ทุกครั้ง
+    ใบที่ขายเป็น USD ต้องส่ง `usd_price` กลับมาด้วย ไม่งั้นราคาเด้งกลับเป็นราคาบาทของสินค้า (ดู [api-order-edit.md](api-order-edit.md))
+
+    ### `POST order/uploade/slip/{id}` · `multipart/form-data`
+
+    | ฟิลด์ | บังคับ | กติกา |
+    |---|:---:|---|
+    | `path` | ✅ | **array ของไฟล์** jpg/jpeg/png ≤5MB ต่อไฟล์ |
+    | `slip_amount` | | ≥0 |
+
+    ยอดในสลิปเกินยอดคงเหลือ = **422** พร้อม `{remaining, input_amount}` ให้แอปแสดงได้เลย → สำเร็จ `{message}`
+
+    > ชื่อเส้นสะกดว่า `uploade` (เกิน e) — เป็น path จริง
+
+    ### `GET billing/list`
+    → `{order_dispatch, total_unpaid, total_paid, page, size, total_elements, total_pages, has_next, has_prev}`
+
+    **แบ่งหน้า** (`page`, `per_page`) เฉพาะ `order_dispatch` — ส่วน `total_unpaid` / `total_paid` เป็นยอดรวม
+    ของ **ทุกรายการ** ไม่ใช่เฉพาะหน้าที่ขอมา จึงไม่เปลี่ยนตามขนาดหน้า
+
+    ### `GET api/order/details/{id}`
+    คืน **object ดิบ** ไม่มี wrapper
+
+    ---
+
+    ## 11. Debt Reduction 🔒
+
+    ### `GET debt-reduction/list`
+    → `{customers, debtReductions, page, size, total_elements, total_pages, has_next, has_prev}`
+
+    **แบ่งหน้าเฉพาะ `debtReductions`** ส่วน `customers` เป็นลิสต์ตัวเลือกตอนสร้างใบลดหนี้ จึงคืนมาครบเสมอ
+
+    ### `GET debt-reduction/orders/{customer_id}`
+    คืน **array ดิบ** ของใบสั่งขาย
+
+    ### `GET debt-reduction/order-items/{order_id}`
+    ```json
+    { "items": [...], "quotation_image_url": "https://...",
+      "total_after_discount_baht": 12000 }
+    ```
+    > `total_after_discount_baht` = ผลรวม (ราคาปกติ × จำนวน) **ไม่คิดส่วนลด/VAT** — ใช้ฐานเดียวกับใบลดหนี้
+
+    ### `POST debt-reduction/store` · `multipart/form-data`
+
+    | ฟิลด์ | บังคับ | กติกา |
+    |---|:---:|---|
+    | `customer_id` | ✅ | |
+    | `order_id` | ✅ | |
+    | `total_amount` | ✅ | numeric — **รับค่าที่มีคอมมาได้** (`1,200.00`) ระบบตัดให้ก่อนตรวจ |
+    | `note` / `note_other` | | ถ้า `note = "อื่นๆ"` จะใช้ `note_other` แทน |
+    | `image` | | jpeg,png,jpg,gif ≤**2MB** |
+
+    ไม่เลือกสินค้าเลย = 422 `"กรุณาเลือกรายการสินค้าอย่างน้อย 1 รายการ"`
+
+    ### `DELETE debt-reduction/delete/{id}`
+
+    ---
+
+    ## 12. Exchange Rate 🔒
+
+    อัตราแลกเปลี่ยนอ้างอิงจาก **ธนาคารแห่งประเทศไทย (ธปท.)** — ชุดเดียวกับที่หน้าเว็บใช้
+    ([`BotExchangeRateService`](../app/Services/Currency/BotExchangeRateService.php))
+
+    **กติกาการปัดสองชั้น** ที่ทั้งเว็บ/แอป/เซิร์ฟเวอร์ต้องใช้ให้ตรงกัน:
+
+    1. อัตราขาย (selling) ของ ธปท. → **ปัดขึ้นเป็นบาทเต็ม** · 33.2264 → 34.00
+    2. ราคา USD ที่กรอก → **ปัดขึ้นเป็นดอลลาร์เต็ม** ก่อนคูณอัตรา · $42.50 → $43
+
+    > แอปต้องใช้ `rate_used` (อัตราที่ปัดแล้ว) คิดเงินเสมอ — ใช้ `rate` ดิบจะได้ยอดคนละชุดกับที่เซิร์ฟเวอร์บันทึก
+
+    ### `GET exchange-rate/usd`
+
+    ```json
+    { "success": true,
+      "data": {
+        "enabled": true, "available": true, "reason": null,
+        "rate": {
+          "base_currency": "USD", "quote_currency": "THB",
+          "rate": 33.2264, "rate_used": 34,
+          "as_of": "2026-08-17", "last_updated": "2026-08-17",
+          "fetched_at": "2026-08-18 09:00:00", "source": "bot",
+          "display": { "summary": "1 USD = ฿34.00",
+                       "detail": "ปัดขึ้นจากอัตราขาย ธปท. ฿33.2264 · งวด 2026-08-17" },
+          "rounding": { "rate": "...", "price": "..." }
+        } } }
+    ```
+
+    | key | ความหมาย |
+    |---|---|
+    | `enabled` | บริษัทนี้เปิดฟีเจอร์ราคา USD ไว้หรือไม่ (`Tenant::hasUsdPricing`) |
+    | `available` | มีอัตราให้ใช้หรือไม่ — `false` แล้ว `rate` จะเป็น `null` |
+    | `reason` | `feature_disabled` (ไม่ได้เปิดฟีเจอร์) · `rate_unavailable` (เปิดแล้วแต่ดึงอัตราไม่ได้) |
+    | `rate` | อัตราขายดิบตามที่ ธปท. ประกาศ — ไว้อ้างอิง/แสดงที่มาเท่านั้น |
+    | `rate_used` | **อัตราที่ระบบใช้คิดเงินจริง** ปัดขึ้นเป็นบาทเต็มแล้ว |
+    | `as_of` | งวดของอัตราที่หยิบมาใช้ (ธปท. ไม่ประกาศวันหยุด ระบบจึงย้อนหางวดล่าสุดที่มีค่า) |
+    | `source` | `bot` = จาก ธปท. · `fallback` = อัตราสำรองใน `.env` (`BOT_USD_RATE_FALLBACK`) |
+
+    > **ดึงอัตราไม่ได้ = ยังตอบ `200`** (`available:false`) ไม่ใช่ 5xx — ออกแบบให้แอปแค่ซ่อนส่วน USD ทิ้ง ไม่ต้องขึ้นหน้าจอ error
+    > อัตราถูก cache ไว้ตาม `BOT_RATE_CACHE_MINUTES` (ค่าเริ่มต้น 180 นาที) ยิงถี่ได้โดยไม่กระทบ ธปท.
+
+    ### `GET exchange-rate/usd/convert`
+
+    แปลงค่าตามสูตรของระบบ เพื่อให้แอปไม่ต้องปัดเศษเอง (ปัดคนละแบบ = ตัวเลขบนหน้าจอไม่ตรงกับยอดที่บันทึก)
+
+    | query | บังคับ | กติกา |
+    |---|:---:|---|
+    | `usd` | ✅* | ≥0 — *ต้องมี `usd` หรือ `thb` อย่างน้อยหนึ่งค่า |
+    | `thb` | ✅* | ≥0 — ทิศทางกลับ (บาท → USD) |
+    | `qty` | | ≥0 (ไม่ส่ง = 1) ใช้คิดยอดรวมของบรรทัด |
+
+    `GET exchange-rate/usd/convert?usd=42.50` →
+
+    ```json
+    { "success": true,
+      "data": { "...": "ก้อน rate เหมือนเส้นบน",
+        "conversion": {
+          "usd_input": 42.5, "usd_used": 43, "rate_used": 34,
+          "thb": 1462, "qty": 1, "thb_total": 1462,
+          "formula": "$43.00 × ฿34.00 = ฿1,462.00" } } }
+    ```
+
+    ไม่มีอัตราให้ใช้ → `conversion: null` (ไม่คืนเลข 0 ให้เผลอเอาไปแสดงเป็นราคา)
+
+    ---
+
+    ## 13. Sales Document Setting 🔒
+
+    ค่าตั้งระดับ **บริษัท** ที่บอกว่าหน้าสร้างเอกสารต้องแสดงปุ่มอะไร และให้กรอกด้วยวิธีไหนได้บ้าง
+    ค่าชุดเดียวกับหน้าเว็บ "ตั้งค่าระบบ → ตั้งค่าเอกสารขาย" (เก็บใน `data` JSON ของ tenant)
+
+    ### `GET sales-document-setting`
+
+    ไม่รับพารามิเตอร์ · อ่านได้ทุกคนที่ล็อกอิน
+
+    ```json
+    { "success": true,
+      "data": {
+        "document_actions": { "pending": true, "order": false },
+        "allowed_statuses": ["open"],
+        "default_status": "open",
+        "is_order_only": false,
+        "document_label": "ใบเสนอราคา",
+        "input_modes": { "lines": true, "image": false },
+        "display": { "actions_summary": "...", "modes_summary": "..." }
+      } }
+    ```
+
+    | ฟิลด์ | ใช้ทำอะไร |
+    |---|---|
+    | `document_actions` | `pending` = แสดงปุ่ม "รออนุมัติ" · `order` = แสดงปุ่ม "ส่งออเดอร์" |
+    | `allowed_statuses` | ค่าที่ส่งไปกับ `quotation/create` ได้ (`open` / `confirmed`) |
+    | `document_label` | คำที่ใช้เรียกเอกสาร — `"ใบเสนอราคา"` หรือ `"ออเดอร์"` |
+    | `input_modes` | `lines` = แสดงตารางสินค้า · `image` = แสดงช่องแนบรูป |
+
+    ### `POST sales-document-setting`
+
+    **เฉพาะแอดมิน** (`level` 0/1) ไม่ใช่แอดมิน → `403` `code: forbidden`
+
+    | ฟิลด์ | หมายเหตุ |
+    |---|---|
+    | `allow_pending` · `allow_direct_order` | ปุ่มบันทึก — ต้องเปิดอย่างน้อย 1 |
+    | `allow_lines` · `allow_image` | วิธีกรอก — ต้องเปิดอย่างน้อย 1 |
+
+    ⚠️ **ไม่ส่งช่องไหนมา = คงค่าเดิม** ไม่ใช่ปิดทิ้ง · ปิดทั้งคู่ในกลุ่มเดียวกัน → `422`
+
+    ### เซิร์ฟเวอร์บังคับค่านี้ตอนบันทึกเอกสาร
+
+    | กรณี | ผลลัพธ์ |
+    |---|---|
+    | ส่ง `quotation_lines` แต่ปิด `lines` ไว้ | `422` `code: quotation_lines_disabled` |
+    | แนบ `quotation_image` แต่ปิด `image` ไว้ | `422` `code: quotation_image_disabled` |
+    | ส่ง `status` นอก `allowed_statuses` | **แปลงให้เงียบ ๆ** ไม่ตีกลับ |
+
+    📄 **อธิบายทุกฟิลด์ + เหตุผลของแต่ละพฤติกรรม → [api-sales-document-setting.md](api-sales-document-setting.md)**
+
+    ---
+
+    # ⚠️ หมายเหตุสำคัญ
+
+    ## 1. `POST order/update/status/payment/{id}` — เส้นนี้พังแน่นอน
+
+    ```php
+    // routes/api/api_v1.php
+    Route::post('order/update/status/payment/{id}', [ApiOrderController::class, 'updatePaymentStatus']);
+    ```
+
+    เมธอด `updatePaymentStatus` **มีอยู่แค่ใน [`Sale\OrderController`](../app/Http/Controllers/Sale/OrderController.php) ไม่มีใน `Api\ApiOrderController`** — ยิงเส้นนี้เมื่อไหร่จะได้ `BadMethodCallException` → **500** ทันที
+
+    ทางเลือกในการแก้:
+    - **ชี้ไป controller ฝั่งเว็บ** ถ้าตรรกะใช้ร่วมกันได้ (ระวังเรื่อง guard: ฝั่งเว็บใช้ `Auth::id()` ไม่ใช่ `auth('api')`)
+    - **ย้าย/คัดลอกเมธอดมาไว้ใน `ApiOrderController`** แล้วปรับให้ใช้ `Auth::guard('api')`
+    - **ลบ route ทิ้ง** ถ้าแอปไม่ได้ใช้แล้ว
+
+    ตรวจได้ด้วย:
+    ```bash
+    php artisan route:list --path=api/v1/order
+    ```
+
+    ## 2. path ที่มี `api/` ซ้ำ
+
+    สองเส้นนี้ประกาศไว้ในกลุ่มที่มี prefix `/api/v1` อยู่แล้ว แต่ยังใส่ `api/` นำหน้าอีก ทำให้ path จริงกลายเป็น:
+
+    ```
+    /api/v1/api/order/details/{id}
+    /api/v1/api/customer/purchased-product/{id}
+    ```
+
+    ใช้งานได้ปกติ แต่ผิดรูปแบบจากเส้นอื่นทั้งหมด — ถ้าจะแก้ให้เป็น `/api/v1/order/details/{id}` ต้องแก้ฝั่งแอปพร้อมกัน (breaking change)
+
+    ## 3. เส้นที่ไม่ตรวจความเป็นเจ้าของข้อมูล
+
+    `DELETE customer/delete/{id}` และ `DELETE relationship-detail/delete-contact/{id}` **ไม่เช็คว่าข้อมูลนั้นเป็นของ user ที่ login หรือเปล่า** — เซลส์คนหนึ่งลบข้อมูลของเซลส์อีกคนในบริษัทเดียวกันได้ ต่างจาก `customer/edit/{id}` และ `getCustomer-detail` ที่กรอง `user_id` ไว้
+
+    ถ้าต้องการปิด ให้เพิ่มเงื่อนไขแบบเดียวกับ `RelationshipDetailController::canManageDetail()` ที่เส้นนัดหมายล่าช้าใช้อยู่
+
+    ## 4. `GET calendar` ไม่รับพารามิเตอร์เดือน
+
+    โค้ดอ่าน `Carbon::now()` ตายตัว — แอปเปลี่ยนเดือนดูย้อนหลังไม่ได้ ถ้าต้องการให้เลือกเดือนได้ต้องเพิ่ม `$request->month/year` เข้าไปเอง (แบบเดียวกับ `user/dashboard/admin`)
+
+    ## 5. รูปแบบ response ไม่เป็นมาตรฐาน
+
+    ดูตารางในหัวข้อ [กติกาที่ใช้กับทุกเส้น](#-รูปแบบ-response-ไม่เป็นมาตรฐานเดียวกัน) — ถ้าจะทำให้เป็นมาตรฐานเดียวกันควรทำเป็น major version ใหม่ (`/api/v2`) ไม่ใช่แก้ทับของเดิม เพราะแอปที่ปล่อยไปแล้วจะพังทันที
+
+    ---
+
+    *อัปเดตล่าสุด: 2026-08-18 · อ้างอิงจาก [`routes/api/api_v1.php`](../routes/api/api_v1.php)*
+  type: text/markdown
 bundled: false
 extensions:
   bruno:

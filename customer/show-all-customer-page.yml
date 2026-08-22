@@ -5,7 +5,7 @@ info:
 
 http:
   method: GET
-  url: "{{sale_uat}}/api/v1/getCustomer-detail"
+  url: "{{sale_uat}}/api/v1/getCustomer-detail?page=1&per_page=20"
   auth:
     type: bearer
     token: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwczovL25pY2hhcnBuLnVhdC1mb2xsb3dvbmVjcm0uY29tL2FwaS92MS9sb2dpbiIsImlhdCI6MTc4NTkwMzU5NiwiZXhwIjoxNzg1OTA3MTk2LCJuYmYiOjE3ODU5MDM1OTYsImp0aSI6IkxlclV3Z3dnejNxajlIN1QiLCJzdWIiOiI0IiwicHJ2IjoiMjNiZDVjODk0OWY2MDBhZGIzOWU3MDFjNDAwODcyZGI3YTU5NzZmNyJ9.ZC9QyFHvVnJ7yzRwtjq-2ezZFx_f1hpWkAu-yJ8H9qI

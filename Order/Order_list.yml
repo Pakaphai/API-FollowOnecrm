@@ -5,7 +5,7 @@ info:
 
 http:
   method: GET
-  url: "{{sale_uat}}/api/v1/order/list"
+  url: "{{sale_uat}}/api/v1/order/list?page=1&per_page=20"
   auth:
     type: bearer
     token: "{{token}}"
@@ -15,3 +15,25 @@ settings:
   timeout: 0
   followRedirects: true
   maxRedirects: 5
+
+docs: |
+  ## การแบ่งหน้า (pagination)
+
+  เส้นนี้แบ่งหน้าเสมอ ไม่ส่งอะไรมาก็ได้ 20 รายการแรก
+
+  | พารามิเตอร์ | ชนิด | ค่าเริ่มต้น |
+  |---|---|---|
+  | `page` | integer >= 1 | 1 |
+  | `per_page` | integer 1-200 | 20 |
+
+  ส่ง `per_page` เกิน 200 จะได้ 422
+
+  meta ที่แนบกลับมาทุกครั้ง (ระดับเดียวกับ key ของรายการ):
+
+  ```json
+  { "page": 1, "size": 20, "total_elements": 137, "total_pages": 7,
+    "has_next": true, "has_prev": false }
+  ```
+
+  ต้องวนดึงต่อตาม `has_next` / `total_pages` ถ้าอยากได้ครบทุกรายการ
+  รายละเอียดทั้งหมดอยู่ที่ docs/api-reference.md หัวข้อ "การแบ่งหน้า (pagination)"

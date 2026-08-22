@@ -1,0 +1,121 @@
+info:
+  name: usd_create_quotation
+  type: http
+  seq: 10
+
+http:
+  method: POST
+  url: "{{sale_uat}}/api/v1/quotation/usd/create"
+  body:
+    type: multipart-form
+    data:
+      - name: customer_id
+        type: text
+        value: "2"
+      - name: quotation_date
+        type: text
+        value: 2026-08-19
+      - name: price_mode
+        type: text
+        value: price
+      - name: quotation_lines[0][product_id]
+        type: text
+        value: "1"
+      - name: quotation_lines[0][qty]
+        type: text
+        value: "1"
+      - name: quotation_lines[0][uom_code]
+        type: text
+        value: EA
+      - name: quotation_lines[0][manual_discount]
+        type: text
+        value: "0"
+      - name: quotation_lines[0][discount_type]
+        type: text
+        value: amount
+      # เส้นนี้ "บังคับ" ให้ทุกบรรทัดมี usd_price — ขาดบรรทัดไหนได้ 422 ทันที
+      # ราคานี้ต้องรวมราคาตัวเลือกสินค้าแล้ว เซิร์ฟเวอร์ไม่บวกให้อัตโนมัติ
+      - name: quotation_lines[0][usd_price]
+        type: text
+        value: "116685"
+      # ตัวเลือกสินค้าที่ลูกค้าเลือก — ส่งเฉพาะ id (ดู product_options ใน preload)
+      - name: quotation_lines[0][option_ids][]
+        type: text
+        value: "2"
+      - name: quotation_lines[0][option_ids][]
+        type: text
+        value: "6"
+  auth:
+    type: bearer
+    token: "{{token}}"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+
+docs: |
+  # API — สร้างใบเสนอราคาที่ตั้งราคาเป็นสกุล USD
+
+  ```
+  POST /api/v1/quotation/usd/create
+  Authorization: Bearer <token>
+  ```
+
+  | | |
+  |---|---|
+  | Route | [`routes/api/api_v1.php`](../routes/api/api_v1.php) — อยู่ในกลุ่ม `auth_api` |
+  | Controller | [`Api\ApiQuotationController::quotation_usd_create_api()`](../app/Http/Controllers/Api/ApiQuotationController.php) |
+  | เส้นปกติ | [api-quotation-create.md](api-quotation-create.md) — พารามิเตอร์และ response เหมือนกันทุกอย่าง |
+
+  ---
+
+  ## ต่างจาก `quotation/create` ตรงไหน
+
+  ตรวจ 3 อย่างก่อน แล้วส่งต่อให้ `quotation_create_api()` ทำงานตามปกติ
+
+  1. **ทุกบรรทัดต้องมี `usd_price`** — ขาดบรรทัดไหนได้ `422` ที่ `quotation_lines.N.usd_price`
+  2. บริษัทต้องเปิดฟีเจอร์ราคา USD ไว้ — ไม่งั้น `422` `{code: "usd_pricing_disabled"}`
+  3. ต้องดึงอัตราจาก ธปท. ได้ — ไม่งั้น `422` `{code: "usd_rate_unavailable"}`
+
+  > ส่ง `usd_price` ไปที่ `quotation/create` ตรง ๆ ก็ได้ผลเหมือนกัน — เส้นนี้ต่างตรงที่**บังคับให้ครบทุกบรรทัด**
+  > จึงไม่มีทางได้ใบที่ตั้งใจให้เป็น USD แต่บางบรรทัดกลับไปคิดเป็นราคาบาทของสินค้าแทน
+
+  ---
+
+  ## ทิศทางการคำนวณ — USD เป็นตัวตั้ง แล้วแปลงกลับเป็นบาท
+
+  ```
+  $42.50  → ปัดขึ้นเป็นดอลลาร์เต็ม $43
+          × อัตราขาย ธปท. ที่ปัดขึ้นเป็นบาทเต็ม ฿34 (จาก 33.2264)
+          = ฿1,462.00 ต่อหน่วย   ← ค่านี้คือ unit_price ที่ถูกบันทึกลงฐานข้อมูล
+  ```
+
+  - **ราคาขั้นต่ำเงินบาทของสินค้าไม่ถูกนำมาบีบ** (ยึดตัวเลขที่เสนอลูกค้าเป็นหลัก)
+  - ส่วนลด / โปรโมชัน / VAT / ส่วนลดท้ายบิล คิดต่อจากราคาบาทที่แปลงแล้ว เหมือนใบปกติ
+  - อัตราที่ใช้ถูก**ยึดไว้กับตัวเอกสาร** (`quotation_headers.usd_rate_used`) + บันทึกลง `usd_rate_logs`
+    เปิดใบเดิมวันหลังจึงได้ตัวเลขชุดเดิมเสมอ ต่อให้อัตราวันนี้เปลี่ยนไปแล้ว
+
+  ---
+
+  ## ตัวเลือกสินค้า — `option_ids`
+
+  ส่งเป็นอาเรย์ของ id (จาก `product_options` ใน `quotation/preload`) เลือกได้หลายหมวดหมู่
+  และหมวดหนึ่งเลือกได้หลายตัวเลือก
+
+  **ราคาของตัวเลือกไม่ได้บวกให้อัตโนมัติ** — ต้องบวกเข้ากับ `usd_price` มาเอง
+
+  ```
+  ราคาสินค้า $92,995 + TSC $7,495 + 10K-40T-GBX $16,195 = usd_price 116,685
+  ```
+
+  ชื่อกับราคาของตัวเลือกเซิร์ฟเวอร์อ่านจากฐานข้อมูลเอง แล้วเก็บเป็น**สำเนา** ณ วันที่ออกเอกสาร
+  แก้ชื่อ/ราคาที่หน้าสินค้าภายหลัง เอกสารเก่าจะยังแสดงค่าเดิมเสมอ
+
+  ---
+
+  ## Response
+
+  `201 Created` — โครงสร้างเหมือน `quotation/create` ทุกประการ
+  ดู [api-quotation-create.md](api-quotation-create.md) หัวข้อ Response

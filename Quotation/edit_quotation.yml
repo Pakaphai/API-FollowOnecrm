@@ -15,3 +15,102 @@ settings:
   timeout: 0
   followRedirects: true
   maxRedirects: 5
+
+docs: |
+  # API — ข้อมูลสำหรับฟอร์มแก้ไขใบเสนอราคา
+
+  ```
+  GET /api/v1/quotation/edit/{id}
+  Authorization: Bearer <token>
+  ```
+
+  | | |
+  |---|---|
+  | Route | [`routes/api/api_v1.php`](../routes/api/api_v1.php) — อยู่ในกลุ่ม `auth_api` |
+  | Controller | [`Api\ApiQuotationController::qutation_edit_api()`](../app/Http/Controllers/Api/ApiQuotationController.php) |
+  | ส่งกลับไปบันทึกที่ | [`POST quotation/update/{id}`](api-quotation-update.md) |
+  | ข้อมูลตั้งต้นของฟอร์ม | [api-quotation-preload.md](api-quotation-preload.md) |
+
+  ---
+
+  ## โครง response
+
+  ```json
+  {
+    "status": "success",
+    "quotation_headers": {
+      "id": 12,
+      "quotation_number": "QT-2026-0012",
+      "quotation_date": "2026-08-22",
+      "status": "open",
+      "price_mode": "price",
+      "total_before_discount": 47838.45,
+      "total_after_discount": 47838.45,
+      "usd_rate": { "rate": 32.9781, "rate_used": 33, "as_of": "2026-08-21", ... },
+      "usd_rate_from_document": true,
+      "total_after_discount_usd": 144965,
+      "quotation_lines": [ ... ]
+    },
+    "customers": [ ... ],
+    "products": [ ... ],
+    "conditions": [ ... ]
+  }
+  ```
+
+  ---
+
+  ## `quotation_lines[]` — รายการสินค้า
+
+  | ฟิลด์ | หน่วย | หมายเหตุ |
+  |---|---|---|
+  | `id` | | รหัสบรรทัด (`quotation_lines.id`) |
+  | `product_id` · `uom_code` | | `uom_code` ตัดช่องว่างท้ายให้แล้ว |
+  | `qty` · `unit_price` · `discount` · `manual_discount` · `total_line` | **บาท** | หารร้อยมาให้แล้ว |
+  | `usd_price` | **ดอลลาร์** | ราคาต่อหน่วยถอดกลับจากราคาบาท ÷ อัตราของใบนี้ |
+  | `total_line_usd` | **ดอลลาร์** | ยอดบรรทัดเทียบ USD |
+  | `options[]` | | ตัวเลือกสินค้าที่ลูกค้าเลือกไว้ — ดูหัวข้อถัดไป |
+
+  > `usd_price` ถอดกลับมาให้**เฉพาะใบที่บันทึกอัตราไว้กับตัวเอง** (`usd_rate_from_document: true`)
+  > ใบเก่าที่ยืมอัตราปัจจุบันมาแสดงจะได้ `null` เพราะถ้าถอดเป็น USD แล้วส่งกลับมาบันทึก
+  > ราคาจะถูกปัดขึ้นจนเพี้ยนไปจากราคาบาทเดิม (ฐานข้อมูลเก็บราคาเป็นบาท ไม่ได้เก็บ USD รายบรรทัด)
+
+  ---
+
+  ## `quotation_lines[].options[]` — ตัวเลือกสินค้า
+
+  ```json
+  "options": [
+    { "id": 3, "group_name": "Through-Spindle Coolant", "name": "TSC READY-3RD PARTY",
+      "price": 168135, "usd": "5095.0000" },
+    { "id": 8, "group_name": "Spindle", "name": "10K-40T-IN",
+      "price": 250635, "usd": "7595.0000" }
+  ]
+  ```
+
+  | ฟิลด์ | ความหมาย |
+  |---|---|
+  | `id` | id ใน `product_options` — **ส่งกลับไปที่ `option_ids` ตอนบันทึกได้ตรง ๆ** |
+  | `group_name` · `name` | ชื่อหมวดหมู่/ตัวเลือก **ณ วันที่ออกเอกสาร** |
+  | `price` | ราคาที่บวกเพิ่ม หน่วยเป็น **บาท** (หารร้อยมาให้แล้ว เหมือนช่องเงินอื่นในเส้นนี้) |
+  | `usd` | ราคาที่บวกเพิ่มสกุล USD (`null` = ไม่ได้ตั้งราคา USD ไว้) |
+
+  เรียงตามลำดับที่ผู้ใช้เลือกไว้ตอนบันทึก · บรรทัดที่ไม่มีตัวเลือกได้ `[]`
+
+  > ค่าทั้งหมดเป็น **สำเนา** ที่บันทึกไว้ตอนออกเอกสาร (ตาราง `quotation_line_options`)
+  > ไม่ได้อ่านสดจากตัวสินค้า — แก้ชื่อหรือราคาที่หน้าสินค้าภายหลัง ใบเก่ายังแสดงค่าเดิมเสมอ
+
+  ---
+
+  ## ⚠️ ราคาของบรรทัดรวมตัวเลือกไปแล้ว
+
+  `unit_price` / `usd_price` / `total_line` **รวมราคาตัวเลือกทุกตัวไว้แล้ว**
+  เอา `options[].price` ไปบวกซ้ำไม่ได้ จะกลายเป็นคิดเงินสองรอบ
+
+  ถ้าจะกางให้ผู้ใช้เห็นว่าราคาสินค้าเท่าไร ตัวเลือกเท่าไร ให้ถอดออกเอง
+
+  ```
+  ราคาสินค้าล้วน = unit_price - ผลรวม options[].price
+  ```
+
+  ตอนส่งกลับไปที่ `quotation/update/{id}` ก็ต้องส่ง `unit_price` / `usd_price` ที่รวมตัวเลือกแล้วเช่นกัน
+  — เซิร์ฟเวอร์ไม่บวกราคาตัวเลือกให้อัตโนมัติ

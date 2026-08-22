@@ -1,0 +1,100 @@
+info:
+  name: order-details
+  type: http
+  seq: 6
+
+http:
+  method: GET
+  url: "{{sale_uat}}/api/v1/api/order/details/1"
+  auth:
+    type: bearer
+    token: "{{token}}"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+
+docs: |
+  # API — รายละเอียดใบสั่งขาย 1 ใบ
+
+  ```
+  GET /api/v1/api/order/details/{id}
+  Authorization: Bearer <token>
+  ```
+
+  | | |
+  |---|---|
+  | Route | [`routes/api/api_v1.php`](../routes/api/api_v1.php) — อยู่ในกลุ่ม `auth_api` |
+  | Controller | [`Api\ApiOrderController::getOrderDetails()`](../app/Http/Controllers/Api/ApiOrderController.php) |
+  | ตารางหลัก | `orders` + `order_lines` + `order_line_options` + `customers` + `order_slips` |
+
+  > ⚠️ **URL มี `api` ซ้ำสองครั้ง** (`/api/v1/api/order/details/{id}`) — ผิดรูปแบบจากเส้นอื่นทั้งหมด
+  > แต่แอปที่ปล่อยไปแล้วเรียกแบบนี้อยู่ แก้เป็น `/api/v1/order/details/{id}` = breaking change
+
+  ---
+
+  ## Response
+
+  คืน **object ดิบ** ไม่มี wrapper `{status, data}` เหมือนเส้นอื่น
+
+  ```json
+  {
+    "id": 12,
+    "order_number": "PO-260822-0002",
+    "customer": { ... },
+    "customer_name_formatted": "บริษัท สยาม นวัตกรรม เทคโนโลยี จำกัด",
+    "total_before_discount": 353694000,
+    "total_after_discount": 353694000,
+    "quotation_image_url": null,
+    "conditions": [ ... ],
+    "slips": [ ... ],
+    "order_lines": [
+      {
+        "id": 16,
+        "qty": 100,
+        "unit_price": 353694000,
+        "total_line": 353694000,
+        "product": { "id": 126, "name": "VF-4", ... },
+        "options_list": [
+          { "id": 3, "group": "Through-Spindle Coolant", "name": "TSC READY-3RD PARTY",
+            "price": 16813500, "usd": "5095.0000" },
+          { "id": 8, "group": "Spindle", "name": "10K-40T-IN",
+            "price": 25063500, "usd": "7595.0000" }
+        ]
+      }
+    ]
+  }
+  ```
+
+  ---
+
+  ## `order_lines[].options_list[]` — ตัวเลือกสินค้าที่ลูกค้าเลือก
+
+  | ฟิลด์ | ความหมาย |
+  |---|---|
+  | `id` | id ของตัวเลือกใน `product_options` (ส่งกลับไปที่ `option_ids` ตอนแก้ไขได้ตรง ๆ) |
+  | `group` | ชื่อหมวดหมู่ **ณ วันที่ออกเอกสาร** |
+  | `name` | ชื่อตัวเลือก **ณ วันที่ออกเอกสาร** |
+  | `price` | ราคาที่บวกเพิ่ม หน่วยเป็น **สตางค์** (16813500 = ฿168,135.00) |
+  | `usd` | ราคาที่บวกเพิ่มสกุล USD (`null` = ตัวเลือกนี้ไม่ได้ตั้งราคา USD ไว้) |
+
+  เรียงตามลำดับที่ผู้ใช้เลือกไว้ตอนบันทึก · สินค้าที่ไม่มีตัวเลือกจะได้ `[]`
+
+  > ค่าทั้งหมดเป็น **สำเนา** ที่บันทึกไว้ตอนออกเอกสาร (ตาราง `order_line_options`)
+  > ไม่ได้อ่านสดจากตัวสินค้า — แก้ชื่อหรือราคาที่หน้าสินค้าภายหลัง ใบเก่ายังแสดงค่าเดิมเสมอ
+
+  ---
+
+  ## ⚠️ ราคาของบรรทัดรวมตัวเลือกไปแล้ว
+
+  `unit_price` / `total_line` เป็นราคาที่**รวมราคาตัวเลือกทุกตัวไว้แล้ว**
+  ถ้าจะกางให้ผู้ใช้เห็นว่าราคาสินค้าเท่าไร ตัวเลือกเท่าไร ต้องถอดออกเอง:
+
+  ```
+  ราคาสินค้าล้วน = unit_price - ผลรวม options_list[].price
+  ยอดของตัวเลือกหนึ่งตัว = price x (qty / 100)   ← qty เก็บคูณ 100 ไว้
+  ```
+
+  เอาไปบวกซ้ำกับ `total_line` ไม่ได้ จะกลายเป็นคิดเงินสองรอบ

@@ -24,6 +24,13 @@ body:multipart-form:
   order_lines[0][uom_code]: EA
   order_lines[0][discount_type]: amount
   order_lines[0][manual_discount]: 0
+  # ราคาต่อหน่วย — usd_price (ดอลลาร์) มาแล้ว unit_price (บาท) จะถูกมองข้าม
+  # ราคานี้ต้องรวมราคาตัวเลือกสินค้าแล้ว เซิร์ฟเวอร์ไม่บวกให้อัตโนมัติ
+  order_lines[0][usd_price]: 116685
+  # ตัวเลือกสินค้าที่ลูกค้าเลือก — ส่งเฉพาะ id (ดู product_options ใน quotation/preload)
+  # ไม่ส่งคีย์นี้ = คงตัวเลือกเดิมของบรรทัดนั้นไว้
+  order_lines[0][option_ids][0]: 2
+  order_lines[0][option_ids][1]: 6
   order_lines[1][product_id]: 1
   order_lines[1][qty]: 1
   order_lines[1][uom_code]: EA
@@ -43,6 +50,11 @@ docs: |
 
   - ใบที่ขายเป็น USD ต้องส่ง order_lines[N][usd_price] กลับมาด้วยทุกบรรทัด
     ไม่งั้นราคาจะเด้งกลับไปเป็นราคาบาทที่ตั้งไว้ที่สินค้า
+
+  - ตัวเลือกสินค้า: order_lines[N][option_ids][] เป็นอาเรย์ของ id (จาก product_options ใน preload)
+    ส่งเฉพาะ id เท่านั้น ชื่อกับราคาเซิร์ฟเวอร์อ่านจากฐานข้อมูลเองแล้วเก็บเป็นสำเนา
+    ราคาของตัวเลือกไม่ได้บวกให้อัตโนมัติ ต้องบวกเข้ากับ unit_price / usd_price เอง
+    ไม่ส่งคีย์นี้ = คงตัวเลือกเดิมไว้ · ส่ง [] = ล้างตัวเลือกของบรรทัดนั้นทิ้ง
 
 settings:
   encodeUrl: true
