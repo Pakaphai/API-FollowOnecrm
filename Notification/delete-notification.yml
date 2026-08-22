@@ -1,0 +1,54 @@
+info:
+  name: delete-notification
+  type: http
+  seq: 6
+
+http:
+  method: DELETE
+  url: "{{sale_uat}}/api/v1/notifications/c93dc213-0817-40cc-aeb3-04b283a83323"
+  auth:
+    type: bearer
+    token: "{{token}}"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+
+docs: |
+  # ลบการแจ้งเตือน 1 รายการ
+
+  ```
+  DELETE /api/v1/notifications/{id}
+  Authorization: Bearer {{token}}
+  ```
+
+  `{id}` เป็น **UUID** ไม่ใช่ integer — เอาค่ามาจาก `GET notifications`
+  ใส่ค่าที่ไม่ใช่รูปแบบ UUID จะได้ `404` ตั้งแต่ชั้น route
+
+  ## สำเร็จ `200`
+
+  ```json
+  {
+    "status": "success",
+    "message": "ลบการแจ้งเตือนเรียบร้อยแล้ว",
+    "data": { "deleted_count": 1, "unread_count": 3 }
+  }
+  ```
+
+  `unread_count` คือจำนวนที่ยังไม่อ่าน **หลังลบแล้ว** เอาไปอัปเดตกระดิ่งได้เลย
+  ไม่ต้องยิง `notifications/unread-count` ซ้ำ
+
+  ## ไม่สำเร็จ
+
+  | HTTP | เมื่อไร |
+  |:---:|---|
+  | `401` | ไม่มี token / token หมดอายุ |
+  | `404` | ลบไปแล้ว, ไม่มีอยู่จริง, **หรือเป็นของผู้ใช้คนอื่น** |
+
+  ---
+
+  ⚠️ **ลบแล้วกู้คืนไม่ได้** ตาราง `notifications` ไม่มี soft delete
+
+  📄 รายละเอียด → [api-notification-delete.md](api-notification-delete.md)

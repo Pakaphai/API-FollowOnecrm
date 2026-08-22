@@ -18,7 +18,7 @@ docs:
   content: |
     # API Reference — `/api/v1` ทั้งหมด
 
-    สารบัญเส้น API ของแอปมือถือทุกเส้นใน [`routes/api/api_v1.php`](../routes/api/api_v1.php) — **78 เส้น** จาก 14 controller
+    สารบัญเส้น API ของแอปมือถือทุกเส้นใน [`routes/api/api_v1.php`](../routes/api/api_v1.php) — **84 เส้น** จาก 14 controller
 
     | เอกสารเจาะลึกรายหัวข้อ | |
     |---|---|
@@ -36,6 +36,8 @@ docs:
     | [api-user-profile.md](api-user-profile.md) | โปรไฟล์, แก้ไขผู้ใช้, รหัสผ่าน, FCM token |
     | [api-customer.md](api-customer.md) | ลูกค้า — สร้าง/แก้ไข/ลบ/รายชื่อ |
     | [api-late-appointment.md](api-late-appointment.md) | คำขออนุมัตินัดหมายล่าช้า |
+    | [api-forgot-password.md](api-forgot-password.md) | ลืมรหัสผ่านด้วย OTP — 3 ขั้น |
+    | [api-notification-delete.md](api-notification-delete.md) | ลบการแจ้งเตือน — ทีละรายการ / ล้างกล่อง |
 
     ---
 
@@ -137,9 +139,23 @@ docs:
     | | `POST` | `login` | เข้าสู่ระบบด้วย username/password |
     | | `POST` | `login/google` | เข้าสู่ระบบด้วย Google (BukkhonID) |
     | | `GET` | `refresh` | ต่ออายุ token |
+    | | `POST` | `forgot-password/otp` | ลืมรหัสผ่าน — ขอรหัส OTP เข้าอีเมล |
+    | | `POST` | `forgot-password/verify-otp` | ยืนยัน OTP → ได้ `reset_token` |
+    | | `POST` | `forgot-password/reset` | ตั้งรหัสผ่านใหม่ด้วย `reset_token` |
     | 🔒 | `GET` | `logout` | ออกจากระบบ + เคลียร์ fcm_token |
     | 🔒 | `POST` | `update-password` | เปลี่ยนรหัสผ่าน |
     | 🔒 | `POST` | `connect/google` | เชื่อม/ยกเลิกการเชื่อมบัญชี Google |
+
+    ### ลืมรหัสผ่าน — `forgot-password/*`
+
+    3 ขั้น: `otp` → `verify-otp` → `reset` · **ข้ามขั้นไม่ได้** เพราะ `reset_token` ถูกออกให้
+    ก็ต่อเมื่อ OTP ผ่านแล้วเท่านั้น (ระบบเช็ค `verified_at` ไม่ใช่แค่ว่าถือ token อยู่)
+
+    - ยิงเข้า **subdomain ของบริษัท** เหมือน `login` — บัญชีอยู่ในฐานข้อมูลของแต่ละบริษัท
+    - `email` รับ**อีเมลหรือเบอร์โทร**ก็ได้ แต่ OTP ส่งเข้าอีเมลของบัญชีนั้นเสมอ (ยังไม่มีช่องทาง SMS)
+    - OTP อายุ 10 นาที · กรอกผิดได้ 5 ครั้ง · ขอรหัสได้ 5 ครั้ง/15 นาที/IP · `reset_token` อายุ 15 นาที ใช้ครั้งเดียว
+
+    📄 **อธิบายทุกพารามิเตอร์ + รหัส error → [api-forgot-password.md](api-forgot-password.md)**
 
     ### 2. User & Profile — 9 เส้น
 
@@ -156,7 +172,7 @@ docs:
     | 🔒 | `GET` | `contact-rank` | อันดับการติดต่อรายเดือน |
     | 🔒 | `GET` | `sales-rank` | อันดับยอดขายรายเดือน |
 
-    ### 3. Notifications — 4 เส้น
+    ### 3. Notifications — 7 เส้น
 
     | | Method | Path | ใช้ทำอะไร |
     |:---:|---|---|---|
@@ -164,6 +180,9 @@ docs:
     | 🔒 | `GET` | `notifications/unread-count` | จำนวนที่ยังไม่อ่าน |
     | 🔒 | `POST` | `notifications/{id}/read` | ทำเครื่องหมายอ่านแล้ว 1 รายการ |
     | 🔒 | `POST` | `notifications/read-all` | อ่านทั้งหมด |
+    | 🔒 | `DELETE` | `notifications/{id}` | ลบ 1 รายการ |
+    | 🔒 | `DELETE` | `notifications` | ลบตาม `ids` / `only=read` / `only=all` |
+    | 🔒 | `POST` | `notifications/delete` | เหมือนเส้นบน (สำหรับ client ที่ส่ง body กับ DELETE ไม่ได้) |
 
     ### 4. Subscription & Calendar — 3 เส้น
 
@@ -396,8 +415,14 @@ docs:
     | `GET notifications/unread-count` | `{status:"success", data:{unread_count}}` |
     | `POST notifications/{id}/read` | `{status:"success", message}` · ไม่พบ = **404** |
     | `POST notifications/read-all` | `{status:"success", message}` |
+    | `DELETE notifications/{id}` | `{status:"success", message, data:{deleted_count, unread_count}}` · ไม่พบ/ของคนอื่น = **404** |
+    | `DELETE notifications` | body: `ids[]` **หรือ** `only=read|all` · ไม่ระบุขอบเขต = **422** (ไม่ลบทั้งหมดให้เอง) |
+    | `POST notifications/delete` | เหมือน `DELETE notifications` ทุกอย่าง |
 
     ใช้ Laravel notifications มาตรฐาน (`user->notifications()`) — `{id}` เป็น **UUID** ไม่ใช่ integer
+
+    การลบทุกเส้นคืน `unread_count` หลังลบมาให้ด้วย เอาไปอัปเดตกระดิ่งได้เลยไม่ต้องยิง `unread-count` ซ้ำ
+    ลบแล้วกู้คืนไม่ได้ (ไม่มี soft delete) → ดู [api-notification-delete.md](api-notification-delete.md)
 
     ---
 
@@ -709,6 +734,13 @@ docs:
 
     > รายการสินค้าส่งมา **2 ที่ ชุดเดียวกันเป๊ะ** — `data.quotation.quotationLines` (ใช้ตัวนี้) และ `data.quotationLines` ตำแหน่งเดิมที่ยังส่งเหมือนเดิม
 
+    ### `GET quotation/preload`
+    ข้อมูลตั้งต้นของฟอร์มใบเสนอราคา — นอกจากลูกค้า/สินค้า/ราคา ยังมี **`product_options`**
+    (ตัวเลือกสินค้า จัดกลุ่มตาม `product_id` · ราคาเป็น**สตางค์**) ให้ผู้ใช้ติ๊กเลือก
+    แล้วส่ง id กลับมาที่ `option_ids` ตอนสร้าง/แก้เอกสาร สินค้าที่ไม่มีตัวเลือกจะไม่มีคีย์ในก้อนนี้
+
+    📄 **อธิบายทุกก้อน → [api-quotation-preload.md](api-quotation-preload.md)**
+
     ### `POST quotation/usd/create` · `multipart/form-data`
 
     ใบเสนอราคาที่ **ตั้งราคาเป็นสกุล USD** — พารามิเตอร์และ response เหมือน `quotation/create` ทุกอย่าง
@@ -735,6 +767,23 @@ docs:
 
     > ส่ง `usd_price` ไปที่ `quotation/create` ตรง ๆ ก็ได้ผลเหมือนกัน — เส้นนี้ต่างตรงที่บังคับให้ครบทุกบรรทัด
     > จึงไม่มีทางได้ใบที่ตั้งใจให้เป็น USD แต่บางบรรทัดกลับไปคิดเป็นราคาบาทของสินค้าแทน
+
+    ### ตัวเลือกสินค้า — `option_ids` (ใช้กับทุกเส้นที่เขียนบรรทัดเอกสาร)
+
+    `quotation/create` · `quotation/usd/create` · `quotation/update/{id}` · `order/update-api/{id}`
+    รับ `option_ids` รายบรรทัดเป็นอาเรย์ของ id (จาก `product_options` ใน `quotation/preload`)
+
+    | เรื่อง | รายละเอียด |
+    |---|---|
+    | ส่งอะไร | **เฉพาะ id** — ชื่อกับราคาเซิร์ฟเวอร์อ่านจากฐานข้อมูลเอง แล้วเก็บเป็น**สำเนา** ณ วันที่ออกเอกสาร |
+    | ราคา | **ไม่ได้บวกให้อัตโนมัติ** — ต้องบวกเข้ากับ `unit_price` / `usd_price` เอง |
+    | ไม่ส่งคีย์นี้ | ตอน create = ไม่มีตัวเลือก · ตอน update = **คงของเดิมไว้** |
+    | ส่ง `[]` | ล้างตัวเลือกของบรรทัดนั้นทิ้ง |
+    | id ไม่มีจริง | `422` ที่คีย์ `<lines>.N.option_ids.M` |
+    | id เป็นของสินค้าตัวอื่น | `422` ที่คีย์เดียวกัน — ตัวเลือกต้องสังกัดสินค้าในบรรทัดนั้น |
+
+    ฝั่งอ่าน (`quotation/edit/{id}` · `order/edit-api/{id}` · `api/order/details/{id}`)
+    คืนตัวเลือกที่บันทึกไว้กลับมาในแต่ละบรรทัด — ส่ง `id` กลับไปที่ `option_ids` ได้ตรง ๆ
 
     ### `POST quotation/update/{id}`
     เหมือน create แต่ **`quotation_lines` บังคับ** (`required|array|min:1`) — รับ `usd_price` รายบรรทัดเหมือนกัน และบันทึกอัตราใหม่ทับพร้อมเพิ่มแถวใน `usd_rate_logs`
@@ -858,7 +907,8 @@ docs:
     ของ **ทุกรายการ** ไม่ใช่เฉพาะหน้าที่ขอมา จึงไม่เปลี่ยนตามขนาดหน้า
 
     ### `GET api/order/details/{id}`
-    คืน **object ดิบ** ไม่มี wrapper
+    คืน **object ดิบ** ไม่มี wrapper — แต่ละบรรทัดใน `order_lines[]` มี `options_list[]`
+    (ตัวเลือกที่ลูกค้าเลือกไว้ · `id` `group` `name` `price` เป็น**สตางค์** `usd`)
 
     ---
 
@@ -1062,7 +1112,7 @@ docs:
 
     ---
 
-    *อัปเดตล่าสุด: 2026-08-18 · อ้างอิงจาก [`routes/api/api_v1.php`](../routes/api/api_v1.php)*
+    *อัปเดตล่าสุด: 2026-08-22 · อ้างอิงจาก [`routes/api/api_v1.php`](../routes/api/api_v1.php)*
   type: text/markdown
 bundled: false
 extensions:

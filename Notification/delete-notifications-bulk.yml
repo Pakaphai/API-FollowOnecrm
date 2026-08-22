@@ -1,0 +1,82 @@
+info:
+  name: delete-notifications-bulk
+  type: http
+  seq: 7
+
+http:
+  method: DELETE
+  url: "{{sale_uat}}/api/v1/notifications"
+  auth:
+    type: bearer
+    token: "{{token}}"
+  body:
+    type: json
+    data: |
+      {
+        "only": "read"
+      }
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+
+docs: |
+  # ลบการแจ้งเตือนหลายรายการ / ล้างกล่อง
+
+  ```
+  DELETE /api/v1/notifications
+  Authorization: Bearer {{token}}
+  Content-Type: application/json
+  ```
+
+  ต้องระบุขอบเขตมาอย่างใดอย่างหนึ่ง
+
+  | ฟิลด์ | ชนิด | ความหมาย |
+  |---|---|---|
+  | `ids` | array ของ UUID | ลบเฉพาะรายการที่ระบุ (ผู้ใช้ติ๊กเลือกเอง) |
+  | `only` | `read` | ลบเฉพาะที่**อ่านแล้ว** — ปุ่ม "ล้างที่อ่านแล้ว" |
+  | `only` | `all` | ล้างทั้งกล่อง |
+
+  ส่ง `ids` มาเมื่อไรจะยึด `ids` เป็นหลัก (`only` ที่ส่งมาด้วยถูกมองข้าม)
+
+  ```json
+  { "ids": ["9f1c...e21", "9f1c...e33"] }
+  ```
+
+  ## สำเร็จ `200`
+
+  ```json
+  {
+    "status": "success",
+    "message": "ลบการแจ้งเตือน 4 รายการเรียบร้อยแล้ว",
+    "data": { "deleted_count": 4, "unread_count": 2 }
+  }
+  ```
+
+  ไม่มีรายการตรงเงื่อนไขก็ยังเป็น `200` แต่ `deleted_count = 0` — กดล้างซ้ำตอนกล่องว่างไม่เด้ง error
+
+  ## ไม่สำเร็จ
+
+  | HTTP | เมื่อไร |
+  |:---:|---|
+  | `401` | ไม่มี token / token หมดอายุ |
+  | `422` | ไม่ส่งทั้ง `ids` และ `only` |
+  | `422` | `only` ไม่ใช่ `read` หรือ `all` |
+  | `422` | สมาชิกใน `ids` ไม่ใช่ UUID หรือ `ids` เป็นอาเรย์ว่าง |
+
+  ---
+
+  ## ยิงตัวเปล่าแล้วไม่ลบทั้งหมด
+
+  body ว่าง = `422` ไม่ใช่ "ลบทั้งหมด" — ตั้งใจให้เป็นแบบนี้
+  คำขอที่ลืมแนบ body จะกลายเป็นการล้างกล่องทิ้ง และไม่มี soft delete ให้กู้คืน
+  การล้างทั้งกล่องจึงต้องเขียน `only=all` มาชัด ๆ
+
+  ## ลบของคนอื่นไม่ได้
+
+  ส่ง `ids` ที่ปนของผู้ใช้อื่นมา ระบบลบเฉพาะของเจ้าของ token
+  `deleted_count` นับเฉพาะที่ลบจริง ของคนอื่นไม่ถูกแตะ
+
+  📄 รายละเอียด → [api-notification-delete.md](api-notification-delete.md)

@@ -1,0 +1,45 @@
+info:
+  name: delete-notifications-bulk-post
+  type: http
+  seq: 8
+
+http:
+  method: POST
+  url: "{{sale_uat}}/api/v1/notifications/delete"
+  auth:
+    type: bearer
+    token: "{{token}}"
+  body:
+    type: json
+    data: |
+      {
+        "only": "all"
+      }
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+
+docs: |
+  # ล้างกล่องแจ้งเตือน (ทางเลือกแบบ POST)
+
+  ```
+  POST /api/v1/notifications/delete
+  Authorization: Bearer {{token}}
+  Content-Type: application/json
+  ```
+
+  **พฤติกรรมเหมือน `DELETE /api/v1/notifications` ทุกอย่าง** — พารามิเตอร์ ผลลัพธ์ และรหัส error ชุดเดียวกัน
+  มีไว้ให้ client ที่ส่ง body ไปกับ method `DELETE` ไม่ได้ ถ้า client ส่งได้ให้ใช้เส้น `DELETE` ตามปกติ
+
+  | ฟิลด์ | ชนิด | ความหมาย |
+  |---|---|---|
+  | `ids` | array ของ UUID | ลบเฉพาะรายการที่ระบุ |
+  | `only` | `read` | ลบเฉพาะที่อ่านแล้ว |
+  | `only` | `all` | ล้างทั้งกล่อง |
+
+  ⚠️ ตัวอย่างในคำขอนี้เป็น `only: "all"` = **ล้างทั้งกล่องของ token ที่ใช้ยิง** ลบแล้วกู้คืนไม่ได้
+
+  📄 รายละเอียด → [api-notification-delete.md](api-notification-delete.md)
