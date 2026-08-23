@@ -10,13 +10,13 @@ http:
     type: multipart-form
     data:
       - name: profile_img
-        type: text
-        value: ""
-        disabled: true
+        type: file
+        value:
+          - C:\Users\Softa-P\Downloads\S__5283847.jpg
+        contentType: image/jpeg
       - name: email
         type: text
-        value: ""
-        disabled: true
+        value: pxpeach.15@gmail.com
       - name: firstname
         type: text
         value: นิชาพร
