@@ -38,6 +38,7 @@ docs:
     | [api-late-appointment.md](api-late-appointment.md) | คำขออนุมัตินัดหมายล่าช้า |
     | [api-forgot-password.md](api-forgot-password.md) | ลืมรหัสผ่านด้วย OTP — 3 ขั้น |
     | [api-notification-delete.md](api-notification-delete.md) | ลบการแจ้งเตือน — ทีละรายการ / ล้างกล่อง |
+    | [maintenance-line-options-price.md](maintenance-line-options-price.md) | ตรวจ/ซ่อมเอกสารที่ราคาไม่รวมตัวเลือกสินค้า |
 
     ---
 
@@ -810,6 +811,10 @@ docs:
 
     `total_line` / `total_line_usd` เป็นยอดเต็มของบรรทัด (รวมตัวเลือกแล้ว) ไม่เปลี่ยน
 
+    > ⚠️ เอกสารที่ออกผ่าน API **ก่อน** คอมมิต `e1d4c9b` (เข้า `main` 22 ส.ค. 2026) เก็บราคาไว้
+    > โดยไม่ได้บวกตัวเลือก — deploy โค้ดใหม่แล้วใบเก่าไม่ได้ถูกแก้ตามไปด้วย
+    > ตรวจและซ่อมตาม [maintenance-line-options-price.md](maintenance-line-options-price.md)
+
     ฝั่งอ่าน (`quotation/edit/{id}` · `order/edit-api/{id}` · `api/order/details/{id}`)
     คืนตัวเลือกที่บันทึกไว้กลับมาในแต่ละบรรทัด — ส่ง `id` กลับไปที่ `option_ids` ได้ตรง ๆ
 
@@ -1151,7 +1156,7 @@ docs:
 
     ---
 
-    *อัปเดตล่าสุด: 2026-08-22 · อ้างอิงจาก [`routes/api/api_v1.php`](../routes/api/api_v1.php)*
+    *อัปเดตล่าสุด: 2026-08-23 · อ้างอิงจาก [`routes/api/api_v1.php`](../routes/api/api_v1.php)*
   type: text/markdown
 bundled: false
 extensions:
