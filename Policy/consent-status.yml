@@ -1,0 +1,59 @@
+info:
+  name: consent_status
+  type: http
+  seq: 3
+
+http:
+  method: GET
+  url: "{{sale_uat}}/api/v1/consent/status"
+  auth:
+    type: bearer
+    token: "{{token}}"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+
+docs: |
+  # API — ตรวจสอบสถานะการยินยอมนโยบายความเป็นส่วนตัว (Consent Status)
+
+  ใช้สำหรับตรวจสอบว่าผู้ใช้ที่กำลังล็อกอินอยู่ เคยกดยอมรับนโยบายความเป็นส่วนตัว (Privacy Policy) ฉบับล่าสุดหรือยัง
+  หาก `consent_required = true` แสดงว่าผู้ใช้ยังไม่เคยกดยอมรับ หรือมีนโยบายเวอร์ชันใหม่ออกมา ให้ Mobile App แสดงหน้าต่าง/Popup นโยบายให้ผู้ใช้กดยอมรับ
+
+  ```
+  GET /api/v1/consent/status
+  Authorization: Bearer <token>
+  Accept: application/json
+  ```
+
+  ---
+
+  ## 1. Response (200 OK)
+
+  ### กรณีที่ยังไม่เคยกดยอมรับ (`consent_required: true`):
+  ```json
+  {
+    "success": true,
+    "consent_required": true,
+    "policy": {
+      "id": 1,
+      "type": "privacy_policy",
+      "version": "1.0",
+      "title": "นโยบายความเป็นส่วนตัว (Privacy Policy)",
+      "content": "<h2>นโยบายความเป็นส่วนตัว</h2><p>เนื้อหานโยบาย...</p>",
+      "content_format": "html",
+      "effective_date": "2026-08-23T00:00:00.000000Z"
+    }
+  }
+  ```
+
+  ### กรณีที่เคยกดยอมรับฉบับล่าสุดแล้ว (`consent_required: false`):
+  ```json
+  {
+    "success": true,
+    "consent_required": false,
+    "policy": null
+  }
+  ```

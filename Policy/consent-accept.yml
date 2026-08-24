@@ -1,0 +1,49 @@
+info:
+  name: consent_accept
+  type: http
+  seq: 4
+
+http:
+  method: POST
+  url: "{{sale_uat}}/api/v1/consent/accept"
+  auth:
+    type: bearer
+    token: "{{token}}"
+  body:
+    type: json
+    data: {}
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+
+docs: |
+  # API — บันทึกการยอมรับนโยบายความเป็นส่วนตัว (Accept Privacy Policy)
+
+  ใช้สำหรับส่งบันทึกความยินยอม เมื่อผู้ใช้กดปุ่ม "ยอมรับ" บนหน้าต่างนโยบายความเป็นส่วนตัว (Privacy Policy)
+  ระบบจะบันทึกหลักฐานลงตาราง `user_consents` พร้อมเก็บ IP Address และ User Agent โดยอัตโนมัติ
+
+  ```
+  POST /api/v1/consent/accept
+  Authorization: Bearer <token>
+  Accept: application/json
+  Content-Type: application/json
+  ```
+
+  ---
+
+  ## 1. Response (200 OK)
+
+  ```json
+  {
+    "success": true,
+    "message": "บันทึกการยอมรับนโยบายความเป็นส่วนตัวเรียบร้อยแล้ว",
+    "data": {
+      "policy_id": 1,
+      "policy_version": "1.0",
+      "agreed_at": "2026-08-24T16:20:00+07:00"
+    }
+  }
+  ```

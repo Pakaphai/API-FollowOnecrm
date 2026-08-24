@@ -45,3 +45,55 @@ docs: |
 
   ต้องวนดึงต่อตาม `has_next` / `total_pages` ถ้าอยากได้ครบทุกรายการ
   รายละเอียดทั้งหมดอยู่ที่ docs/api-reference.md หัวข้อ "การแบ่งหน้า (pagination)"
+
+  ## โครงสร้าง Response
+
+  ```json
+  {
+    "orders": [
+      {
+        "id": 9,
+        "order_number": "PO-260822-0006",
+        "order_date": "2026-08-22",
+        "status_en": "open",
+        "status": "รอการยืนยันคำสั่งซื้อ",
+        "total_after_discount": 30688.35,
+        "total_before_discount": 30688.35,
+        "header_discount": 0.00,
+        "total_discount": 0.00,
+        "total_after_discount_usd": 903.00,
+        "usd_rate_used": 34.00,
+        "usd_rate_from_document": true,
+        "note": null,
+        "vat_amount": 0.00,
+        "customer_name": "บริษัท อนัญพร จำกัด",
+        "order_lines": [
+          {
+            "id": 12,
+            "product_id": 5,
+            "qty": 1,
+            "discount_type": "amount",
+            "manual_discount": 0,
+            "uom_code": "EA",
+            "unit_price": 30688.35,
+            "unit_price_total": 30688.35,
+            "discount": 0,
+            "total_line": 30688.35,
+            "usd_price": 903.00,
+            "usd_price_total": 903.00,
+            "total_line_usd": 903.00,
+            "options": []
+          }
+        ],
+        "order_conditions": []
+      }
+    ],
+    "page": 1,
+    "size": 20,
+    "total_elements": 1,
+    "total_pages": 1,
+    "has_next": false,
+    "has_prev": false
+  }
+  ```
+

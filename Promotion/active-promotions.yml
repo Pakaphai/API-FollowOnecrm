@@ -19,18 +19,18 @@ settings:
 docs: |
   # API — รายการโปรโมชันที่กำลังใช้งานทั้งหมด (Preload Active Promotions)
 
-  ดึงโปรโมชันที่เปิดใช้งาน (`is_active = 1`) และอยู่ในช่วงวันที่ที่กำหนดทั้งหมด มาให้แอปเก็บเป็น Cache สำหรับคำนวณส่วนลดแบบออฟไลน์ หรือแสดงป้ายโปรโมชันในรายการสินค้า
+  ดึงโปรโมชันที่เปิดใช้งาน (`is_active = 1`) และอยู่ในช่วงวันที่ที่กำหนดทั้งหมด (`start_date <= date <= end_date`) มาให้แอปเก็บเป็น Cache สำหรับคำนวณส่วนลดแบบออฟไลน์ หรือแสดงป้ายโปรโมชันในรายการสินค้า/ใบเสนอราคา โดยไม่ต้องยิงเช็คทีละรายการสินค้า
 
   ```
-  GET /api/v1/promotion/active
+  GET /api/v1/promotion/active?date=YYYY-MM-DD
   Authorization: Bearer <token>
   Accept: application/json
   ```
 
   | | |
   |---|---|
-  | Route | [`routes/api/api_v1.php`](../routes/api/api_v1.php) — อยู่ในกลุ่ม `auth_api` |
-  | Controller | [`Api\ApiPromotionController::activePromotions()`](../app/Http/Controllers/Api/ApiPromotionController.php) |
+  | Route | `routes/api/api_v1.php` — อยู่ในกลุ่ม `auth_api` |
+  | Controller | `App\Http\Controllers\Api\ApiPromotionController::activePromotions()` |
   | สิทธิ์เข้าถึง | 🔒 ต้องมี JWT Token |
 
   ---
@@ -39,7 +39,7 @@ docs: |
 
   | ฟิลด์ | บังคับ | ชนิด | ค่าเริ่มต้น | คำอธิบาย |
   |---|:---:|---|---|---|
-  | `date` | | date (YYYY-MM-DD) | วันนี้ | วันที่ใช้ตรวจสอบสถานะโปรโมชัน (`start_date <= date <= end_date`) |
+  | `date` | | date (YYYY-MM-DD) | วันนี้ (Current Server Date) | วันที่ใช้ตรวจสอบสถานะโปรโมชัน (`start_date <= date <= end_date`) |
 
   ---
 
@@ -49,46 +49,59 @@ docs: |
   {
     "success": true,
     "date": "2026-08-24",
-    "total": 3,
+    "count": 2,
     "promotions": [
       {
-        "id": 12,
-        "name": "โปรโมชันลดกระหน่ำกลางปี",
-        "description": "ลดราคาสินค้ากลุ่มโทรศัพท์มือถือ",
-        "start_date": "2026-08-01",
-        "end_date": "2026-08-31",
+        "promotion_id": 1,
+        "promotion_name": "โปรโมชันลดราคาประจำเดือน",
         "item_type": "product",
-        "item_id": 5,
-        "uom_code": "EA",
-        "discount_type": "amount",
-        "discount_value": 200.00,
+        "item_id": 105,
+        "item_name": "สินค้าตัวอย่าง A",
+        "uom_code": "PCS",
+        "discount_type": "percent",
+        "discount_value": 10,
         "min_qty": 2,
         "min_value": null,
-        "max_discount_value": null
+        "max_discount_value": 500,
+        "start_date": "2026-08-01",
+        "end_date": "2026-08-31"
       }
     ],
     "by_product": {
-      "5": [
+      "105": [
         {
-          "header_id": 12,
-          "uom_code": "EA",
-          "discount_type": "amount",
-          "discount_value": 200.00,
+          "promotion_id": 1,
+          "promotion_name": "โปรโมชันลดราคาประจำเดือน",
+          "item_type": "product",
+          "item_id": 105,
+          "item_name": "สินค้าตัวอย่าง A",
+          "uom_code": "PCS",
+          "discount_type": "percent",
+          "discount_value": 10,
           "min_qty": 2,
           "min_value": null,
-          "max_discount_value": null
+          "max_discount_value": 500,
+          "start_date": "2026-08-01",
+          "end_date": "2026-08-31"
         }
       ]
     },
     "by_product_type": {
-      "1": [
+      "3": [
         {
-          "header_id": 10,
-          "discount_type": "percent",
-          "discount_value": 10.00,
+          "promotion_id": 2,
+          "promotion_name": "โปรหมวดหมู่อุปกรณ์",
+          "item_type": "product_type",
+          "item_id": 3,
+          "item_name": "หมวดหมู่อุปกรณ์เสริม",
+          "uom_code": null,
+          "discount_type": "amount",
+          "discount_value": 50,
           "min_qty": null,
-          "min_value": 1500.00,
-          "max_discount_value": 500.00
+          "min_value": 1000,
+          "max_discount_value": null,
+          "start_date": "2026-08-01",
+          "end_date": "2026-08-31"
         }
       ]
     }
@@ -97,8 +110,49 @@ docs: |
 
   ---
 
-  ## 3. วิธีการนำไปใช้งานใน Mobile App
-  1. เมื่อเพิ่มสินค้า 1 บรรทัด (`product_id`, `uom_code`, `qty`)
-  2. ตรวจสอบใน `by_product[product_id]` ก่อนว่ามีโปรโมชันสำหรับ `uom_code` นั้นหรือไม่
-  3. หากไม่มี ให้ตรวจสอบใน `by_product_type[product_type_id]` ของหมวดหมู่สินค้านั้น
-  4. ตรวจสอบ `min_qty` และ `min_value` หากผ่านเงื่อนไข ให้คำนวณส่วนลดตาม `discount_type` และไม่เกิน `max_discount_value`
+  ## 3. คำอธิบายฟิลด์ใน Response
+
+  ### ระดับ Root
+  | ตัวแปร | ชนิด | คำอธิบาย |
+  |---|---|---|
+  | `success` | boolean | สถานะการทำงานของ API (`true` = สำเร็จ) |
+  | `date` | string | วันที่ที่ถูกนำมาใช้กรองโปรโมชัน (YYYY-MM-DD) |
+  | `count` | integer | จำนวนรายการเงื่อนไขโปรโมชันทั้งหมดที่ active |
+  | `promotions` | array | รวมรายการเงื่อนไขโปรโมชันทั้งหมดเป็น Array List |
+  | `by_product` | object | แตกกลุ่มตาม `product_id` (Key คือ ID สินค้า) ใช้ค้นหาโปรโมชันระดับสินค้ารวดเร็วแบบ `O(1)` |
+  | `by_product_type` | object | แตกกลุ่มตาม `product_type_id` (Key คือ ID หมวดหมู่) ใช้เมื่อสินค้านั้นไม่มีโปรฯ ระดับสินค้า |
+
+  ### รายละเอียดฟิลด์ใน Object แต่ละรายการโปรโมชัน
+  | ตัวแปร | ชนิด | คำอธิบาย |
+  |---|---|---|
+  | `promotion_id` | integer | รหัส Header ของโปรโมชัน (`promotion_headers.id`) |
+  | `promotion_name` | string | ชื่อโปรโมชันหลัก |
+  | `item_type` | string | ขอบเขตของโปรโมชัน: `"product"` (รายสินค้า) หรือ `"product_type"` (รายหมวดหมู่) |
+  | `item_id` | integer | รหัส ID ตาม `item_type` (`product_id` หรือ `product_type_id`) |
+  | `item_name` | string \| null | ชื่อของสินค้า หรือ ชื่อของหมวดหมู่ |
+  | `uom_code` | string \| null | รหัสหน่วยนับที่กำหนดเงื่อนไขโปรโมชัน เช่น `"PCS"`, `"BOX"` (หากเป็น `null` หมายถึงใช้ได้กับทุกหน่วยนับ) |
+  | `discount_type` | string | ประเภทส่วนลด: `"percent"` (ลดเป็น %) หรือ `"amount"` (ลดเป็นจำนวนเงิน) |
+  | `discount_value` | float | มูลค่าส่วนลด (แปลงจากฐานข้อมูลเรียบร้อย เช่น 10.00) |
+  | `min_qty` | float \| null | **เงื่อนไขจำนวนขั้นต่ำ**: ต้องสั่งซื้อสินค้านี้อย่างน้อยกี่ชิ้นจึงจะได้โปรฯ (หากไม่มีกำหนดเป็น `null`) |
+  | `min_value` | float \| null | **เงื่อนไขยอดเงินขั้นต่ำ**: ยอดซื้อสินค้านี้ (บาท) ก่อนลด ต้องถึงเท่าใดจึงจะได้โปรฯ (หากไม่มีกำหนดเป็น `null`) |
+  | `max_discount_value` | float \| null | **เพดานส่วนลดสูงสุด**: ส่วนลดที่ได้รับจะต้องไม่เกินกี่บาท (มักใช้คุมส่วนลดแบบ `percent`) |
+  | `start_date` | string | วันที่เริ่มต้นโปรโมชัน (YYYY-MM-DD) |
+  | `end_date` | string | วันที่สิ้นสุดโปรโมชัน (YYYY-MM-DD) |
+
+  ---
+
+  ## 4. ตรรกะการคำนวณและนำไปใช้งานฝั่ง Mobile App / Frontend
+
+  เมื่อผู้ใช้เพิ่มสินค้าในใบเสนอราคาหรือใบสั่งขาย:
+  1. **ค้นหาโปรโมชันที่ตรงกัน (Priority):**
+     - ตรวจสอบใน `by_product[product_id]` ก่อน: หาตัวที่ `uom_code` ตรงกับหน่วยที่เลือก (หรือตัวที่ `uom_code == null`)
+     - หากไม่มีในระดับสินค้า ให้ค้นหาใน `by_product_type[product_type_id]` ของหมวดหมู่นั้น
+  2. **ตรวจสอบเงื่อนไขความถูกต้อง (Qualification):**
+     - `qty >= min_qty` (ถ้ามี `min_qty`)
+     - `(qty * unit_price) >= min_value` (ถ้ามี `min_value`)
+  3. **คำนวณมูลค่าส่วนลด (Discount Calculation):**
+     - **แบบ Amount:** ส่วนลด = `discount_value`
+     - **แบบ Percent:** ส่วนลด = `(ยอดก่อนลด * discount_value) / 100`
+       - หากมี `max_discount_value` และยอดส่วนลดที่คำนวณได้เกินเพดาน ให้ตัดเหลือเท่ากับ `max_discount_value`
+  4. **เปรียบเทียบโปรที่ดีที่สุด:**
+     - หากมีหลายโปรโมชันที่ผ่านเงื่อนไข ระบบจะเลือกโปรโมชันที่ให้ส่วนลดสูงสุด (`bestDiscountAmount`)
