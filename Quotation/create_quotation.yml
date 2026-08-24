@@ -14,7 +14,7 @@ http:
         value: "4"
       - name: quotation_date
         type: text
-        value: 2026-08-22
+        value: 2026-08-23
       - name: price_mode
         type: text
         value: price
@@ -33,21 +33,9 @@ http:
       - name: quotation_lines[0][discount_type]
         type: text
         value: amount
-      # ── ราคาต่อหน่วย ─────────────────────────────────────────────────────────
-      # ส่งได้อย่างใดอย่างหนึ่ง — usd_price มาแล้ว unit_price จะถูกมองข้ามทั้งหมด
-      #
-      #   unit_price  หน่วยบาท  ถูกบีบไม่ให้ต่ำกว่าราคาขายขั้นต่ำของสินค้า
-      #   usd_price   หน่วยดอลลาร์  เซิร์ฟเวอร์คิดเป็นบาทให้เอง:
-      #               ceil(usd) x อัตราขาย ธปท. ที่ปัดขึ้นเป็นบาทเต็ม
-      #               (ไม่เอาราคาขั้นต่ำเงินบาทมาบีบ เพราะคนละสกุล)
-      #
-      # ราคานี้คือ "ราคาสินค้าล้วน" — เซิร์ฟเวอร์บวกราคาตัวเลือกให้เองจาก option_ids
-      # ไม่ส่งช่องราคาเลยก็ได้ ระบบจะใช้ราคาที่ตั้งไว้ที่สินค้าแทน
       - name: quotation_lines[0][usd_price]
         type: text
         value: "92995"
-      # ตัวเลือกสินค้าที่ลูกค้าเลือก — ส่งเฉพาะ id (ดู product_options ใน preload)
-      # ราคาของตัวเลือกเซิร์ฟเวอร์บวกให้เอง ไม่ต้องรวมมาในช่องราคาข้างบน
       - name: quotation_lines[0][option_ids][]
         type: text
         value: "9"
@@ -56,7 +44,7 @@ http:
         value: "6"
       - name: quotation_lines[0][option_ids][]
         type: text
-        value: "10"
+        value: "7"
       - name: quotation_image
         type: file
         value:

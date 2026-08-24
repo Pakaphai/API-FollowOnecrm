@@ -1,0 +1,104 @@
+info:
+  name: active_promotions
+  type: http
+  seq: 2
+
+http:
+  method: GET
+  url: "{{sale_uat}}/api/v1/promotion/active?date=2026-08-24"
+  auth:
+    type: bearer
+    token: "{{token}}"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+
+docs: |
+  # API — รายการโปรโมชันที่กำลังใช้งานทั้งหมด (Preload Active Promotions)
+
+  ดึงโปรโมชันที่เปิดใช้งาน (`is_active = 1`) และอยู่ในช่วงวันที่ที่กำหนดทั้งหมด มาให้แอปเก็บเป็น Cache สำหรับคำนวณส่วนลดแบบออฟไลน์ หรือแสดงป้ายโปรโมชันในรายการสินค้า
+
+  ```
+  GET /api/v1/promotion/active
+  Authorization: Bearer <token>
+  Accept: application/json
+  ```
+
+  | | |
+  |---|---|
+  | Route | [`routes/api/api_v1.php`](../routes/api/api_v1.php) — อยู่ในกลุ่ม `auth_api` |
+  | Controller | [`Api\ApiPromotionController::activePromotions()`](../app/Http/Controllers/Api/ApiPromotionController.php) |
+  | สิทธิ์เข้าถึง | 🔒 ต้องมี JWT Token |
+
+  ---
+
+  ## 1. Query Parameters
+
+  | ฟิลด์ | บังคับ | ชนิด | ค่าเริ่มต้น | คำอธิบาย |
+  |---|:---:|---|---|---|
+  | `date` | | date (YYYY-MM-DD) | วันนี้ | วันที่ใช้ตรวจสอบสถานะโปรโมชัน (`start_date <= date <= end_date`) |
+
+  ---
+
+  ## 2. โครงสร้าง Response (200 OK)
+
+  ```json
+  {
+    "success": true,
+    "date": "2026-08-24",
+    "total": 3,
+    "promotions": [
+      {
+        "id": 12,
+        "name": "โปรโมชันลดกระหน่ำกลางปี",
+        "description": "ลดราคาสินค้ากลุ่มโทรศัพท์มือถือ",
+        "start_date": "2026-08-01",
+        "end_date": "2026-08-31",
+        "item_type": "product",
+        "item_id": 5,
+        "uom_code": "EA",
+        "discount_type": "amount",
+        "discount_value": 200.00,
+        "min_qty": 2,
+        "min_value": null,
+        "max_discount_value": null
+      }
+    ],
+    "by_product": {
+      "5": [
+        {
+          "header_id": 12,
+          "uom_code": "EA",
+          "discount_type": "amount",
+          "discount_value": 200.00,
+          "min_qty": 2,
+          "min_value": null,
+          "max_discount_value": null
+        }
+      ]
+    },
+    "by_product_type": {
+      "1": [
+        {
+          "header_id": 10,
+          "discount_type": "percent",
+          "discount_value": 10.00,
+          "min_qty": null,
+          "min_value": 1500.00,
+          "max_discount_value": 500.00
+        }
+      ]
+    }
+  }
+  ```
+
+  ---
+
+  ## 3. วิธีการนำไปใช้งานใน Mobile App
+  1. เมื่อเพิ่มสินค้า 1 บรรทัด (`product_id`, `uom_code`, `qty`)
+  2. ตรวจสอบใน `by_product[product_id]` ก่อนว่ามีโปรโมชันสำหรับ `uom_code` นั้นหรือไม่
+  3. หากไม่มี ให้ตรวจสอบใน `by_product_type[product_type_id]` ของหมวดหมู่สินค้านั้น
+  4. ตรวจสอบ `min_qty` และ `min_value` หากผ่านเงื่อนไข ให้คำนวณส่วนลดตาม `discount_type` และไม่เกิน `max_discount_value`

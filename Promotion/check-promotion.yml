@@ -1,0 +1,136 @@
+info:
+  name: check_promotion
+  type: http
+  seq: 1
+
+http:
+  method: GET
+  url: "{{sale_uat}}/api/v1/promotion/check?product_id=5&uom_code=EA&qty=2&price_mode=price&special_discount=0&discount_type=amount"
+  auth:
+    type: bearer
+    token: "{{token}}"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+
+docs: |
+  # API — ตรวจสอบและคำนวณโปรโมชันต่อสินค้า (Real-time Promotion Check)
+
+  ใช้สำหรับหน้าสร้าง/แก้ไขใบเสนอราคา (Quotation) หรือใบสั่งขาย (Order) เมื่อผู้ใช้เลือกสินค้า, เปลี่ยนหน่วยนับ (`uom_code`), หรือเปลี่ยนจำนวน (`qty`)
+  เซิร์ฟเวอร์จะตรวจสอบโปรโมชันที่ตรงเงื่อนไข คำนวณส่วนลด และส่งราคาสุทธิกลับมาให้ทันที
+
+  ```
+  GET /api/v1/promotion/check
+  Authorization: Bearer <token>
+  Accept: application/json
+  ```
+
+  | | |
+  |---|---|
+  | Route | [`routes/api/api_v1.php`](../routes/api/api_v1.php) — อยู่ในกลุ่ม `auth_api` |
+  | Controller | [`Api\ApiPromotionController::checkPromotion()`](../app/Http/Controllers/Api/ApiPromotionController.php) |
+  | สิทธิ์เข้าถึง | 🔒 ต้องมี JWT Token |
+
+  ---
+
+  ## 1. Query Parameters
+
+  | ฟิลด์ | บังคับ | ชนิด | ค่าเริ่มต้น | คำอธิบาย |
+  |---|:---:|---|---|---|
+  | `product_id` | ✅ | integer | - | รหัสสินค้าที่ต้องการตรวจสอบ (อ้างอิง `products.id`) |
+  | `uom_code` | ✅ | string(3) | - | รหัสหน่วยนับของแถวนั้น เช่น `EA`, `BOX`, `PK` |
+  | `qty` | | numeric ≥ 0 | `1` | จำนวนสินค้าที่สั่งซื้อ |
+  | `price_mode` | | string | `price` | โหมดราคา: `price` (ราคาปกติ), `vat` (ราคารวม VAT/ก่อน VAT), `novat` (ไม่มี VAT) |
+  | `special_discount` | | numeric ≥ 0 | `0` | ส่วนลดพิเศษที่ผู้ใช้กรอกเองเพิ่มเติม |
+  | `discount_type` | | string | `amount` | ประเภทส่วนลดพิเศษ: `amount` (บาท), `percent` (%) |
+  | `quotation_date` | | date (YYYY-MM-DD) | วันนี้ | วันที่ใช้ตรวจสอบช่วงเวลาโปรโมชัน (`start_date` ถึง `end_date`) |
+
+  ---
+
+  ## 2. เงื่อนไขโปรโมชันและการคำนวณ (Business Logic)
+
+  ### ลำดับความสำคัญ (Priority):
+  1. **โปรโมชันระดับสินค้า (`item_type = product`)**: ตรวจสอบ `product_id` และ `uom_code` ที่ตรงกันก่อน
+  2. **โปรโมชันระดับหมวดหมู่ (`item_type = product_type`)**: หากสินค้าไม่มีโปรโมชันตรง จะตรวจสอบจากหมวดหมู่สินค้า (`product_type_id`)
+
+  ### เงื่อนไขความถูกต้อง (Qualification):
+  1. **จำนวนขั้นต่ำ (`min_qty`)**: `qty >= min_qty` หากสั่งน้อยกว่าจะไม่ได้รับโปรโมชัน
+  2. **ยอดซื้อขั้นต่ำ (`min_value`)**: `(unit_price × qty) >= min_value` หากยอดรวมก่อนหักส่วนลดไม่ถึงจะไม่ได้รับโปรโมชัน
+  3. **เพดานส่วนลดสูงสุด (`max_discount_value`)**: สำหรับส่วนลดแบบ `%` (`percent`) หากส่วนลดคำนวณแล้วเกินเพดาน จะถูกจำกัดไว้ที่ `max_discount_value`
+
+  ---
+
+  ## 3. ตัวอย่าง Response
+
+  ### สำเร็จและเข้าเงื่อนไขโปรโมชัน (200 OK)
+
+  ```json
+  {
+    "success": true,
+    "has_promotion": true,
+    "promotion": {
+      "source": "product",
+      "discount_type": "percent",
+      "discount_value": 20,
+      "min_qty": 2,
+      "min_value": 1000.00,
+      "max_discount_value": 500.00,
+      "is_qualified": true,
+      "product_type_name": null
+    },
+    "calculation": {
+      "price_mode": "price",
+      "unit_price": 500.00,
+      "qty": 2.00,
+      "line_amount": 1000.00,
+      "promo_discount": 200.00,
+      "special_discount": 0.00,
+      "total_discount": 200.00,
+      "net_price": 800.00
+    }
+  }
+  ```
+
+  ### มีโปรโมชันแต่สั่งซื้อไม่ถึงขั้นต่ำ (`is_qualified = false`)
+
+  ```json
+  {
+    "success": true,
+    "has_promotion": false,
+    "promotion": {
+      "source": "product",
+      "discount_type": "amount",
+      "discount_value": 200,
+      "min_qty": 2,
+      "min_value": null,
+      "max_discount_value": null,
+      "is_qualified": false,
+      "product_type_name": null
+    },
+    "calculation": {
+      "price_mode": "price",
+      "unit_price": 500.00,
+      "qty": 1.00,
+      "line_amount": 500.00,
+      "promo_discount": 0.00,
+      "special_discount": 0.00,
+      "total_discount": 0.00,
+      "net_price": 500.00
+    }
+  }
+  ```
+
+  ### กรณีข้อมูลไม่ถูกต้อง (422 Unprocessable Entity)
+
+  ```json
+  {
+    "success": false,
+    "message": "รูปแบบข้อมูลไม่ถูกต้อง",
+    "errors": {
+      "product_id": ["The selected product id is invalid."]
+    }
+  }
+  ```

@@ -291,6 +291,13 @@ docs:
     | 🔒 | `GET` | `sales-document-setting` | ปุ่มบันทึก + วิธีกรอกที่บริษัทเปิดใช้ |
     | 🔒 | `POST` | `sales-document-setting` | แก้ค่าตั้ง — **เฉพาะแอดมิน** (level 0/1) |
 
+    ### 14. Policy & Legal (นโยบายความเป็นส่วนตัว) — 2 เส้น
+
+    | | Method | Path | ใช้ทำอะไร |
+    |:---:|---|---|---|
+    | | `GET` | `privacy-policy` | ดึงนโยบายความเป็นส่วนตัวฉบับปัจจุบัน (`is_active = true`) |
+    | | `GET` | `privacy-policy/v/{version}` | ดึงนโยบายความเป็นส่วนตัวตามเลขเวอร์ชันที่ระบุ |
+
     ---
 
     # รายละเอียดรายเส้น
@@ -677,12 +684,32 @@ docs:
 
     ```json
     { "success": true, "has_promotion": true,
-      "promotion": {"source":"product","discount_type":"percent","discount_value":10,"min_qty":null},
-      "calculation": {"price_mode":"price","unit_price":100,"qty":2,"line_amount":200,
-                      "promo_discount":20,"special_discount":0,"total_discount":20,"net_price":180} }
+      "promotion": {
+        "source": "product",
+        "discount_type": "percent",
+        "discount_value": 20,
+        "min_qty": 2,
+        "min_value": 1000.0,
+        "max_discount_value": 500.0,
+        "is_qualified": true,
+        "product_type_name": null
+      },
+      "calculation": {
+        "price_mode": "price",
+        "unit_price": 500.0,
+        "qty": 2.0,
+        "line_amount": 1000.0,
+        "promo_discount": 200.0,
+        "special_discount": 0.0,
+        "total_discount": 200.0,
+        "net_price": 800.0
+      }
+    }
     ```
 
-    ไม่มีราคาสำหรับหน่วยนั้น = **422** · ทุกยอดคำนวณด้วย `bcmath` (ไม่ใช้ float) · `net_price` ไม่ติดลบ
+    - **เงื่อนไข:** `min_qty` (จำนวนขั้นต่ำ), `min_value` (ยอดซื้อขั้นต่ำ), `max_discount_value` (เพดานส่วนลดสูงสุดสำหรับ %)
+    - **`is_qualified`:** `true` เมื่อผ่านทุกเงื่อนไขขั้นต่ำ · หากไม่ผ่าน `has_promotion: false`, `is_qualified: false`, `promo_discount: 0`
+    - **ความแม่นยำ:** ทุกยอดคำนวณด้วย `bcmath` และ `net_price` ไม่ติดลบ
 
     ---
 
@@ -1105,6 +1132,33 @@ docs:
     | ส่ง `status` นอก `allowed_statuses` | **แปลงให้เงียบ ๆ** ไม่ตีกลับ |
 
     📄 **อธิบายทุกฟิลด์ + เหตุผลของแต่ละพฤติกรรม → [api-sales-document-setting.md](api-sales-document-setting.md)**
+
+    ---
+
+    ## 14. Policy & Legal
+
+    ### `GET privacy-policy`
+    ดึงนโยบายความเป็นส่วนตัวฉบับที่กำลังมีผลบังคับใช้อยู่ในปัจจุบัน (`is_active = true`) — **ไม่ต้องแนบ token**
+
+    ```json
+    {
+      "success": true,
+      "data": {
+        "id": 1,
+        "type": "privacy_policy",
+        "version": "1.0",
+        "title": "นโยบายความเป็นส่วนตัว (Privacy Policy)",
+        "content": "<h2>นโยบายความเป็นส่วนตัว</h2>...",
+        "content_format": "html",
+        "content_hash": "...",
+        "is_active": true,
+        "effective_date": "2026-08-23T00:00:00.000000Z"
+      }
+    }
+    ```
+
+    ### `GET privacy-policy/v/{version}`
+    ดึงนโยบายความเป็นส่วนตัวตามเลขเวอร์ชันที่ระบุ เช่น `/api/v1/privacy-policy/v/1.0` — ไม่พบนโยบายคืน **404** `{success: false, message: "Policy not found"}`
 
     ---
 
