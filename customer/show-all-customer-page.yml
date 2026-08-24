@@ -5,7 +5,7 @@ info:
 
 http:
   method: GET
-  url: "{{sale_uat}}/api/v1/getCustomer-detail?page=1&per_page=20"
+  url: "{{sale_uat}}/api/v1/getCustomer-detail?page=1&per_page=20&q="
   auth:
     type: bearer
     token: "{{token}}"
@@ -19,11 +19,19 @@ settings:
 docs: |-
   ## 5. `GET /api/v1/getCustomer-detail`
 
-  รายชื่อลูกค้า **ของตัวเองทั้งหมด** เรียงตาม `customer_code` — ไม่แบ่งหน้า
+  รายชื่อลูกค้า **ของตัวเอง** เรียงตาม `customer_code` — แบ่งหน้าและค้นหาได้
 
   ```json
-  { "datas": [ {...}, {...} ], "user": 4 }
+  { "datas": [ {...}, {...} ], "user": 4,
+    "page": 1, "size": 20, "total_elements": 137, "total_pages": 7,
+    "has_next": true, "has_prev": false }
   ```
+
+  | พารามิเตอร์ | ชนิด | ค่าเริ่มต้น |
+  |---|---|---|
+  | `page` | integer >=1 | 1 |
+  | `per_page` | integer 1-200 | 20 |
+  | `q` | string <=100 | - ค้นจาก รหัสลูกค้า - ชื่อลูกค้า - ชื่อผู้ติดต่อ - เบอร์โทร - เลขผู้เสียภาษี |
 
   แต่ละแถวมีฟิลด์คำนวณเพิ่ม 3 ตัว:
 
@@ -40,6 +48,6 @@ docs: |-
   | `401` | `{success:false, message:"Token expired or invalid"}` |
   | `500` | `{status:"error", message:"..."}` |
 
-  > ⚠️ **ไม่แบ่งหน้า** — บริษัทที่มีลูกค้าหลายพันรายจะได้ payload ก้อนใหญ่มากในครั้งเดียว ควรเพิ่ม pagination ถ้าเริ่มช้า
+  > `q` ถูกส่งไปกรองที่ฐานข้อมูล จึงค้นเจอลูกค้าทุกรายที่ตรงคีย์เวิร์ด ไม่ใช่เฉพาะหน้าที่โหลดมาแล้ว
 
   ---

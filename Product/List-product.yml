@@ -5,7 +5,7 @@ info:
 
 http:
   method: GET
-  url: "{{sale_uat}}/api/v1/productlist"
+  url: "{{sale_uat}}/api/v1/productlist?page=1&per_page=20&q="
   auth:
     type: bearer
     token: "{{token}}"
@@ -43,7 +43,7 @@ docs: |
   |---|---|---|---|
   | `page` | integer ≥1 | 1 | หน้าที่ต้องการ |
   | `per_page` | integer 1–200 | **20** | จำนวนต่อหน้า |
-  | `q` | string | — | ค้นหาจาก ชื่อสินค้า / ชื่อรุ่น / ชื่อแบรนด์ ⚠️ **ดูหมายเหตุข้อ 1 — พารามิเตอร์นี้ทำให้เกิด 500** |
+  | `q` | string <=100 | — | ค้นหาจาก ชื่อสินค้า / ชื่อรุ่น / ชื่อแบรนด์ / รหัสสินค้า — ไม่แยกตัวพิมพ์เล็กใหญ่ |
   | `brand_id` | integer | — | กรองตามแบรนด์ |
   | `model_id` | integer | — | กรองตามรุ่น |
   | `min_price` | numeric | — | ⚠️ หน่วยเป็น **สตางค์** ไม่ใช่บาท |
@@ -302,7 +302,7 @@ docs: |
   |:---:|---|---|
   | `401` | token หาย/หมดอายุ/ผิด | `{success:false, message:"Token expired or invalid"}` หรือ `{status:"error", code:"token_..."}` จาก middleware |
   | `422` | `per_page` > 200, `page` < 1, `sort` ไม่อยู่ในรายการ | `{message, errors}` (ValidationException) |
-  | `500` | ส่ง `q` มา — **ดูหมายเหตุข้อ 1** | error ของ Laravel |
+  | `422` | `q` ยาวเกิน 100 ตัว | รูปแบบ validation ของ Laravel |
   | `404` | subdomain ไม่มีในระบบ | HTML abort |
 
   > เส้นนี้เช็ค token เองซ้ำอีกชั้นหลังจาก middleware `auth_api` ผ่านแล้ว จึงมีข้อความ 401 สองรูปแบบ
@@ -311,7 +311,10 @@ docs: |
 
   ## ⚠️ หมายเหตุ
 
-  ### 1. `?q=` ทำให้เกิด 500 — คอลัมน์ `products.sku` ไม่มีอยู่จริง
+  ### 1. `?q=` เคยพัง 500 — แก้แล้ว (คอลัมน์ชื่อ `code` ไม่ใช่ `sku`)
+
+  > **แก้ไปแล้ว** — เปลี่ยนไปใช้ `products.code` และย้ายไปใช้ helper กลาง `ApiSearch`
+  > (ILIKE ไม่แยกตัวพิมพ์เล็กใหญ่ + escape `%` `_` ให้) ข้อความด้านล่างเก็บไว้เป็นบันทึกที่มา
 
   ```php
   // app/Http/Controllers/Auth/ApiAuthController.php
