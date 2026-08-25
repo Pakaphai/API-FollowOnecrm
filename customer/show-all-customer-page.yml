@@ -16,98 +16,38 @@ settings:
   followRedirects: true
   maxRedirects: 5
 
-docs: |
-  # API — รายชื่อลูกค้า (Customer List)
+docs: |-
+  ## 5. `GET /api/v1/getCustomer-detail`
 
-  ดึงรายชื่อลูกค้าที่อยู่ในความดูแลของพนักงานขายที่กำลังเข้าสู่ระบบ (Salesperson's Own Customers) เรียงตามรหัสลูกค้า (`customer_code`) พร้อมข้อมูลที่อยู่ พิกัด GPS และการแบ่งหน้า (Pagination)
-
-  ```
-  GET /api/v1/getCustomer-detail
-  Authorization: Bearer <token>
-  Accept: application/json
-  ```
-
-  ---
-
-  ## 1. พารามิเตอร์การค้นหาและแบ่งหน้า (Query String)
-
-  | พารามิเตอร์ | ชนิด | ค่าเริ่มต้น | รายละเอียด |
-  |---|---|---|---|
-  | `page` | integer ≥ 1 | `1` | หน้าที่ต้องการดูข้อมูล |
-  | `per_page` | integer 1–200 | `20` | จำนวนรายการต่อหน้า (สูงสุดไม่เกิน 200 รายการ) |
-  | `q` / `keyword` / `search` | string ≤ 100 | — | คำค้นหา (ค้นหาจาก **รหัสลูกค้า, ชื่อลูกค้า, ชื่อผู้ติดต่อ, เบอร์โทร, เลขประจำตัวผู้เสียภาษี**) ค้นแบบไม่แยกตัวพิมพ์เล็ก-ใหญ่ (Case-insensitive) |
-
-  ---
-
-  ## 2. ตัวอย่าง Response (200 OK)
+  รายชื่อลูกค้า **ของตัวเอง** เรียงตาม `customer_code` — แบ่งหน้าและค้นหาได้
 
   ```json
-  {
-    "datas": [
-      {
-        "id": 4,
-        "user_id": 12,
-        "customer_code": "CUS-2026-0004",
-        "customer_name": "อนัญพร",
-        "customer_name_full": "บริษัท อนัญพร จำกัด",
-        "business_type_id": 3,
-        "business_type_name": "บริษัท จำกัด",
-        "customer_scope": "province",
-        "customer_scope_label": "ระดับจังหวัด",
-        "customer_detail": "ลูกค้ารายใหญ่สั่งซื้อประจำ",
-        "customer_address": "123/45 ถนนเจริญกรุง",
-        "province_name": "กรุงเทพมหานคร",
-        "district_name": "เขต พระนคร",
-        "subdistrict_name": "พระบรมมหาราชวัง",
-        "subdistrict_zip_code": "10200",
-        "subdistrict": "100101",
-        "customer_tel": "0812345678",
-        "tax_id": "0105558000123",
-        "latitude": 13.7563309,
-        "longitude": 100.5017651,
-        "is_address_incomplete": false
-      }
-    ],
-    "user": 12,
-    "page": 1,
-    "size": 20,
-    "total_elements": 45,
-    "total_pages": 3,
-    "has_next": true,
-    "has_prev": false
-  }
+  { "datas": [ {...}, {...} ], "user": 4,
+    "page": 1, "size": 20, "total_elements": 137, "total_pages": 7,
+    "has_next": true, "has_prev": false }
   ```
 
+  | พารามิเตอร์ | ชนิด | ค่าเริ่มต้น |
+  |---|---|---|
+  | `page` | integer >=1 | 1 |
+  | `per_page` | integer 1-200 | 20 |
+  | `q` | string <=100 | - ค้นจาก รหัสลูกค้า - ชื่อลูกค้า - ชื่อผู้ติดต่อ - เบอร์โทร - เลขผู้เสียภาษี |
+
+  แต่ละแถวมีฟิลด์คำนวณเพิ่ม 3 ตัว:
+
+  | ฟิลด์ | ความหมาย |
+  |---|---|
+  | `customer_name_full` | ชื่อเติมคำนำหน้าตามประเภทธุรกิจ (ตรรกะเดียวกับ `formatted_name`) |
+  | `customer_scope_label` | ชื่อไทยของประเภทลูกค้า |
+  | `is_address_incomplete` | `true` = ที่อยู่ไม่ครบ (ขาด address / province / district / subdistrict) — ใช้ขึ้นป้ายเตือนให้ผู้ใช้ไปกรอกเพิ่ม |
+
+  พร้อม `business_type_name` จาก join และชื่อจังหวัด/อำเภอ/ตำบล
+
+  | HTTP | เงื่อนไข |
+  |:---:|---|
+  | `401` | `{success:false, message:"Token expired or invalid"}` |
+  | `500` | `{status:"error", message:"..."}` |
+
+  > `q` ถูกส่งไปกรองที่ฐานข้อมูล จึงค้นเจอลูกค้าทุกรายที่ตรงคีย์เวิร์ด ไม่ใช่เฉพาะหน้าที่โหลดมาแล้ว
+
   ---
-
-  ## 3. คำอธิบายตัวแปรใน Response
-
-  ### ข้อมูลลูกค้าแต่ละรายการใน `datas[]`:
-  * **`id`**: รหัสลูกค้า (Customer ID ในระบบ)
-  * **`user_id`**: รหัสพนักงานขายที่ดูแลลูกค้ารายนี้
-  * **`customer_code`**: รหัสอ้างอิงลูกค้า (เช่น `CUS-2026-0004`)
-  * **`customer_name`**: ชื่อกิจการ/ชื่อลูกค้า (ชื่อล้วน)
-  * **`customer_name_full`**: ชื่อกิจการแบบเติมคำนำหน้าตามประเภทธุรกิจอัตโนมัติ (เช่น `บริษัท อนัญพร จำกัด`) นำไปแสดงผลบนหน้าจอได้ทันที
-  * **`business_type_id`**: รหัสประเภทธุรกิจ (`1`=บุคคลธรรมดา, `2`=หจก., `3`=บริษัท จำกัด, `4`=บมจ., `5`=สหกรณ์, `6`=หสม.)
-  * **`business_type_name`**: ชื่อประเภทธุรกิจ
-  * **`customer_scope`**: รหัสขอบเขตกลุ่มลูกค้า (เช่น `local`, `province`, `country`)
-  * **`customer_scope_label`**: ชื่อภาษาไทยของกลุ่มลูกค้า (เช่น `ระดับจังหวัด`)
-  * **`customer_detail`**: บันทึกรายละเอียดเพิ่มเติมเกี่ยวกับลูกค้า
-  * **`customer_address`**: ที่อยู่ (เลขที่, อาคาร, ซอย, ถนน)
-  * **`province_name`**: ชื่อจังหวัด
-  * **`district_name`**: ชื่ออำเภอ / เขต
-  * **`subdistrict_name`**: ชื่อตำบล / แขวง
-  * **`subdistrict_zip_code`**: รหัสไปรษณีย์
-  * **`customer_tel`**: เบอร์โทรศัพท์ลูกค้า
-  * **`tax_id`**: เลขประจำตัวผู้เสียภาษี 13 หลัก
-  * **`latitude` / `longitude`**: พิกัดแผนที่ GPS ของสถานที่ลูกค้า
-  * **`is_address_incomplete`**: สถานะความครบถ้วนของที่อยู่ (`true` = ที่อยู่ยังไม่สมบูรณ์ ขาดจังหวัด/อำเภอ/ตำบล แนะนำให้แสดงไอคอนเตือน)
-
-  ### ข้อมูลสรุปและการแบ่งหน้า (Pagination Metadata):
-  * **`user`**: รหัสพนักงานขายที่เรียกข้อมูล
-  * **`page`**: หน้าปัจจุบันที่กำลังแสดงผล
-  * **`size`**: จำนวนรายการต่อหน้าที่ร้องขอมา (`per_page`)
-  * **`total_elements`**: จำนวนลูกค้าทั้งหมดที่ตรงกับเงื่อนไขการค้นหา
-  * **`total_pages`**: จำนวนหน้าทั้งหมด
-  * **`has_next`**: มีหน้าถัดไปหรือไม่ (`true` = มีข้อมูลหน้าถัดไป)
-  * **`has_prev`**: มีหน้าก่อนหน้าหรือไม่ (`true` = มีข้อมูลหน้าก่อนหน้า)
