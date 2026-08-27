@@ -1,0 +1,94 @@
+info:
+  name: cancel-relationship-detail
+  type: http
+  seq: 8
+
+http:
+  method: POST
+  url: "{{sale_uat}}/api/v1/relationship-detail/cancel/3"
+  body:
+    type: multipart-form
+    data:
+      - name: cancel_reason
+        type: text
+        value: ลูกค้าติดประชุม ขอเลื่อนไปก่อน
+  auth:
+    type: bearer
+    token: "{{token}}"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+
+docs: |-
+  ## 17. `POST /api/v1/relationship-detail/cancel/{id}`
+
+  ยกเลิกนัดหมาย — **`{id}` = `relationship_detail_id`**
+
+  ต่างจากเส้น 14 (`delete-contact`) ตรงที่ **รายการยังอยู่ในประวัติ** พร้อมเหตุผลที่ยกเลิก
+  ใช้เมื่อลูกค้าเลื่อน/ไม่สะดวก/ไม่ต้องเข้าพบแล้ว ส่วน `delete-contact` คือเอาออกจากระบบไปเลย
+
+  สถานะเก็บที่ `relationship_details.follow_status_id = 2` (ลูกค้ายกเลิก) — คนละแกนกับ `mode`
+
+  ```bash
+  curl -s -X POST "$BASE/relationship-detail/cancel/88" -H "$AUTH" -H "Accept: application/json" \
+    -F "cancel_reason=ลูกค้าติดประชุม ขอเลื่อนไปก่อน"
+  ```
+
+  ### พารามิเตอร์ — มีตัวเดียว
+
+  | ฟิลด์ | ชนิด | บังคับ | ความสำคัญ | อธิบาย |
+  |---|---|:---:|:---:|---|
+  | `cancel_reason` | string (≤ 500) | ✅ | 🔴 | เหตุผลที่ยกเลิก — เก็บลง `relationship_details.cancel_reason` และแสดงบนการ์ดนัดหมายในเว็บ |
+
+  ส่งเป็น `multipart/form-data` หรือ `application/json` ก็ได้
+
+  ### ผลลัพธ์ — `200`
+
+  ```json
+  {
+    "success": true,
+    "message": "ยกเลิกนัดหมายเรียบร้อยแล้ว",
+    "customer_id": 12,
+    "is_cancelled": true,
+    "cancel_reason": "ลูกค้าติดประชุม ขอเลื่อนไปก่อน"
+  }
+  ```
+
+  ### อธิบายตัวแปรใน response ทุกตัว
+
+  | ฟิลด์ | ชนิด | อธิบาย |
+  |---|---|---|
+  | `success` | boolean | 🔴 ตัวชี้ขาดว่าสำเร็จหรือไม่ |
+  | `message` | string | 🟡 ข้อความภาษาไทย โชว์ผู้ใช้ได้ทันที |
+  | `customer_id` | int | 🟡 ลูกค้าเจ้าของนัด — ใช้พากลับไปหน้ารายละเอียดลูกค้า |
+  | `is_cancelled` | boolean | 🔴 สถานะหลังทำรายการ — ใช้สลับปุ่มบนหน้าจอโดยไม่ต้องยิงถามซ้ำ |
+  | `cancel_reason` | string | 🟢 เหตุผลที่บันทึกไว้ (สะท้อนค่าที่ส่งมา) |
+
+  ### Error
+
+  | HTTP | เมื่อไหร่ | ก้อนที่ได้ |
+  |:---:|---|---|
+  | `403` | ไม่ใช่ลูกค้าของเซลส์คนนี้ (และไม่ใช่แอดมิน level 0/1) | `{"success": false, "message": "คุณไม่มีสิทธิ์เข้าถึงบันทึกนี้"}` |
+  | `404` | ไม่พบนัดหมาย | ก้อน `ModelNotFound` ของ Laravel |
+  | `422` | ไม่ได้ส่งเหตุผล / เหตุผลยาวเกิน 500 | `{"success": false, "message": "กรุณาระบุเหตุผลที่ยกเลิกนัดหมาย", "errors": {...}}` |
+  | `422` | นัดปิดงานไปแล้ว (`mode = completed`) | `{"success": false, "message": "นัดหมายนี้ปิดงานไปแล้ว ยกเลิกไม่ได้"}` |
+  | `422` | ยกเลิกไปแล้ว | `{"success": false, "message": "นัดหมายนี้ถูกยกเลิกไปแล้ว", "is_cancelled": true}` |
+
+  ### ผลข้างเคียงที่ตั้งใจให้เกิด
+
+  | เกิดอะไร | รายละเอียด |
+  |---|---|
+  | นัดหมาย | `follow_status_id = 2` และเซ็ต `cancel_reason` / `cancelled_at` / `cancelled_by` · `mode` **ยังเป็น `scheduled`** เหมือนเดิม |
+  | คำขอล่าช้า | คำขอที่ยัง `pending` ของนัดใบนี้ถูกปิดทิ้ง (`is_delete = true`) ไม่ให้ค้างในคิวแอดมิน |
+  | ปฏิทินงาน | หายจาก "งานวันนี้ / งานล่าช้า / งานเดือนนี้" ในเส้น `user/dashboard` ทั้งแอปและเว็บ |
+  | แจ้งเตือน | ไม่ถูกเตือนใน `notify:daily-appointments` อีก |
+  | ช่วงเวลา | **ถือว่าว่าง** — สร้างนัดใหม่ทับเวลาเดิมได้ทันที |
+  | เส้นอื่น | เส้น 10 / 11 / 12 จะตอบ `422` พร้อม `is_cancelled: true` จนกว่าจะเรียกเส้น 18 |
+
+  > ⚠️ ต้องรัน migration `v0102_add_cancel_fields_to_relationship_details_table` ก่อน
+  > ไม่งั้นทุกเส้นจะพังที่ระดับ SQL — `php artisan tenants:migrate`
+
+  ---

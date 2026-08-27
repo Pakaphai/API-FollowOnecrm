@@ -1,0 +1,83 @@
+info:
+  name: restore-relationship-detail
+  type: http
+  seq: 9
+
+http:
+  method: POST
+  url: "{{sale_uat}}/api/v1/relationship-detail/restore/3"
+  auth:
+    type: bearer
+    token: "{{token}}"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+
+docs: |-
+  ## 18. `POST /api/v1/relationship-detail/restore/{id}`
+
+  คืนสถานะนัดที่ยกเลิกไปแล้วให้กลับมาเป็นนัดปกติ — **`{id}` = `relationship_detail_id`**
+
+  ```bash
+  curl -s -X POST "$BASE/relationship-detail/restore/88" -H "$AUTH" -H "Accept: application/json" | jq
+  ```
+
+  **ไม่ต้องส่งพารามิเตอร์ใด ๆ** — ระบบจะล้าง `cancel_reason` / `cancelled_at` / `cancelled_by`
+  แล้วตั้ง `follow_status_id = 0` กลับไป
+
+  ### ผลลัพธ์ — `200`
+
+  ```json
+  {
+    "success": true,
+    "message": "คืนสถานะนัดหมายเรียบร้อยแล้ว",
+    "customer_id": 12,
+    "is_cancelled": false
+  }
+  ```
+
+  ### อธิบายตัวแปรใน response ทุกตัว
+
+  | ฟิลด์ | ชนิด | อธิบาย |
+  |---|---|---|
+  | `success` | boolean | 🔴 ตัวชี้ขาดว่าสำเร็จหรือไม่ |
+  | `message` | string | 🟡 ข้อความภาษาไทย โชว์ผู้ใช้ได้ทันที |
+  | `customer_id` | int | 🟡 ลูกค้าเจ้าของนัด |
+  | `is_cancelled` | boolean | 🔴 `false` เสมอเมื่อสำเร็จ — ใช้สลับปุ่มกลับเป็นชุดปกติ |
+
+  ### Error
+
+  | HTTP | เมื่อไหร่ | ก้อนที่ได้ |
+  |:---:|---|---|
+  | `403` | ไม่ใช่ลูกค้าของเซลส์คนนี้ | `{"success": false, "message": "คุณไม่มีสิทธิ์เข้าถึงบันทึกนี้"}` |
+  | `404` | ไม่พบนัดหมาย | ก้อน `ModelNotFound` ของ Laravel |
+  | `422` | นัดใบนี้ไม่ได้อยู่ในสถานะยกเลิก | `{"success": false, "message": "นัดหมายนี้ไม่ได้อยู่ในสถานะยกเลิก", "is_cancelled": false}` |
+  | `422` | **มีนัดอื่นจองเวลาเดิมไปแล้ว** | `{"success": false, "message": "ช่วงเวลานี้มีนัดหมายอยู่แล้ว (10:00 - 11:00 น. ลูกค้า ...) กรุณาเลือกเวลาอื่น", "errors": {"time_start": [...]}}` |
+
+  ### ทำไมต้องเช็คเวลาชนตอนคืนสถานะ
+
+  ระหว่างที่นัดถูกยกเลิก **ช่วงเวลานั้นถือว่าว่าง** (`findTimeConflict` ข้ามนัดที่ยกเลิกไป)
+  เซลส์อาจสร้างนัดใหม่ทับเวลาเดิมไปแล้ว การคืนสถานะจึงต้องตรวจซ้ำ ไม่งั้นจะได้นัดซ้อนกัน 2 ใบ
+
+  ทดสอบเคสนี้:
+
+  ```bash
+  # 1) ยกเลิกนัด 88 (2026-09-01 เวลา 10:00-11:00)
+  curl -s -X POST "$BASE/relationship-detail/cancel/88" -H "$AUTH" -H "Accept: application/json" \
+    -F "cancel_reason=ทดสอบชนเวลา"
+
+  # 2) สร้างนัดใหม่ทับเวลาเดิม — ต้องผ่าน
+  curl -s -X POST "$BASE/relationship-detail/create-contact" -H "$AUTH" -H "Accept: application/json" \
+    -F "customer_id=3" -F "contact_type_id=1" -F "follow_date=2026-09-01" \
+    -F "time_start=10:00" -F "time_end=11:00"
+
+  # 3) คืนสถานะนัด 88 — ต้องได้ 422
+  curl -s -X POST "$BASE/relationship-detail/restore/88" -H "$AUTH" -H "Accept: application/json"
+  ```
+
+  > ในเคสนี้ฝั่งแอปควรแนะนำให้ผู้ใช้ **สร้างนัดใหม่** แทนการคืนสถานะ
+
+  ---

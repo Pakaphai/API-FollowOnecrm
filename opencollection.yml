@@ -18,7 +18,7 @@ docs:
   content: |
     # API Reference — `/api/v1` ทั้งหมด
 
-    สารบัญเส้น API ของแอปมือถือทุกเส้นใน [`routes/api/api_v1.php`](../routes/api/api_v1.php) — **84 เส้น** จาก 14 controller
+    สารบัญเส้น API ของแอปมือถือทุกเส้นใน [`routes/api/api_v1.php`](../routes/api/api_v1.php) — **86 เส้น** จาก 14 controller
 
     | เอกสารเจาะลึกรายหัวข้อ | |
     |---|---|
@@ -36,6 +36,7 @@ docs:
     | [api-user-profile.md](api-user-profile.md) | โปรไฟล์, แก้ไขผู้ใช้, รหัสผ่าน, FCM token |
     | [api-customer.md](api-customer.md) | ลูกค้า — สร้าง/แก้ไข/ลบ/รายชื่อ |
     | [api-late-appointment.md](api-late-appointment.md) | คำขออนุมัตินัดหมายล่าช้า |
+    | [api-cancel-appointment.md](api-cancel-appointment.md) | ยกเลิกนัดหมาย / คืนสถานะ |
     | [api-forgot-password.md](api-forgot-password.md) | ลืมรหัสผ่านด้วย OTP — 3 ขั้น |
     | [api-notification-delete.md](api-notification-delete.md) | ลบการแจ้งเตือน — ทีละรายการ / ล้างกล่อง |
     | [maintenance-line-options-price.md](maintenance-line-options-price.md) | ตรวจ/ซ่อมเอกสารที่ราคาไม่รวมตัวเลือกสินค้า |
@@ -228,6 +229,8 @@ docs:
     | 🔒 | `POST` | `relationship-detail/submit-contact/{id}` | **ปิดงานนัดหมาย** — ถูกบล็อกถ้าล่าช้า |
     | 🔒 | `GET` | `relationship-detail/late-status/{id}` | เช็คว่าล่าช้าไหม / ควรโชว์ปุ่มอะไร |
     | 🔒 | `POST` | `relationship-detail/late-request/{id}` | ยื่นคำขออนุมัติล่าช้า |
+    | 🔒 | `POST` | `relationship-detail/cancel/{id}` | **ยกเลิกนัดหมาย** — เก็บประวัติ + เหตุผล |
+    | 🔒 | `POST` | `relationship-detail/restore/{id}` | คืนสถานะนัดที่ยกเลิกไปแล้ว |
     | 🔒 | `DELETE` | `relationship-detail/delete-contact/{id}` | ลบนัดหมาย |
     | 🔒 | `GET` | `relationship-detail/{id}` | รายละเอียดนัดหมายเดี่ยว |
     | 🔒 | `GET` | `getcustomer/detail/byid/{id}` | **นัดหมายทั้งหมดของลูกค้า พร้อม flag ปุ่ม** |
@@ -604,10 +607,14 @@ docs:
     ```json
     { "success": true, "relationship_detail_id": 1, "mode": "scheduled",
       "is_late": true, "can_submit": false, "can_request_late": true,
+      "is_cancelled": false, "cancel_reason": null, "cancelled_at": null,
+      "can_cancel": true, "can_restore": false,
       "visit_pic": "crm/visit_pics/...", "visit_pic_url": "https://...",
       "late_request": { "id": 7, "status": "pending", "status_label": "รอพิจารณา", ... } }
     ```
     ไม่มีสิทธิ์ = **403** · `late_request` เป็น `null` ถ้าไม่เคยยื่น
+
+    นัดที่ยกเลิกแล้ว (`is_cancelled: true`) จะได้ `can_submit` / `can_request_late` เป็น `false` ทั้งคู่
 
     ### `POST relationship-detail/late-request/{id}` · `multipart/form-data`
     | ฟิลด์ | บังคับ | กติกา |
@@ -623,6 +630,28 @@ docs:
     | `422` | ปิดงานไปแล้ว / ยังไม่ล่าช้า / มีคำขอค้างอยู่ |
     | `201` | `{success, message, customer_id, image_path, late_request:{id,status,late_days,reason}}` |
 
+    ### `POST relationship-detail/cancel/{id}` · `POST relationship-detail/restore/{id}`
+
+    **ยกเลิกนัดหมาย** (เก็บประวัติ ต่างจาก `delete-contact` ที่หายไปเลย) และ **คืนสถานะ**
+    สถานะเก็บที่ `follow_status_id` — `2` = ลูกค้ายกเลิก · คนละแกนกับ `mode`
+
+    | ฟิลด์ | บังคับ | กติกา |
+    |---|:---:|---|
+    | `cancel_reason` | ✅ | ≤500 · เฉพาะเส้น `cancel` — เส้น `restore` ไม่ต้องส่งอะไร |
+
+    | HTTP | เงื่อนไข |
+    |:---:|---|
+    | `403` | ไม่มีสิทธิ์เข้าถึงบันทึกนี้ |
+    | `422` (cancel) | ไม่ส่งเหตุผล / ปิดงานไปแล้ว / ยกเลิกไปแล้ว |
+    | `422` (restore) | ไม่ได้อยู่ในสถานะยกเลิก / **มีนัดอื่นจองเวลาเดิมไปแล้ว** |
+    | `200` | `{success, message, customer_id, is_cancelled}` |
+
+    ยกเลิกแล้ว → เส้น `update-contact` / `submit-contact` / `late-request` จะตอบ `422`
+    พร้อม `is_cancelled: true` จนกว่าจะเรียก `restore` · คำขอล่าช้าที่ค้าง `pending` ถูกปิดทิ้งอัตโนมัติ
+    · ช่วงเวลาของนัดที่ยกเลิก **ถือว่าว่าง** จองทับได้ (จึงเป็นเหตุให้ `restore` อาจไม่สำเร็จ)
+
+    รายละเอียดเต็มที่ [api-cancel-appointment.md](api-cancel-appointment.md)
+
     ### `DELETE relationship-detail/delete-contact/{id}` · `GET relationship-detail/{id}`
     delete → `{success, message}` · get → `{status:"success", data:{details}}`
 
@@ -636,7 +665,8 @@ docs:
         "relationship_details_scheduled": [...],
         "global_schedule": [...] }}
     ```
-    นัดหมายแต่ละรายการมี flag ให้แอปเรนเดอร์ปุ่มได้เลย: `is_late`, `can_submit`, `can_request_late`, `late_request_status`, `late_request_note`
+    นัดหมายแต่ละรายการมี flag ให้แอปเรนเดอร์ปุ่มได้เลย: `is_late`, `can_submit`, `can_request_late`, `late_request_status`, `late_request_note`,
+    `is_cancelled`, `cancel_reason`, `can_cancel`, `can_restore`
 
     ---
 
