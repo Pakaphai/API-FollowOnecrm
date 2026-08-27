@@ -244,7 +244,7 @@ docs:
     | 🔒 | `POST` | `relationship-detail/create-contact` | สร้างนัดหมาย |
     | 🔒 | `GET` | `relationship-detail/edit-contact/{id}` | ข้อมูลนัดหมายสำหรับฟอร์มแก้ไข |
     | 🔒 | `POST` | `relationship-detail/update-contact/{id}` | แก้ไขนัดหมาย |
-    | 🔒 | `POST` | `relationship-detail/submit-contact/{id}` | **ปิดงานนัดหมาย** — ถูกบล็อกถ้าล่าช้า |
+    | 🔒 | `POST` | `relationship-detail/submit-contact/{id}` | **ปิดงานนัดหมาย** — ถูกบล็อกถ้าล่าช้า · ปิดก่อนวันนัดต้องมีเหตุผล |
     | 🔒 | `GET` | `relationship-detail/late-status/{id}` | เช็คว่าล่าช้าไหม / ควรโชว์ปุ่มอะไร |
     | 🔒 | `POST` | `relationship-detail/late-request/{id}` | ยื่นคำขออนุมัติล่าช้า |
     | 🔒 | `POST` | `relationship-detail/cancel/{id}` | **ยกเลิกนัดหมาย** — เก็บประวัติ + เหตุผล |
@@ -631,6 +631,15 @@ docs:
     { "success": false, "message": "นัดหมายนี้ล่าช้าแล้ว...", "require_late_request": true }
     ```
     **422** → แอปเจอ `require_late_request: true` ให้เด้ง modal ขออนุมัติแทน
+
+    **ปิดงานก่อนถึงวันนัดต้องมีเหตุผล** — ถ้า `follow_date` ที่ส่งมายังมาไม่ถึง (เช่น วันนี้ 27 นัดไว้ 29
+    แต่ลูกค้าโทรมาคุยจบก่อน) ปิดได้ แต่ต้องส่ง `early_close_reason` (≤1000) มาด้วย ไม่งั้น **422**
+
+    ```json
+    { "message": "Validation failed.",
+      "errors": { "early_close_reason": ["ปิดงานก่อนถึงวันนัดหมาย กรุณาระบุเหตุผลที่ปิดงานก่อนกำหนด"] } }
+    ```
+    ปิดตรงวันนัดหรือหลังวันนัดไม่ต้องส่ง — ส่งมาก็ถูกล้างเป็น `null` พร้อม `early_closed_at`
 
     ผ่านแล้ว → `{success, message, customer_id, image_path, relationship_status_id}`
 
