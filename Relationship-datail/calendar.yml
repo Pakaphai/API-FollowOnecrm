@@ -80,6 +80,8 @@ docs: |-
   | `visit_conclusion_id` + `visit_conclusion_name` | 🟡 | สรุปผลการเข้าพบ + ชื่อไทย |
   | `contact_detail` | 🟡 | บันทึกย่อ |
   | `latitude` · `longitude` | 🟡 | พิกัดที่บันทึกไว้ตอนติดต่อ |
+  | `early_close_reason` | 🔴 | **เหตุผลที่ปิดงานก่อนถึงวันนัด** · มีเฉพาะใบที่ปิดก่อกำหนด นอกนั้น `null` · เอาไปโชว์คู่กับการ์ดประวัติได้เลย |
+  | `early_closed_at` | 🟢 | เวลาที่กดปิดงานก่อนกำหนด (ISO 8601 UTC) — คู่กับ `early_close_reason` มีทั้งคู่หรือไม่มีทั้งคู่ |
   | `visit_pic` | 🟢 | path ดิบบน S3 |
   | `visit_pic_url` | 🔴 | signed URL อายุ 10 นาที เอาไปแสดงรูปได้เลย |
   | `customer_scope` + `customer_scope_label` | 🟢 | ประเภทลูกค้า + ชื่อไทย (มีเฉพาะบางชุด) |

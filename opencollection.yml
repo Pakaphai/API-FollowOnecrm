@@ -484,6 +484,9 @@ docs:
 
     > ⚠️ **ยึดเดือนปัจจุบันตายตัว** — โค้ดอ่าน `Carbon::now()` ไม่ได้รับ query param ส่ง `?month=` มาก็ไม่มีผล
 
+    แต่ละแถวมี `early_close_reason` / `early_closed_at` ด้วย — ใบที่ปิดงานก่อนถึงวันนัดจะมีค่า
+    เอาไปโชว์บนการ์ดปฏิทินได้เลย (ปิดตรงวันหรือหลังวันนัด = `null` ทั้งคู่)
+
     ### `GET calendar/all/customer`
     นัดหมาย **ทั้งบริษัท** ทุกเซลส์ ไม่กรองเดือน → `{global_schedule: [...]}` แต่ละแถวมี `formatted_name` (ชื่อบริษัทเติมคำนำหน้าตาม `business_type_id`) และ `visit_pic_url` (presigned 10 นาที)
 
@@ -696,6 +699,7 @@ docs:
 
     ### `DELETE relationship-detail/delete-contact/{id}` · `GET relationship-detail/{id}`
     delete → `{success, message}` · get → `{status:"success", data:{details}}`
+    แต่ละใบใน `details` มี `early_close_reason` / `early_closed_at` ติดมาด้วย (ใบที่ไม่ได้ปิดก่อนกำหนด = `null`)
 
     ### `GET getcustomer/detail/byid/{id}`
     เส้นหลักของหน้ารายละเอียดลูกค้า `{id}` = **customer_id**
@@ -709,6 +713,9 @@ docs:
     ```
     นัดหมายแต่ละรายการมี flag ให้แอปเรนเดอร์ปุ่มได้เลย: `is_late`, `can_submit`, `can_request_late`, `late_request_status`, `late_request_note`,
     `is_cancelled`, `cancel_reason`, `can_cancel`, `can_restore`
+
+    ใบที่ปิดงานก่อนถึงวันนัดจะมี `early_close_reason` (เหตุผลที่เซลส์กรอกไว้) และ `early_closed_at` (เวลาที่กดปิด)
+    มาด้วยทั้งใน `relationship_details_completed` และ `global_schedule` — ใบอื่นเป็น `null`
 
     ---
 
