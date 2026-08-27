@@ -1,0 +1,150 @@
+info:
+  name: get_seats
+  type: http
+  seq: 1
+
+http:
+  method: GET
+  url: "{{sale_uat}}/api/v1/seats"
+  auth:
+    type: bearer
+    token: "{{token}}"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+
+docs: |
+  # API — สถานะโควตาที่นั่ง + รายชื่อบัญชี (Seat Quota)
+
+  ใช้ดึงสถานะโควตาผู้ใช้ของบริษัท และรายชื่อบัญชีทั้งหมด สำหรับหน้า "จัดการโควตาผู้ใช้"
+  บริษัทที่ซื้อแพ็กเกจแบบรายที่นั่ง (Basic) จะเปิดบัญชีได้ไม่เกินจำนวนที่จ่ายเงินไว้
+  ถ้ามีผู้ใช้เกินโควตา ระบบจะกั้นการใช้งานทั้งบริษัทจนกว่าแอดมินจะเลือกว่าจะเก็บบัญชีไหนไว้
+
+  **เส้นนี้ยกเว้นจากด่านเกินโควตา** จึงเรียกได้เสมอแม้บริษัทกำลังถูกกั้นอยู่
+  ไม่งั้นแอดมินจะเข้ามาแก้ไม่ได้เลย
+
+  ```
+  GET /api/v1/seats
+  Authorization: Bearer <token>
+  Accept: application/json
+  ```
+
+  เปิดให้ **ทุก level** เรียกได้ เพราะแอปต้องรู้ว่าทำไมถึงถูกกั้น
+  แต่ `can_manage` บอกว่าผู้ใช้คนนี้แก้ได้หรือแค่ดู
+
+  ---
+
+  ## 1. Response (200 OK) — แอดมิน `can_manage: true`
+
+  ```json
+  {
+    "success": true,
+    "seats": {
+      "limit": 5,
+      "used": 5,
+      "suspended": 0,
+      "remaining": 0,
+      "unlimited": false,
+      "is_full": true,
+      "over_by": 0,
+      "is_over_limit": false,
+      "percent": 100
+    },
+    "can_manage": true,
+    "current_user_id": 1,
+    "users": [
+      {
+        "id": 1,
+        "username": "sunnypop",
+        "fullname": "Thapanat Kraipob",
+        "email": "thapanatee44@gmail.com",
+        "level": 0,
+        "role_label": "เจ้าของระบบ",
+        "customer_count": 7,
+        "has_logged_in": true,
+        "is_active_seat": true,
+        "is_self": true
+      },
+      {
+        "id": 2,
+        "username": "saleofficer0001",
+        "fullname": "ซัมเมอร์ โซฮอท",
+        "email": "lunarie.18lx@gmail.com",
+        "level": 2,
+        "role_label": "พนักงานขาย",
+        "customer_count": 6,
+        "has_logged_in": true,
+        "is_active_seat": true,
+        "is_self": false
+      }
+    ]
+  }
+  ```
+
+  ### ฟิลด์ใน `seats`
+
+  | ฟิลด์ | ชนิด | ความหมาย |
+  |---|---|---|
+  | `limit` | int \| null | ที่นั่งที่ซื้อไว้ · `null` = ไม่จำกัด |
+  | `used` | int | บัญชีที่ใช้งานอยู่ (ไม่นับที่ถูกระงับ) |
+  | `suspended` | int | บัญชีที่ถูกระงับไว้ |
+  | `remaining` | int \| null | เปิดเพิ่มได้อีกกี่บัญชี · `null` = ไม่จำกัด |
+  | `unlimited` | bool | แพ็กเกจฟรี/ทดลอง = `true` → ซ่อน UI โควตาทั้งหมด |
+  | `is_full` | bool | เต็มแล้ว เพิ่มคนใหม่ไม่ได้ (แต่ยังไม่เกิน) |
+  | `over_by` | int | เกินมากี่บัญชี · `0` = ไม่เกิน |
+  | `is_over_limit` | bool | `true` = บริษัทถูกกั้นอยู่ตอนนี้ |
+  | `percent` | int | 0–100 สำหรับวาดแถบความคืบหน้า |
+
+  ### ฟิลด์ใน `users[]`
+
+  | ฟิลด์ | ใช้ทำอะไร |
+  |---|---|
+  | `fullname` | ไม่มีชื่อจริงในระบบ → คืน `username` แทน แสดงได้เลยไม่ต้องเช็ค null |
+  | `role_label` | ชื่อบทบาทภาษาไทยพร้อมแสดง — ไม่ต้อง map `level` เอง |
+  | `customer_count` | ลูกค้าที่คนนี้ดูแลอยู่ — ช่วยแอดมินตัดสินใจว่าจะระงับใคร |
+  | `has_logged_in` | `false` = ยังไม่เคยเข้าใช้งานเลย คือตัวเลือกที่ปลอดภัยที่สุดที่จะระงับ |
+  | `is_active_seat` | ค่าเริ่มต้นของช่องติ๊ก · `false` = ถูกระงับอยู่ตอนนี้ |
+  | `is_self` | **ล็อกช่องติ๊กแถวนี้ไว้ ห้ามให้เอาออก** (เซิร์ฟเวอร์กันอีกชั้น) |
+
+  > `users[]` **เรียงมาให้แล้ว** — แอดมินขึ้นก่อน แล้วตามด้วยคนที่เคยล็อกอิน
+  > คนที่ยังไม่เคยล็อกอินเลยอยู่ท้ายสุด · แสดงตามลำดับที่ส่งมาได้เลย ไม่ต้อง sort ใหม่
+
+  ---
+
+  ## 2. Response (200 OK) — พนักงานทั่วไป `can_manage: false`
+
+  level 2–4 จะ **ไม่ได้ `users[]`** ติดมาโดยตั้งใจ เพราะไม่มีอะไรให้ทำกับรายชื่อเพื่อนร่วมงาน
+
+  ```json
+  {
+    "success": true,
+    "seats": { "limit": 5, "used": 5, "over_by": 0, "is_over_limit": false },
+    "can_manage": false,
+    "current_user_id": 2,
+    "message": null
+  }
+  ```
+
+  `message` จะมีข้อความเมื่อบริษัทเกินโควตาอยู่ · เป็น `null` เมื่อปกติ
+
+  ---
+
+  ## 3. หน้าจอที่ควรทำ
+
+  ### หน้าจัดการโควตา (`can_manage: true`)
+  - รายการติ๊กเลือกจาก `users[]` โดยใช้ `is_active_seat` เป็นค่าเริ่มต้น
+  - แถวที่ `is_self = true` ล็อกไว้ ติ๊กออกไม่ได้
+  - ตัวนับสด "เลือกแล้ว X / `seats.limit`" และล็อกปุ่มบันทึกเมื่อเกิน
+  - บอกให้ชัดว่า **ระงับ ≠ ลบ** ไม่งั้นแอดมินจะไม่กล้ากดบันทึก
+  - ทางเลือกซื้อที่นั่งเพิ่ม (ชี้ไปหน้าแพ็กเกจ)
+
+  ### หน้ารอผู้ดูแลระบบ (`can_manage: false`)
+  - แสดง `message` + ตัวเลข `used` / `limit` / `over_by`
+  - ปุ่ม "ลองอีกครั้ง" ที่ยิง request เดิมซ้ำ + ปุ่มออกจากระบบ
+
+  ---
+
+  📄 เอกสารเต็ม: [`docs/api-seat-quota.md`](../docs/api-seat-quota.md)

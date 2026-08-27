@@ -18,13 +18,14 @@ docs:
   content: |
     # API Reference — `/api/v1` ทั้งหมด
 
-    สารบัญเส้น API ของแอปมือถือทุกเส้นใน [`routes/api/api_v1.php`](../routes/api/api_v1.php) — **86 เส้น** จาก 14 controller
+    สารบัญเส้น API ของแอปมือถือทุกเส้นใน [`routes/api/api_v1.php`](../routes/api/api_v1.php) — **92 เส้น** จาก 16 controller
 
     | เอกสารเจาะลึกรายหัวข้อ | |
     |---|---|
     | [api-login.md](api-login.md) | เข้าสู่ระบบ + วงจรอายุ token |
     | [api-login-google.md](api-login-google.md) | Google OAuth ผ่าน BukkhonID |
     | [api-subscription-status.md](api-subscription-status.md) | สถานะแพ็กเกจ / วันใช้งาน |
+    | [api-seat-quota.md](api-seat-quota.md) | **โควตาที่นั่ง — รหัส error ใหม่ 2 ตัว + `GET/POST seats`** |
     | [api-master-data.md](api-master-data.md) | ข้อมูลตั้งต้น — `contact-type`, `master-data` |
     | [api-product-list.md](api-product-list.md) | รายการสินค้า + ราคาแยกหน่วยนับ |
     | [api-quotation-preload.md](api-quotation-preload.md) | ข้อมูลตั้งต้นฟอร์มใบเสนอราคา — อธิบายทุกฟิลด์ |
@@ -66,6 +67,23 @@ docs:
     ### รหัส error ของ token — [`ApiAuth`](../app/Http/Middleware/ApiAuth.php)
 
     `token_absent` · `token_expired` (→ เรียก `/refresh`) · `token_blacklisted` · `token_invalid` · `user_not_found` ทั้งหมดคืน **401** ส่วน `subscription_expired` คืน **403**
+
+    ### รหัส error ของโควตาที่นั่ง — [`ApiAuth`](../app/Http/Middleware/ApiAuth.php)
+
+    เกิดได้กับ **ทุกเส้น** ไม่ใช่เฉพาะตอนล็อกอิน ทั้งคู่คืน **403**
+
+    | `code` | หมายถึง | แอปต้องทำ |
+    |---|---|---|
+    | `seat_suspended` | บัญชี*นี้*ถูกระงับ (คนอื่นยังใช้ได้) | ล้าง token → หน้าล็อกอิน |
+    | `seat_quota_exceeded` | *ทั้งบริษัท*ใช้ผู้ใช้เกินแพ็กเกจ | **เก็บ token ไว้** → ดู `can_manage` แล้วพาไปหน้าจัดการ/หน้ารอ |
+
+    ⚠️ **อย่าเอา 403 สองตัวนี้ไปรวมกับ token หมดอายุ** — ถ้า interceptor สั่ง refresh หรือเตะออก
+    ผู้ใช้จะโดนเตะทุกครั้งที่บริษัทเกินโควตา ทั้งที่ token ยังดีอยู่ · แยกด้วย `code` เสมอ
+
+    `code` มีเหมือนกันทุกกรณี แต่ key ระดับบนสุดต่างกันตามชั้นที่ throw
+    (`POST login` ใช้ `success: false` ส่วนชั้น middleware ใช้ `status: "error"`) — **ตัดสินจาก `code` เท่านั้น**
+
+    📄 **ครบทุกเคส + payload จริง → [api-seat-quota.md](api-seat-quota.md)**
 
     ### ⚠️ รูปแบบ response ไม่เป็นมาตรฐานเดียวกัน
 
@@ -293,6 +311,21 @@ docs:
     |:---:|---|---|---|
     | 🔒 | `GET` | `sales-document-setting` | ปุ่มบันทึก + วิธีกรอกที่บริษัทเปิดใช้ |
     | 🔒 | `POST` | `sales-document-setting` | แก้ค่าตั้ง — **เฉพาะแอดมิน** (level 0/1) |
+
+    ### 14. Seat Quota (โควตาที่นั่ง) — 2 เส้น
+
+    | | Method | Path | ใช้ทำอะไร |
+    |:---:|---|---|---|
+    | 🔒 | `GET` | `seats` | สถานะโควตา + รายชื่อบัญชี (`can_manage` บอกว่าแก้ได้ไหม) |
+    | 🔒 | `POST` | `seats` | เลือกบัญชีที่จะใช้งานต่อ — **เฉพาะแอดมิน** (level 0/1) |
+
+    สองเส้นนี้ **ยกเว้นจากด่านเกินโควตา** จึงเรียกได้เสมอแม้บริษัทกำลังถูกกั้นอยู่
+    (เส้นที่ยกเว้นทั้งหมด: `seats` · `logout` · `consent/*` · `privacy-policy*`)
+
+    `POST login` มีฟิลด์ใหม่ `seat_quota` — ถ้า `is_over_limit = true` ให้พาไปหน้าจัดการโควตาทันที
+    ไม่ต้องรอโดน 403
+
+    📄 **[api-seat-quota.md](api-seat-quota.md)**
 
     ### 14. Policy & Legal (นโยบายความเป็นส่วนตัว) — 2 เส้น
 
