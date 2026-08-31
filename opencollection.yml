@@ -212,11 +212,12 @@ docs:
     | 🔒 | `GET` | `calendar` | ตารางนัดหมายเดือนปัจจุบันของตัวเอง |
     | 🔒 | `GET` | `calendar/all/customer` | นัดหมายทั้งบริษัท (ทุกเซลส์) |
 
-    ### 5. Customer — 8 เส้น
+    ### 5. Customer — 9 เส้น
 
     | | Method | Path | ใช้ทำอะไร |
     |:---:|---|---|---|
     | 🔒 | `GET` | `master-data` | ข้อมูลตั้งต้นทั้งหมด + โลโก้/แบนเนอร์ |
+    | 🔒 | `GET` | `credit-terms` | เงื่อนไขเครดิตที่เลือกได้ (dropdown ช่องเครดิต) |
     | 🔒 | `GET` | `getCustomer-detail` | รายชื่อลูกค้าของตัวเอง |
     | 🔒 | `POST` | `create-customer` | เพิ่มลูกค้า |
     | 🔒 | `GET` | `customer/edit/{id}` | ข้อมูลลูกค้าสำหรับฟอร์มแก้ไข |
@@ -549,6 +550,18 @@ docs:
 
     ### `GET api/customer/purchased-product/{id}`
     สินค้าที่ลูกค้ารายนี้เคยซื้อ นับเฉพาะ order ที่ `status = completed` **และ** `payment_status = paid` — รวม qty ต่อสินค้า เรียงมากไปน้อย → `{success, data: [{product_name, product_code, total_qty, uom_name}]}`
+
+    ### `GET credit-terms`
+    เงื่อนไขเครดิตที่เลือกได้ → `{success, credit_terms: [{days, label, description, is_cash}]}`
+
+    ส่ง `?customer_id=` **ทุกครั้งตอนเปิดหน้าแก้ไขลูกค้า** เพื่อให้ค่าเดิมของลูกค้ารายนั้นติดมาในรายการเสมอ
+    แม้ตัวเลือกจะถูกปิด/ลบไปแล้ว — ไม่งั้น dropdown ไม่มีค่าเดิม พอบันทึกเครดิตจะกลายเป็น `0` เงียบ ๆ
+
+    `days` คือค่าที่ต้องส่งกลับในฟิลด์ `credit` ตอน create/update ลูกค้า และตรงกับที่สองเส้นนั้นตรวจด้วย
+    `Rule::in(CreditTermModel::selectableDays())` ชุดเดียวกัน
+
+    > **ห้ามฝังตัวเลือกไว้ในแอป** — แต่ละบริษัทแก้รายการนี้เองได้จากหน้าตั้งค่า
+    > ปัจจุบันมีบริษัทหนึ่งที่มี `45` วันเพิ่มจากชุดมาตรฐาน `0/30/60/90`
 
     ### `GET contact-type`
     → `{contact_types: [...]}`

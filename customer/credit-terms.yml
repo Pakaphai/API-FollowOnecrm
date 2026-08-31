@@ -1,0 +1,69 @@
+info:
+  name: credit-terms
+  type: http
+  seq: 13
+
+http:
+  method: GET
+  url: "{{sale_uat}}/api/v1/credit-terms"
+  auth:
+    type: bearer
+    token: "{{token}}"
+  params:
+    - name: customer_id
+      value: "8"
+      type: query
+      enabled: false
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+
+docs: |-
+  ## 13. `GET /api/v1/credit-terms`
+
+  เงื่อนไขเครดิตที่เลือกได้ — ใช้เติม dropdown ช่อง **เครดิต** ในหน้าเพิ่ม/แก้ไขลูกค้า
+
+  ```json
+  { "success": true, "credit_terms": [
+    { "days": 0,  "label": "ไม่มีเครดิต", "description": "เงินสด / เงินโอน (ไม่มีเครดิต)", "is_cash": true },
+    { "days": 30, "label": "30 วัน", "description": null, "is_cash": false },
+    { "days": 45, "label": "45 วัน", "description": null, "is_cash": false },
+    { "days": 60, "label": "60 วัน", "description": null, "is_cash": false },
+    { "days": 90, "label": "90 วัน", "description": null, "is_cash": false } ] }
+  ```
+
+  **ห้ามฝังตัวเลือกไว้ในแอป** — แอดมินแต่ละบริษัทแก้รายการนี้เองได้จากหน้าตั้งค่า
+  จากข้อมูลจริงตอนนี้มีบริษัทหนึ่งที่มี `45` วันเพิ่มมาจากชุดมาตรฐาน `0/30/60/90`
+  ถ้าฮาร์ดโค้ดไว้ ลูกค้าที่ใช้ 45 วันจะบันทึกไม่ได้เลย
+
+  | ฟิลด์ | หมายเหตุ |
+  |---|---|
+  | `days` | **ค่าที่ต้องส่งกลับในฟิลด์ `credit`** ตอน create/update ลูกค้า |
+  | `label` | ข้อความสำหรับแสดง — `0` แปลงเป็น `"ไม่มีเครดิต"` ไม่ใช่ `"0 วัน"` |
+  | `description` | คำอธิบายที่แอดมินกรอกไว้ อาจเป็น `null` |
+  | `is_cash` | `true` เมื่อ `days = 0` เผื่อแยกสไตล์หรือตั้งเป็นค่าเริ่มต้น |
+
+  ### query parameter
+
+  | ชื่อ | บังคับ | ใช้เมื่อไหร่ |
+  |---|:---:|---|
+  | `customer_id` | — | **ส่งเสมอตอนเปิดหน้าแก้ไขลูกค้า** |
+
+  > ⚠️ **ตอนแก้ไขลูกค้าต้องส่ง `customer_id` มาด้วยทุกครั้ง**
+  >
+  > ถ้าลูกค้ารายนั้นตั้งเครดิตไว้ที่ค่าที่แอดมิน**ปิดหรือลบไปแล้ว** รายการที่ได้จะไม่มีค่าเดิม
+  > พอผู้ใช้กดบันทึก เครดิตของลูกค้าจะกลายเป็น `0` เงียบ ๆ โดยไม่มีใครตั้งใจ
+  >
+  > ส่งพารามิเตอร์นี้มา ระบบจะใส่ค่าเดิมกลับเข้าไปในรายการให้
+
+  ค่าที่ endpoint นี้คืนมา **ตรงกับที่ `create-customer` และ `update-customer` ยอมรับเป๊ะ**
+  (ทั้งคู่ตรวจด้วย `Rule::in(CreditTermModel::selectableDays())` ชุดเดียวกัน)
+  จึงไม่มีทางเจอ 422 จากค่าที่ dropdown เสนอให้เอง
+
+  > `customers.credit` เก็บเป็น **จำนวนวัน** ไม่ใช่ id ของตาราง `credit_terms`
+  > ลบตัวเลือกทิ้งแล้วลูกค้าที่เคยตั้งไว้จึงยังคงค่าเดิมอยู่
+
+  ---
