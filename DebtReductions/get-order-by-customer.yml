@@ -15,3 +15,27 @@ settings:
   timeout: 0
   followRedirects: true
   maxRedirects: 5
+
+docs: |-
+  ## 2. `GET /api/v1/debt-reduction/orders/{customer_id}`
+
+  ใบสั่งขายของลูกค้ารายนั้นที่ยังออกใบลดหนี้ได้ — ใช้เติม dropdown "อ้างอิง Order"
+
+  คืน **array ดิบ** (ไม่มี wrapper `success`)
+
+  ```json
+  [ { "id": 12, "order_number": "PO-260827-0001", "order_date": "2026-08-27" } ]
+  ```
+
+  เอาเฉพาะใบที่ `status = completed` **และ** `payment_status = paid`
+  และ**ยังไม่มีใบลดหนี้ที่ยังมีผล** (`pending` · `approved` · `commissioned`) ผูกอยู่
+  — ใบที่เคยออกแล้วถูกยกเลิกไป ยังออกใหม่ได้
+
+  > ⚠️ **ตอบ 403 ได้แล้ว** ถ้า `customer_id` ไม่ใช่ลูกค้าของผู้ใช้ที่ล็อกอิน
+  > เดิมเส้นนี้ไม่ตรวจเจ้าของเลย ไล่เลข id ดูใบสั่งขายของเซลส์คนอื่นได้
+  >
+  > ```json
+  > { "success": false, "status": false, "message": "คุณไม่มีสิทธิ์เข้าถึงข้อมูลลูกค้ารายนี้" }
+  > ```
+
+  ---

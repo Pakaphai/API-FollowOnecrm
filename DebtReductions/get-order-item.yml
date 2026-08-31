@@ -15,3 +15,36 @@ settings:
   timeout: 0
   followRedirects: true
   maxRedirects: 5
+
+docs: |-
+  ## 3. `GET /api/v1/debt-reduction/order-items/{order_id}`
+
+  รายการสินค้าในใบสั่งขาย พร้อมจำนวนและราคาที่ใช้เป็น**เพดาน**ของใบลดหนี้
+
+  ```json
+  { "items": [
+      { "order_item_id": 45, "product_name": "รองเท้าวิ่ง Nik Air Zoom 50",
+        "qty": 10, "unit_price_baht": 10000, "total_line_baht": 100000 } ],
+    "quotation_image_url": "https://...",
+    "total_after_discount_baht": 100000 }
+  ```
+
+  | ฟิลด์ | หมายเหตุ |
+  |---|---|
+  | `order_item_id` | ส่งกลับใน `items[].order_item_id` ตอนสร้างใบลดหนี้ |
+  | `qty` | **จำนวนสูงสุดที่ลดหนี้ได้ของบรรทัดนั้น** |
+  | `unit_price_baht` | ราคาปกติตามหน่วยนับ — เซิร์ฟเวอร์ใช้ค่านี้คิดเพดาน |
+  | `total_after_discount_baht` | ผลรวม (ราคาปกติ × จำนวน) **ไม่คิดส่วนลด/VAT** |
+
+  > ค่าจากเส้นนี้คือค่าเดียวกับที่ `debt-reduction/store` ใช้ตรวจเพดาน
+  > ถ้าแอปส่ง `quantity` ไม่เกิน `qty` และยอดรวมไม่เกิน `total_after_discount_baht`
+  > จะไม่มีทางเจอ 422 เรื่องเพดาน
+
+  > ⚠️ **ตอบ 403 ได้แล้ว** ถ้า `order_id` ไม่ใช่ใบสั่งขายของผู้ใช้ที่ล็อกอิน
+  > เดิมเส้นนี้ไม่ตรวจเจ้าของเลย
+  >
+  > ```json
+  > { "success": false, "status": false, "message": "คุณไม่มีสิทธิ์เข้าถึงใบสั่งขายนี้" }
+  > ```
+
+  ---
