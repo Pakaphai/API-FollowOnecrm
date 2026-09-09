@@ -18,7 +18,7 @@ docs:
   content: |
     # API Reference — `/api/v1` ทั้งหมด
 
-    สารบัญเส้น API ของแอปมือถือทุกเส้นใน [`routes/api/api_v1.php`](../routes/api/api_v1.php) — **92 เส้น** จาก 16 controller
+    สารบัญเส้น API ของแอปมือถือทุกเส้นใน [`routes/api/api_v1.php`](../routes/api/api_v1.php) — **94 เส้น** จาก 17 controller
 
     | เอกสารเจาะลึกรายหัวข้อ | |
     |---|---|
@@ -34,6 +34,7 @@ docs:
     | [api-order-edit.md](api-order-edit.md) | ใบสั่งขาย — ฟอร์มแก้ไข + อัตรา USD ที่ยืมจากใบเสนอราคา |
     | [api-sales-document-setting.md](api-sales-document-setting.md) | ตั้งค่าเอกสารขาย — ปุ่มบันทึก + วิธีกรอกใบเสนอราคา |
     | [api-dashboard.md](api-dashboard.md) | แดชบอร์ด, สรุปยอดขาย, อันดับ, ปฏิทิน |
+    | [api-my-commission.md](api-my-commission.md) | **ค่าคอมของฉัน — การ์ดสรุป + ใบค่าคอม + รออกค่าคอม** |
     | [api-user-profile.md](api-user-profile.md) | โปรไฟล์, แก้ไขผู้ใช้, รหัสผ่าน, FCM token |
     | [api-customer.md](api-customer.md) | ลูกค้า — สร้าง/แก้ไข/ลบ/รายชื่อ |
     | [api-late-appointment.md](api-late-appointment.md) | คำขออนุมัตินัดหมายล่าช้า |
@@ -93,7 +94,7 @@ docs:
     |---|---|
     | `{status: "success", data: {...}}` | notifications, subscription, relationship-detail/{id} |
     | `{status: true, message, data: {...}}` | dashboard ทั้งหมด, sale-summary-user |
-    | `{success: true, message, data}` | customer, quotation, debt-reduction |
+    | `{success: true, message, data}` | customer, quotation, debt-reduction, my/commission |
     | key เฉพาะกิจ (ไม่มี wrapper) | `master-data`, `quotation/preload`, `contact-type`, `billing/list` |
     | array/object ดิบ | `debt-reduction/orders/{id}`, `api/order/details/{id}` |
 
@@ -334,6 +335,18 @@ docs:
     |:---:|---|---|---|
     | | `GET` | `privacy-policy` | ดึงนโยบายความเป็นส่วนตัวฉบับปัจจุบัน (`is_active = true`) |
     | | `GET` | `privacy-policy/v/{version}` | ดึงนโยบายความเป็นส่วนตัวตามเลขเวอร์ชันที่ระบุ |
+
+    ### 15. Commission (ค่าคอมของฉัน) — 2 เส้น
+
+    | | Method | Path | ใช้ทำอะไร |
+    |:---:|---|---|---|
+    | 🔒 | `GET` | `my/commission` | การ์ดสรุป + ใบค่าคอมทั้งปี (`?year=` เป็น **ค.ศ.**) |
+    | 🔒 | `GET` | `my/commission/{id}` | ใบค่าคอมใบเดียว — ใบของคนอื่นได้ **404** |
+
+    ข้อมูลชุดเดียวกับหน้าเว็บ `/my/commission` · ผูกกับผู้ที่ล็อกอินเสมอ ไม่รับ `user_id` · `level` ต้องเป็น 0/1/2
+    ตัวเลขเงินใน response **หารด้วย 100 มาให้แล้ว** (บาท) และ `commission_rate` เป็นเปอร์เซ็นต์จริง — ห้ามหารซ้ำ
+
+    📄 **[api-my-commission.md](api-my-commission.md)**
 
     ---
 

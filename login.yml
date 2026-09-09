@@ -5,13 +5,13 @@ info:
 
 http:
   method: POST
-  url: https://goldcolorcupslt.uat-followonecrm.com/api/v1/login
+  url: https://primavel.uat-followonecrm.com/api/v1/login
   body:
     type: json
     data: |-
       {
         "username": "saleofficer0002",
-        "password": "123456789"
+        "password": "saleofficer0002"
       }
   auth: inherit
 

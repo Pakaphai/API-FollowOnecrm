@@ -30,13 +30,13 @@ http:
       - name: time_end
         type: text
         value: 10:45
-      - name: contact_detail
-        type: text
-        value: เข้าพบเรียบร้อย
       - name: early_close_reason
         type: text
         value: ลูกค้าโทรมาแจ้งผลก่อนถึงวันนัด
         disabled: true
+      - name: contact_detail
+        type: text
+        value: เข้าพบเรียบร้อย
       - name: latitude
         type: text
         value: "13.7563"

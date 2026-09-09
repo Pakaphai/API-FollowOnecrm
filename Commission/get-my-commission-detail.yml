@@ -1,0 +1,100 @@
+info:
+  name: get-my-commission-detail
+  type: http
+  seq: 2
+
+http:
+  method: GET
+  url: "{{sale_uat}}/api/v1/my/commission/2"
+  auth:
+    type: bearer
+    token: "{{token}}"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+
+docs: |
+  # API — ใบค่าคอมใบเดียว (My Commission Detail)
+
+  ใบค่าคอมของตัวเอง 1 ใบ ไว้เปิดจากลิงก์หรือการแจ้งเตือนโดยไม่ต้องโหลดทั้งปีก่อน
+
+  ```
+  GET /api/v1/my/commission/{id}
+  Authorization: Bearer <token>
+  Accept: application/json
+  ```
+
+  เรียกได้เฉพาะ `level` 0 / 1 / 2 (แอดมิน + พนักงานขาย) ระดับอื่นได้ **403** `forbidden`
+
+  > `{id}` ต้องเป็น **ตัวเลข** (`commission.id`) **ไม่ใช่** `commission_number`
+  > ส่ง `CM-202608-0002` มาจะไม่เข้าเส้นนี้ (route จำกัดไว้เฉพาะตัวเลข)
+
+  ---
+
+  ## 1. Response (200 OK)
+
+  `data` คือก้อนเดียวกับ `bills[]` ของเส้น [`get-my-commission`](get-my-commission.yml) ทุกฟิลด์
+  **เขียน parser ตัวเดียวใช้ได้ทั้งสองเส้น**
+
+  ```json
+  {
+    "success": true,
+    "message": "Success",
+    "data": {
+      "id": 2,
+      "commission_number": "CM-202608-0002",
+      "issued_at": "2026-08-20T14:31:07+07:00",
+      "issued_date": "2026-08-20",
+      "issued_date_display": "20/08/2569",
+      "commission_rate": 10,
+      "commission_rate_display": "10%",
+      "total_value": 180450.00,
+      "total_discount": 0.00,
+      "total_commission": 18045.00,
+      "withholding_tax": 541.35,
+      "net": 17503.65,
+      "order_refer": null,
+      "order_count": 2,
+      "orders": [
+        {
+          "order_id": 7,
+          "order_number": "SO-202608-0007",
+          "order_date": "2026-08-12",
+          "customer_name": "บริษัท ตัวอย่าง จำกัด",
+          "total_value": 150000.00,
+          "total_commission": 15000.00,
+          "withholding_tax": 450.00
+        }
+      ]
+    }
+  }
+  ```
+
+  คำอธิบายฟิลด์ทั้งหมดอยู่ในเส้น [`get-my-commission`](get-my-commission.yml) หัวข้อ 5 และ 7
+
+  ---
+
+  ## 2. Error
+
+  | HTTP | `code` | เมื่อไหร่ |
+  |---|---|---|
+  | **401** | - | ไม่มี token / token ใช้ไม่ได้ |
+  | **403** | `forbidden` | `level` ไม่ใช่ 0/1/2 |
+  | **404** | - | ไม่พบใบนี้ **หรือเป็นใบของคนอื่น** |
+
+  ```json
+  {
+    "success": false,
+    "message": "ไม่พบใบค่าคอมนี้"
+  }
+  ```
+
+  > ใบของคนอื่นคืน **404 ไม่ใช่ 403** โดยตั้งใจ — ไม่บอกผู้เรียกว่าเลขใบนั้นมีอยู่จริงหรือไม่
+  > คิวรีกรอง `user_id` ในตัว SQL เลย ไม่ได้ดึงมาแล้วเทียบเจ้าของทีหลัง
+
+  ---
+
+  📄 เอกสารเต็ม: [`docs/api-my-commission.md`](../docs/api-my-commission.md)

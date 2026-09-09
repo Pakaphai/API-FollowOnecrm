@@ -10,13 +10,14 @@ http:
     type: json
     data: |-
       {
-          "customer_id": 1,
-          "order_id": 12,
-          "total_amount": 1500.50,
+          "customer_id": 4 ,
+          "order_id": 4,
+          "total_amount": 2997.00,
           "note": "สินค้าชำรุด",
           "items": [
-            { "selected": "1", "order_item_id": 45, "quantity": 2, "unit_price": 500 },
-            { "selected": "0", "order_item_id": 46, "quantity": 1, "unit_price": 300 }
+            { "selected": "1", "order_item_id": 7, "quantity": 6, "unit_price": 1500 },
+            { "selected": "0", "order_item_id": 8, "quantity": 6, "unit_price": 666 }
+          
           ]
         }
   auth:
