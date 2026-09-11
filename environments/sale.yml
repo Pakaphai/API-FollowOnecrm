@@ -1,7 +1,7 @@
 name: sale
 variables:
   - name: sale_uat
-    value: https://nicharpn.uat-followonecrm.com
+    value: https://primavel.uat-followonecrm.com
   - name: sale_uat_loc
     value: http://sunnypop.localhost:8000
   - secret: true

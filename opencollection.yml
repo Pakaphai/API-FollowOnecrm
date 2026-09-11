@@ -763,9 +763,9 @@ docs:
     | `sort` | `price_asc` · `price_desc` · `created_asc` · `created_desc` (ดีฟอลต์) |
     | `low_stock` | `1` · `0` · `true` · `false` — เหลือเฉพาะสินค้าที่ **พร้อมขายต่ำกว่าจุดแจ้งเตือน** (เกณฑ์เดียวกับปุ่มบนหัวตารางฝั่งเว็บ) |
 
-    คืน paginator มาตรฐาน แต่ละสินค้ามี `brand_name`, `model_name`, `product_price` (บาท), ตัวเลขสต๊อกสามช่อง `stock_qty` (ของจริงบนชั้น ติดลบได้) · `reserved_qty` (ของที่ใบอื่นจองไว้) · `available_qty` (**ยอดที่ยังขายได้** = ของจริง − จอง) พร้อม `low_stock_threshold` / `is_low_stock`, รูป (presigned 10 นาที เรียงรูปหลักก่อน) และรายการหน่วยนับพร้อมราคา/บาร์โค้ด/`usd_price` (หน่วยหลัก `is_current` มาก่อน)
+    คืน paginator มาตรฐาน แต่ละสินค้ามี `brand_name`, `model_name`, `product_price` (บาท), ตัวเลขสต๊อกสามช่อง `min_stock_level` (ของจริงบนชั้น) · `reserved_qty` (ของที่ใบอื่นจองไว้) · `stock_qty` = `available_qty` (**คงเหลือพร้อมขาย** = ของจริง − จอง ติดลบได้) พร้อม `low_stock_threshold` / `is_low_stock`, รูป (presigned 10 นาที เรียงรูปหลักก่อน) และรายการหน่วยนับพร้อมราคา/บาร์โค้ด/`usd_price` (หน่วยหลัก `is_current` มาก่อน)
 
-    > 📦 ช่องที่เอาไปโชว์เป็น "คงเหลือ" และใช้เตือนผู้ใช้คือ **`available_qty`** ไม่ใช่ `stock_qty` — ของที่ใบอื่นจองไว้ขายซ้ำไม่ได้ (ดู `StockReservationService`)
+    > 🔻 **`stock_qty` เปลี่ยนความหมาย** — เดิมเป็นของบนชั้นดิบ ๆ ตอนนี้เป็นยอดที่ขายได้ (หักยอดจองแล้ว) ตรงกับคอลัมน์ "คงเหลือ (พร้อมขาย)" ของตารางสินค้าฝั่งเว็บ · ของบนชั้นอ่านจาก `min_stock_level`
 
     > ระดับ `data` มี `usd_pricing` + `usd_rate` (ก้อนเดียวกับ `quotation/preload`) — `usd_pricing: false` เมื่อไรให้ซ่อนราคา USD ทิ้ง
 
