@@ -24,8 +24,22 @@ docs: |-
   คืน **array ดิบ** (ไม่มี wrapper `success`)
 
   ```json
-  [ { "id": 12, "order_number": "PO-260827-0001", "order_date": "2026-08-27" } ]
+  [ {
+    "id": 12,
+    "order_number": "PO-260827-0001",
+    "quotation_number": "QT-2026-0011",
+    "reference_number": "QT-2026-0011",
+    "order_date": "2026-08-27",
+    "quotation": { "id": 7, "quotation_number": "QT-2026-0011" }
+  } ]
   ```
+
+  **เอาตัวไหนไปแสดง เอาตัวไหนไปส่งกลับ**
+
+  | | |
+  |---|---|
+  | แสดงใน dropdown | `reference_number` (เลข QT ก่อน ไม่มีจึงใช้เลข PO) — เอกสารอ้างอิงที่ระบบยึดเป็นหลักคือเลขใบเสนอราคา |
+  | ส่งกลับตอนสร้างใบลดหนี้ | `id` ของ **ใบสั่งขาย** เหมือนเดิม ใบลดหนี้ผูกกับ `orders.id` ไม่ได้ผูกกับใบเสนอราคา |
 
   เอาเฉพาะใบที่ `status = completed` **และ** `payment_status = paid`
   และ**ยังไม่มีใบลดหนี้ที่ยังมีผล** (`pending` · `approved` · `commissioned`) ผูกอยู่

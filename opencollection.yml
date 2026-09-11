@@ -275,7 +275,7 @@ docs:
     | 🔒 | `POST` | `quotation/update/{id}` | แก้ไขใบเสนอราคา |
     | 🔒 | `POST` | `quotation/with-images/create` | สร้างแบบ **แนบรูปแทนรายการสินค้า** |
     | 🔒 | `POST` | `quotation/with-images/update/{id}` | แก้ไขแบบแนบรูป |
-    | 🔒 | `POST` | `quotation/{id}/status/confirmed` | อนุมัติ → ใบสั่งขายเปลี่ยนตาม |
+    | 🔒 | `POST` | `quotation/{id}/status/confirmed` | อนุมัติ → ใบสั่งขายเปลี่ยนตาม · **ฝ่ายขายเท่านั้น** แอดมินได้ 403 |
     | 🔒 | `POST` | `quotation/{id}/status/cancelled` | ยกเลิก → ใบสั่งขายยกเลิกตาม |
 
     ### 10. Order (ใบสั่งขาย) — 7 เส้น
@@ -437,7 +437,7 @@ docs:
       customerCount, newCustomerCountThisMonth, repeatCustomers, existingCustomer,
       top5ProductsByUser, top5ProductsByUserTotal, top5ProductTypeByUser, top5ProductTypeByUserTotal,
       billingAmount, billingAmountCount, paidAmount, paidAmountCount,
-      openSalesOrder, confirmedSalesOrder, approvedCount, waitingForBilling,
+      openSalesOrder, confirmedSalesOrder, approvedCount (เลิกใช้ = 0), waitingForBilling,
       shippingInProgress, accountingDocuments, completedCount, cancelledCount,
       contactList, salesRank }}
     ```
@@ -448,7 +448,7 @@ docs:
     ```
     {status: true, message, data: {
       sales_users:{total,percent}, customers:{total,percent}, products:{total,percent},
-      order_summary:{openSalesOrder, confirmedSalesOrder, approvedCount, pending_billing_Count,
+      order_summary:{openSalesOrder, confirmedSalesOrder, approvedCount (เลิกใช้ = 0), pending_billing_Count,
                      pending_dispatch_Count, shippedCount, completedCount, cancelledCount},
       relationship_type_by_user, top6_user_sales_order, total_all_sales }}
     ```
@@ -761,8 +761,11 @@ docs:
     | `brand_id` · `model_id` | integer |
     | `min_price` · `max_price` | numeric (หน่วย**สตางค์** — เทียบกับคอลัมน์ดิบ) |
     | `sort` | `price_asc` · `price_desc` · `created_asc` · `created_desc` (ดีฟอลต์) |
+    | `low_stock` | `1` · `0` · `true` · `false` — เหลือเฉพาะสินค้าที่ **พร้อมขายต่ำกว่าจุดแจ้งเตือน** (เกณฑ์เดียวกับปุ่มบนหัวตารางฝั่งเว็บ) |
 
-    คืน paginator มาตรฐาน แต่ละสินค้ามี `brand_name`, `model_name`, `product_price` (บาท), `stock_qty` (คงเหลือในสต๊อก ชิ้นเต็ม ติดลบได้), รูป (presigned 10 นาที เรียงรูปหลักก่อน) และรายการหน่วยนับพร้อมราคา/บาร์โค้ด/`usd_price` (หน่วยหลัก `is_current` มาก่อน)
+    คืน paginator มาตรฐาน แต่ละสินค้ามี `brand_name`, `model_name`, `product_price` (บาท), ตัวเลขสต๊อกสามช่อง `stock_qty` (ของจริงบนชั้น ติดลบได้) · `reserved_qty` (ของที่ใบอื่นจองไว้) · `available_qty` (**ยอดที่ยังขายได้** = ของจริง − จอง) พร้อม `low_stock_threshold` / `is_low_stock`, รูป (presigned 10 นาที เรียงรูปหลักก่อน) และรายการหน่วยนับพร้อมราคา/บาร์โค้ด/`usd_price` (หน่วยหลัก `is_current` มาก่อน)
+
+    > 📦 ช่องที่เอาไปโชว์เป็น "คงเหลือ" และใช้เตือนผู้ใช้คือ **`available_qty`** ไม่ใช่ `stock_qty` — ของที่ใบอื่นจองไว้ขายซ้ำไม่ได้ (ดู `StockReservationService`)
 
     > ระดับ `data` มี `usd_pricing` + `usd_rate` (ก้อนเดียวกับ `quotation/preload`) — `usd_pricing: false` เมื่อไรให้ซ่อนราคา USD ทิ้ง
 
@@ -1007,12 +1010,15 @@ docs:
     เปลี่ยนสถานะใบเสนอราคา **และใบสั่งขายที่ผูกกันไปพร้อมกัน**
 
     - `confirmed` → quotation + order = `confirmed`
-    - `cancelled` → quotation + order = `cancelled` และ **ตั้ง `is_delete` ให้ทุกบรรทัดสินค้า**
+    - `cancelled` → quotation + order = `cancelled` และ **ตั้ง `is_delete` ให้ทุกบรรทัดสินค้า** · **คืนยอดจองสต๊อก** ของใบที่เปิดบิลไปแล้ว และคืนของที่ตัดไปแล้วกลับเข้าคลัง
 
     | HTTP | เงื่อนไข |
     |:---:|---|
+    | `403` | **แอดมินกดอนุมัติ** (`confirmed`) — การอนุมัติใบเสนอราคาเป็นหน้าที่ของฝ่ายขาย → `{success:false, message}` |
     | `409` | สถานะปัจจุบันอยู่ใน `IRREVERSIBLE_STATUSES` (ปิดการขาย/ยกเลิกแล้ว) → `{success:false, final_status, message}` |
     | `200` | `{message}` |
+
+    > 🔒 **อนุมัติได้เฉพาะฝ่ายขาย** (`users.level = 2`) — แอดมิน/เจ้าของระบบ (`level 0,1`) อนุมัติแทนไม่ได้ เพราะคนที่รู้ว่าตกลงกับลูกค้าจบแล้วคือเซลส์เจ้าของใบ (ดู `DocumentEditPolicy::allowsQuotationApproval`) · กติกาเดียวกันนี้บังคับที่ `quotation/create` ด้วย — ส่ง `status=confirmed` มาแล้วไม่มีสิทธิ์ = **403** เช่นกัน
 
     ---
 
@@ -1022,6 +1028,8 @@ docs:
     → `{status:"success", orders:[...], page, size, total_elements, total_pages, has_next, has_prev}` · token ไม่ผ่าน = 401
 
     **แบ่งหน้า** (`page`, `per_page`) — นับเป็น "ใบ" ไม่ใช่ "บรรทัดสินค้า" · เรียงจากใบใหม่ไปเก่า
+
+    แต่ละใบมี `order_number` (เลข PO) · **`quotation_number`** (เลข QT ของใบเสนอราคาต้นทาง — เลขที่ฝั่งเว็บแสดงในตาราง · `null` = ใบเก่าที่ไม่มีต้นทาง) · **`invoice_number`** (เลขที่ใบกำกับภาษี กรอกตอนอนุมัติผ่านขั้น "เปิดบิล" · ค้นด้วย `q` ได้) · `status_en` (คีย์อังกฤษ) + `status` (ป้ายไทยชุดเดียวกับฝั่งเว็บ)
 
     ### `GET order/edit-api/{id}`
     → `{success, message, data:{quotation_header:{..., quotation_lines:[...]}}, products, customers, conditions, order_conditions, user, usd_pricing, usd_rate}`
@@ -1083,6 +1091,8 @@ docs:
     **แบ่งหน้า** (`page`, `per_page`) เฉพาะ `order_dispatch` — ส่วน `total_unpaid` / `total_paid` เป็นยอดรวม
     ของ **ทุกรายการ** ไม่ใช่เฉพาะหน้าที่ขอมา จึงไม่เปลี่ยนตามขนาดหน้า
 
+    แต่ละรายการมี `quotation_number` (เลขที่ใบเสนอราคาต้นทาง) และ `invoice_number` (เลขที่ใบกำกับภาษี) เพิ่มมาจากเลขใบสั่งขาย · ค้นด้วยทั้งสองเลขได้
+
     ### `GET api/order/details/{id}`
     คืน **object ดิบ** ไม่มี wrapper — แต่ละบรรทัดใน `order_lines[]` มี `options_list[]`
     (ตัวเลือกที่ลูกค้าเลือกไว้ · `id` `group` `name` `price` เป็น**สตางค์** `usd`)
@@ -1099,8 +1109,12 @@ docs:
 
     **แบ่งหน้าเฉพาะ `debtReductions`** ส่วน `customers` เป็นลิสต์ตัวเลือกตอนสร้างใบลดหนี้ จึงคืนมาครบเสมอ
 
+    แต่ละใบมี `quotation_number` (เลขใบเสนอราคาต้นทางของใบสั่งขายที่อ้างอิง) และ `reference_number` (เลขที่ควรเอาไปแสดง — ใช้เลข QT ก่อน ไม่มีจึงตกไปใช้เลข PO) พร้อมความสัมพันธ์ `order.quotation`
+
     ### `GET debt-reduction/orders/{customer_id}`
     คืน **array ดิบ** ของใบสั่งขาย · **403** ถ้าลูกค้ารายนั้นไม่ใช่ของผู้ใช้ที่ล็อกอิน
+
+    มี `quotation_number` / `reference_number` มาให้แสดงด้วย แต่ค่าที่ส่งกลับตอนสร้างใบลดหนี้ยังเป็น `id` ของ **ใบสั่งขาย** เหมือนเดิม
 
     ### `GET debt-reduction/order-items/{order_id}`
     ```json

@@ -6,3 +6,5 @@ variables:
     value: http://sunnypop.localhost:8000
   - secret: true
     name: token
+  - name: sale
+    value: https://jiwonmeaosomzaa.followonecrm.com

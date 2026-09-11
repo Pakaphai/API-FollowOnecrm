@@ -29,7 +29,7 @@ docs: |-
       "customers":   { "total": 15, "percent": 8.3 },
       "products":    { "total": 4, "percent": 2.1 },
       "order_summary": {
-        "openSalesOrder": 5, "confirmedSalesOrder": 3, "approvedCount": 2,
+        "openSalesOrder": 5, "confirmedSalesOrder": 3, "approvedCount": 0,
         "pending_billing_Count": 1, "pending_dispatch_Count": 2,
         "shippedCount": 4, "completedCount": 12, "cancelledCount": 1
       },
@@ -41,7 +41,7 @@ docs: |-
   | ฟิลด์ | ความหมาย |
   |---|---|
   | `sales_users` / `customers` / `products` | `total` = จำนวนที่**เพิ่มขึ้นเดือนนี้** · `percent` = เทียบกับเดือนที่แล้ว |
-  | `order_summary` | จำนวนใบสั่งขายแยกตามสถานะ — **key ไม่ตรงกับของ `user/dashboard`** (`pending_billing_Count` vs `waitingForBilling`) |
+  | `order_summary` | จำนวนใบสั่งขายแยกตามสถานะ — **key ไม่ตรงกับของ `user/dashboard`** (`pending_billing_Count` vs `waitingForBilling`) · `approvedCount` คืน `0` เสมอ (ขั้นที่เลิกใช้แล้ว) |
   | `top6_user_sales_order` | 6 อันดับเซลส์ยอดสูงสุด พร้อม `percentage` และ `profile_img_url` |
   | `total_all_sales` | ยอดขายรวมทั้งบริษัท (string มีคอมมา) |
 

@@ -89,11 +89,13 @@ docs: |
           "withholding_tax": 541.35,
           "net": 17503.65,
           "order_refer": null,
+          "quotation_refer": "QT-2026-0011, QT-2026-0013",
           "order_count": 2,
           "orders": [
             {
               "order_id": 7,
               "order_number": "SO-202608-0007",
+              "quotation_number": "QT-2026-0011",
               "order_date": "2026-08-12",
               "customer_name": "บริษัท ตัวอย่าง จำกัด",
               "total_value": 150000.00,
@@ -165,7 +167,8 @@ docs: |
   | `total_commission` | ค่าคอมก่อนหักภาษี |
   | `withholding_tax` | หัก ณ ที่จ่าย |
   | `net` | `total_commission - withholding_tax` |
-  | `order_refer` | เอกสารอ้างอิงที่แอดมินกรอกไว้ · **ไม่มี = `null`** |
+  | `order_refer` | เอกสารอ้างอิงที่แอดมินกรอกไว้ตอนออกใบ (เก็บเลขใบสั่งขาย) · **ไม่มี = `null`** · คงไว้ให้แอปรุ่นเดิมไม่พัง |
+  | `quotation_refer` | **เอกสารอ้างอิงที่ต้องโชว์** — เลขใบเสนอราคาต้นทางของทุกใบในใบค่าคอมนี้ คั่นด้วยจุลภาค · ไม่มีเลย = `null` |
   | `order_count` | จำนวนใบสั่งขายในใบนี้ = `orders.length` |
   | `orders[]` | ใบสั่งขายที่ถูกรวมอยู่ในใบค่าคอมนี้ — **รวมยอดต่อ 1 ใบแล้ว** |
 
@@ -175,6 +178,7 @@ docs: |
   |---|---|
   | `order_id` | `orders.id` — ยิงต่อที่ `api/order/details/{id}` ได้ |
   | `order_number` | เลขที่ใบสั่งขาย |
+  | `quotation_number` | **เลขที่ใบเสนอราคาต้นทาง** — เลขที่ควรเอาไปแสดง · `null` = ใบเก่าที่ไม่มีต้นทาง ให้ตกไปใช้ `order_number` |
   | `order_date` | `YYYY-MM-DD` |
   | `customer_name` | **มีคำนำหน้านิติบุคคลประกอบมาแล้ว** (`บริษัท … จำกัด`) · ไม่มีชื่อ = `"—"` · อย่าประกอบซ้ำในแอป |
   | `total_value` · `total_commission` · `withholding_tax` | ยอดของใบสั่งขายใบนั้น (บาท) |

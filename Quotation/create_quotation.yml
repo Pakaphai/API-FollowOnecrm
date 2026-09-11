@@ -111,7 +111,7 @@ docs: |
   | `price_mode` | | string | `price` · `vat` · `novat` — ดูข้อ 4 |
   | `header_discount` | | numeric ≥0 | ส่วนลดท้ายบิล **หน่วยบาท** |
   | `note` | | string | หมายเหตุท้ายเอกสาร |
-  | `status` | | string | `open` (ค่าเริ่มต้น) หรือ `confirmed` — ค่าอื่นได้ `422` |
+  | `status` | | string | `open` (ค่าเริ่มต้น) หรือ `confirmed` — ค่าอื่นได้ `422` · ส่ง `confirmed` ได้เฉพาะ**ฝ่ายขาย** แอดมินได้ `403` (ดูข้อ 10) |
   | `conditions` | | array | array ของ `conditions.id` |
   | `relationship_id` | | integer | ผูกกับแผนการติดต่อ → ตั้ง `is_quotation_created = 1` ให้แผนนั้น |
   | `quotation_image` | | file | jpeg,png,jpg,gif,webp ≤5MB → เก็บบน S3 แบบ private |
@@ -456,6 +456,7 @@ docs: |
   |:---:|---|---|
   | `401` | token หาย/หมดอายุ | `{status, message, code}` |
   | `403` | แพ็กเกจหมดอายุเกิน 3 วัน | `{code: "subscription_expired"}` |
+  | `403` | **แอดมินส่ง `status=confirmed`** — สร้างใบมาเป็นยืนยันแล้วเท่ากับอนุมัติใบเสนอราคาไปในตัว ซึ่งเป็นงานของฝ่ายขาย | `{success: false, message: "การอนุมัติใบเสนอราคาเป็นหน้าที่ของฝ่ายขาย ผู้ดูแลระบบไม่สามารถอนุมัติแทนได้"}` |
   | `422` | validation ไม่ผ่าน | `{message: "Validation failed.", errors: {...}}` |
   | `422` | ราคาต่อหน่วยต่ำกว่าขั้นต่ำ | `{message: "Validation failed.", errors: {"quotation_lines.0.unit_price": [...]}}` |
   | `422` | ส่ง `usd_price` แต่ใช้ไม่ได้ | `{success: false, code: "usd_pricing_disabled" \| "usd_rate_unavailable"}` |
@@ -505,6 +506,7 @@ docs: |
   |---|---|
   | ไม่ส่ง `product_id` / `qty` / `uom_code` ในบรรทัด → **`500`** โดยไม่บอกว่าผิดตรงไหน | **`422`** ระบุบรรทัดและช่องที่ขาด |
   | `status` ค่าที่ไม่รู้จักถูกเปลี่ยนเป็น `open` เงียบ ๆ | **`422`** `"สถานะต้องเป็น open หรือ confirmed"` |
+  | แอดมินสร้างใบมาเป็น `confirmed` ได้ = อนุมัติใบของตัวเองข้ามกติกา | **`403`** ต้องให้ฝ่ายขายเป็นคนยืนยัน (กติกาเดียวกับเส้น `quotation/{id}/status/confirmed`) |
   | `uom_code` ใน response มีช่องว่างต่อท้าย (`"EA "`) | ตัดให้แล้ว (`"EA"`) ทุกเส้นของใบเสนอราคา |
 
   > ⚠️ สองข้อแรกทำให้คำขอที่**เคยผ่าน** (แบบผิด ๆ) กลายเป็น `422` — ถ้าแอปเคยส่ง `status` แปลก ๆ

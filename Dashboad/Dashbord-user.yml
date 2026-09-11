@@ -37,7 +37,7 @@ docs: |
       "billingAmount": "...", "billingAmountCount": 3,
       "paidAmount": "...",    "paidAmountCount": 12,
 
-      "openSalesOrder": 5, "confirmedSalesOrder": 3, "approvedCount": 2,
+      "openSalesOrder": 5, "confirmedSalesOrder": 3, "approvedCount": 0,
       "waitingForBilling": 1, "shippingInProgress": 4,
       "accountingDocuments": 0, "completedCount": 12, "cancelledCount": 1,
 
@@ -51,6 +51,8 @@ docs: |
   | สินค้าขายดี | `top5Products*` · `top5ProductType*` | 5 อันดับ + ยอดรวม |
   | การเงิน | `billingAmount(Count)` · `paidAmount(Count)` | ยอดรอเก็บ / เก็บแล้ว |
   | สถานะเอกสาร | `openSalesOrder` … `cancelledCount` | จำนวนใบสั่งขายในแต่ละสถานะ (8 ตัว) |
+
+  > ⛔ **`approvedCount` เลิกใช้แล้ว — คืน `0` เสมอ** ขั้น "ตรวจสอบสินค้า" (`approved`) ถูกตัดออกจากกระบวนการขาย เอกสารเดินจาก "ยืนยันใบเสนอราคา" ไป "เปิดบิล" ตรง ๆ และใบที่ค้างอยู่ถูกย้ายไปขั้นเปิดบิลหมดแล้ว คีย์นี้คงไว้ให้แอปรุ่นเดิมไม่พังเท่านั้น **แอปรุ่นใหม่ให้เอาการ์ดใบนี้ออก** (หน้าเว็บเอาออกไปแล้ว)
   | แถมมาให้ | `contactList` · `salesRank` | ข้อมูลชุดเดียวกับ `contact-rank` / `sales-rank` |
 
   > `contactList` และ `salesRank` **ซ้ำกับเส้น `contact-rank` / `sales-rank`** — ถ้าเรียกเส้นนี้แล้วไม่ต้องเรียกอีกสองเส้นซ้ำ

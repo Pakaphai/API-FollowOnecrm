@@ -16,6 +16,10 @@ http:
     - name: q
       value: VF-4
       type: query
+    - name: low_stock
+      value: "1"
+      type: query
+      disabled: true
   auth:
     type: bearer
     token: "{{token}}"
@@ -59,6 +63,7 @@ docs: |
   | `min_price` | numeric | — | ⚠️ หน่วยเป็น **สตางค์** ไม่ใช่บาท |
   | `max_price` | numeric | — | ⚠️ หน่วยเป็น **สตางค์** ไม่ใช่บาท |
   | `sort` | enum | `created_desc` | `price_asc` · `price_desc` · `created_asc` · `created_desc` |
+  | `low_stock` | `1` · `0` · `true` · `false` | — | เหลือเฉพาะสินค้าที่ **พร้อมขายต่ำกว่าจุดแจ้งเตือน** ของสินค้าตัวนั้น (เกณฑ์เดียวกับปุ่ม "สินค้าเหลือน้อย" บนหัวตารางฝั่งเว็บ) · ค่าอื่นได้ **422** |
 
   ```bash
   # 20 รายการแรก
@@ -69,6 +74,9 @@ docs: |
 
   # กรองราคา 500–1,500 บาท  →  ต้องคูณ 100
   curl -s "$BASE/productlist?min_price=50000&max_price=150000" -H "$AUTH" -H "Accept: application/json"
+
+  # เฉพาะสินค้าที่เหลือน้อย (ต้องรีบสั่งเข้า)
+  curl -s "$BASE/productlist?low_stock=1" -H "$AUTH" -H "Accept: application/json"
   ```
 
   > ค่าที่ส่งมาถูก `appends()` กลับไปในลิงก์ pagination ให้อัตโนมัติ
@@ -138,6 +146,10 @@ docs: |
     "uom_code": "HRS",
     "stock_qty": 42,
     "min_stock_level": 42,
+    "reserved_qty": 12,
+    "available_qty": 30,
+    "low_stock_threshold": 100,
+    "is_low_stock": true,
     "min_price": null,
     "is_active": true,
     "is_delete": false,
@@ -189,10 +201,16 @@ docs: |
   | `uom_code` | หน่วยเริ่มต้นที่ตั้งไว้ในตาราง products — **อาจไม่ตรงกับ `uoms[]`** ให้ยึด `uoms[]` เป็นหลัก |
   | `is_active` | ⚠️ **ไม่ถูกกรอง** — สินค้าที่ปิดใช้งานก็ยังโผล่มาในรายการ |
   | `min_price` | ราคาขายขั้นต่ำ **หน่วยสตางค์** (`null` = ไม่ได้ตั้งไว้) |
-  | `stock_qty` | **จำนวนคงเหลือในสต๊อก** หน่วยเป็นชิ้นเต็ม (ไม่ได้คูณ 100) **ติดลบได้** เพราะระบบยอมให้ขายเกินของที่มี |
+  | `stock_qty` | **ของจริงบนชั้น** หน่วยเป็นชิ้นเต็ม (ไม่ได้คูณ 100) **ติดลบได้** เพราะระบบยอมให้ขายเกินของที่มี |
   | `min_stock_level` | ค่าเดียวกับ `stock_qty` เป๊ะ ๆ — ชื่อคอลัมน์จริงใน DB |
+  | `reserved_qty` | **ของที่ใบอื่นจองไว้แล้ว** — ใบที่เปิดบิลแล้วแต่ยังไม่ส่งของ (ดู [`StockReservationService`](../app/Services/Inventory/StockReservationService.php)) |
+  | `available_qty` | **ยอดที่ยังขายได้** = `stock_qty − reserved_qty` ← ตัวที่ควรเอาไปโชว์เป็น "คงเหลือ" และใช้เตือนผู้ใช้ |
+  | `low_stock_threshold` | จุดแจ้งเตือน "เหลือน้อย" ที่ใช้จริงของสินค้าตัวนี้ (ตั้งเองได้รายตัว ไม่ได้ตั้ง = ค่ามาตรฐานของระบบ 100) |
+  | `is_low_stock` | `available_qty < low_stock_threshold` — ค่าเดียวกับป้ายเตือนในตารางสินค้าฝั่งเว็บ |
 
-  > ⚠️ ชื่อ `min_stock_level` ชวนเข้าใจผิดว่าเป็น "จุดสั่งซื้อขั้นต่ำ" — **ไม่ใช่** มันคือยอดคงเหลือจริงที่ทั้งระบบใช้ตัดสต๊อก (ดู [`StockDeductionService`](../app/Services/Inventory/StockDeductionService.php)) หน้าเว็บก็อ่านช่องเดียวกันไปโชว์คงเหลือ · `stock_qty` เป็นชื่อใหม่ที่อ่านรู้เรื่องกว่า ค่าเท่ากันทุกกรณี
+  > ⚠️ ชื่อ `min_stock_level` ชวนเข้าใจผิดว่าเป็น "จุดสั่งซื้อขั้นต่ำ" — **ไม่ใช่** มันคือยอดคงเหลือจริงที่ทั้งระบบใช้ตัดสต๊อก (ดู [`StockDeductionService`](../app/Services/Inventory/StockDeductionService.php)) · `stock_qty` เป็นชื่อใหม่ที่อ่านรู้เรื่องกว่า ค่าเท่ากันทุกกรณี · จุดแจ้งเตือนที่ตั้งเองได้คือ `low_stock_threshold` คนละช่องกัน
+
+  > 📦 สินค้าหนึ่งตัวมีสามตัวเลข — **ของจริง** (`stock_qty`) · **จอง** (`reserved_qty`) · **ขายได้** (`available_qty`) ห้ามเอา `stock_qty` ไปตอบคำถาม "รับออเดอร์เพิ่มได้อีกเท่าไร" เพราะจะทับของที่ใบอื่นจองไว้
 
   > สต๊อก**ไม่บล็อกการขาย** — สั่งเกินคงเหลือก็บันทึกใบเสนอราคาได้ปกติ ค่านี้มีไว้ให้แอป**เตือนผู้ใช้**เท่านั้น
 
