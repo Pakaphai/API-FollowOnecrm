@@ -5,7 +5,7 @@ info:
 
 http:
   method: GET
-  url: "{{sale_uat}}/api/v1/debt-reduction/order-items/4"
+  url: "{{sale_uat}}/api/v1/debt-reduction/order-items/9"
   auth:
     type: bearer
     token: "{{token}}"

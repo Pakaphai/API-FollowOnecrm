@@ -5,7 +5,7 @@ info:
 
 http:
   method: POST
-  url: "{{sale_uat}}/api/v1/quotation/3/status/confirmed"
+  url: "{{sale_uat}}/api/v1/quotation/9/status/confirmed"
   auth:
     type: bearer
     token: "{{token}}"

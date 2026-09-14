@@ -5,7 +5,7 @@ info:
 
 http:
   method: POST
-  url: "{{sale_uat}}/api/v1/order/update-api/11"
+  url: "{{sale_uat}}/api/v1/order/update-api/6"
   body:
     type: multipart-form
     data:
@@ -14,10 +14,10 @@ http:
         value: "4"
       - name: quotation_id
         type: text
-        value: "11"
+        value: "6"
       - name: order_date
         type: text
-        value: 2026-08-23
+        value: 2026-09-11
       - name: price_mode
         type: text
         value: price
@@ -30,10 +30,10 @@ http:
         value: "6"
       - name: quotation_lines[0][qty]
         type: text
-        value: "1"
+        value: "6"
       - name: quotation_lines[0][uom_code]
         type: text
-        value: EA
+        value: BX
       - name: quotation_lines[0][manual_discount]
         type: text
         value: "0"
@@ -43,17 +43,21 @@ http:
       - name: quotation_lines[0][usd_price]
         type: text
         value: "92995"
+        disabled: true
       - name: quotation_lines[0][option_ids][]
         type: text
         value: "2"
+        disabled: true
       - name: quotation_lines[0][option_ids][]
         type: text
         value: "6"
+        disabled: true
       - name: quotation_image
         type: file
         value:
           - C:\Users\Softa-P\Pictures\Screenshots\imageee2.png
         contentType: image/png
+        disabled: true
   auth:
     type: bearer
     token: "{{token}}"
@@ -259,7 +263,7 @@ docs: |
   | key | คืออะไร |
   |---|---|
   | `customers` | ลูกค้าทั้งหมด (**ไม่กรองตามผู้ขาย** ต่างจาก `quotation/preload`) พร้อมชื่อจังหวัด/อำเภอ/ตำบล |
-  | `products` | สินค้าทั้งหมด — `id` · `code` · `name` · **`prices[]`** (ราคาแยกตามหน่วยนับของสินค้าตัวนั้น · `[]` = ยังไม่ได้ตั้งราคา) · ตัวเลขสต๊อกสามช่อง `min_stock_level` (ของจริงบนชั้น) · `reserved_qty` (จอง) · `stock_qty` = `available_qty` (ขายได้ = ของจริง − จอง) พร้อม `low_stock_threshold` / `is_low_stock` |
+  | `products` | สินค้าทั้งหมด — `id` · `code` · `name` · **`prices[]`** (ราคาแยกตามหน่วยนับของสินค้าตัวนั้น · `[]` = ยังไม่ได้ตั้งราคา) · ตัวเลขสต๊อกสามช่อง `stock_qty` (ของจริง) · `reserved_qty` (จอง) · `available_qty` (ขายได้) พร้อม `low_stock_threshold` / `is_low_stock` |
   | `reserved_by_this_order` | ของที่ **ใบนี้เอง** จองไว้ แยกรายสินค้า `{ "<product_id>": จำนวน }` · `{}` = ใบยังไม่ถึงขั้นเปิดบิล · เพดานจำนวนของบรรทัด = `available_qty` + ค่านี้ของสินค้าตัวนั้น |
   | `conditions` | เงื่อนไขทั้งหมดให้เลือก (`id` · `name` · `detail`) |
   | `order_conditions` | เงื่อนไขที่ใบนี้ติ๊กไว้ — ⚠️ มีแค่ `name` · `detail` **ไม่มี `id`** จึงเทียบกับ `conditions` ได้ด้วยชื่อเท่านั้น |
