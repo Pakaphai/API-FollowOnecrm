@@ -1,4 +1,4 @@
-name: sale - localhost
+name: sale - Copy
 variables:
   - name: sale_uat
     value: http://sunnypop.localhost:8000

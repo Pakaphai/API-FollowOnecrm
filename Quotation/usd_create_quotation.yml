@@ -18,6 +18,30 @@ http:
       - name: price_mode
         type: text
         value: price
+      - name: header_discount
+        type: text
+        value: "0"
+        disabled: true
+      - name: header_discount_type
+        type: text
+        value: amount
+        disabled: true
+      - name: note
+        type: text
+        value: ใบเสนอราคาตั้งราคา USD
+        disabled: true
+      - name: status
+        type: text
+        value: open
+        disabled: true
+      - name: conditions[0]
+        type: text
+        value: "1"
+        disabled: true
+      - name: relationship_id
+        type: text
+        value: "1"
+        disabled: true
       - name: quotation_lines[0][product_id]
         type: text
         value: "1"
@@ -33,13 +57,9 @@ http:
       - name: quotation_lines[0][discount_type]
         type: text
         value: amount
-      # เส้นนี้ "บังคับ" ให้ทุกบรรทัดมี usd_price — ขาดบรรทัดไหนได้ 422 ทันที
-      # ราคานี้คือ "ราคาสินค้าล้วน" — เซิร์ฟเวอร์บวกราคาตัวเลือกให้เองจาก option_ids
-      # ไม่ส่งช่องราคาเลยก็ได้ ระบบจะใช้ราคาที่ตั้งไว้ที่สินค้าแทน
       - name: quotation_lines[0][usd_price]
         type: text
         value: "116685"
-      # ตัวเลือกสินค้าที่ลูกค้าเลือก — ส่งเฉพาะ id (ดู product_options ใน preload)
       - name: quotation_lines[0][option_ids][]
         type: text
         value: "2"
@@ -57,70 +77,74 @@ settings:
   maxRedirects: 5
 
 docs: |
-  # API — สร้างใบเสนอราคาที่ตั้งราคาเป็นสกุล USD
+  # API Specification: POST /api/v1/quotation/usd/create
 
-  ```
-  POST /api/v1/quotation/usd/create
-  Authorization: Bearer <token>
-  ```
-
-  | | |
-  |---|---|
-  | Route | [`routes/api/api_v1.php`](../routes/api/api_v1.php) — อยู่ในกลุ่ม `auth_api` |
-  | Controller | [`Api\ApiQuotationController::quotation_usd_create_api()`](../app/Http/Controllers/Api/ApiQuotationController.php) |
-  | เส้นปกติ | [api-quotation-create.md](api-quotation-create.md) — พารามิเตอร์และ response เหมือนกันทุกอย่าง |
+  สร้างใบเสนอราคาที่ **บังคับกำหนดราคาต่อหน่วยเป็นสกุลเงินดอลลาร์สหรัฐ (USD)** ทุกบรรทัด โดยระบบจะแปลงเป็นเงินบาทตามอัตราแลกเปลี่ยนทางการของธนาคารแห่งประเทศไทย (ธปท.) ณ วันที่ออกเอกสาร พร้อมบันทึกลงตารางประวัติอัตราแลกเปลี่ยนและสร้างใบสั่งขายให้อัตโนมัติ
 
   ---
 
-  ## ต่างจาก `quotation/create` ตรงไหน
+  ## 1. ภาพรวมและกระบวนการทำงานสกุลเงิน USD (USD Workflow)
 
-  ตรวจ 3 อย่างก่อน แล้วส่งต่อให้ `quotation_create_api()` ทำงานตามปกติ
-
-  1. **ทุกบรรทัดต้องมี `usd_price`** — ขาดบรรทัดไหนได้ `422` ที่ `quotation_lines.N.usd_price`
-  2. บริษัทต้องเปิดฟีเจอร์ราคา USD ไว้ — ไม่งั้น `422` `{code: "usd_pricing_disabled"}`
-  3. ต้องดึงอัตราจาก ธปท. ได้ — ไม่งั้น `422` `{code: "usd_rate_unavailable"}`
-
-  > ส่ง `usd_price` ไปที่ `quotation/create` ตรง ๆ ก็ได้ผลเหมือนกัน — เส้นนี้ต่างตรงที่**บังคับให้ครบทุกบรรทัด**
-  > จึงไม่มีทางได้ใบที่ตั้งใจให้เป็น USD แต่บางบรรทัดกลับไปคิดเป็นราคาบาทของสินค้าแทน
+  ```
+  [ผู้ใช้ส่งคำขอสร้างใบเสนอราคา USD]
+                │
+                ▼
+  [1. ตรวจสอบเงื่อนไขฟีเจอร์ USD (USD Guard)]
+       ├─ ตรวจสอบว่าบริษัทเปิดใช้งานฟีเจอร์ USD Pricing หรือไม่ (usd_pricing_disabled)
+       ├─ ตรวจสอบอัตราแลกเปลี่ยน BOT ล่าสุด (usd_rate_unavailable)
+       └─ ตรวจสอบว่าทุกบรรทัดสินค้ามีค่า usd_price ครบถ้วน
+                │
+                ▼
+  [2. การแปลงค่าเงินและการคิดราคาต่อหน่วย (USD Conversion)]
+       ├─ ดึง Option USD ที่เลือกมาบวกเพิ่ม: USD_Total = ceil(usd_price + Σ Option_USD)
+       ├─ แปลงเป็นเงินบาท: Unit_Price_THB = USD_Total × BOT_Rate_Used (ปัดขึ้นเป็นบาทเต็ม)
+       └─ ข้ามการตรวจสอบ Min Price ในสกุลเงินบาท (เนื่องจากยึดตามราคาดอลลาร์ที่ตกลงกับลูกค้า)
+                │
+                ▼
+  [3. บันทึกประวัติและผูกอัตราแลกเปลี่ยน]
+       ├─ บันทึกอัตราแลกเปลี่ยน snapshot ลงในหัวเอกสาร (quotation_headers)
+       ├─ เพิ่มประวัติใน usd_rate_logs (action = create)
+       └─ สร้าง Order และ OrderLines คู่ขนานที่มีข้อมูล USD ครบถ้วน
+                │
+                ▼
+  [4. DB Commit และส่ง Response 201 Created]
+  ```
 
   ---
 
-  ## ทิศทางการคำนวณ — USD เป็นตัวตั้ง แล้วแปลงกลับเป็นบาท
+  ## 2. พจนานุกรมตัวแปร Request (Parameters Dictionary)
 
-  ```
-  $42.50  → ปัดขึ้นเป็นดอลลาร์เต็ม $43
-          × อัตราขาย ธปท. ที่ปัดขึ้นเป็นบาทเต็ม ฿34 (จาก 33.2264)
-          = ฿1,462.00 ต่อหน่วย   ← ค่านี้คือ unit_price ที่ถูกบันทึกลงฐานข้อมูล
-  ```
+  ### 2.1 ข้อมูลระดับหัวเอกสาร (Header Parameters)
 
-  - **ราคาขั้นต่ำเงินบาทของสินค้าไม่ถูกนำมาบีบ** (ยึดตัวเลขที่เสนอลูกค้าเป็นหลัก)
-  - ส่วนลด / โปรโมชัน / VAT / ส่วนลดท้ายบิล คิดต่อจากราคาบาทที่แปลงแล้ว เหมือนใบปกติ
-  - อัตราที่ใช้ถูก**ยึดไว้กับตัวเอกสาร** (`quotation_headers.usd_rate_used`) + บันทึกลง `usd_rate_logs`
-    เปิดใบเดิมวันหลังจึงได้ตัวเลขชุดเดิมเสมอ ต่อให้อัตราวันนี้เปลี่ยนไปแล้ว
+  | ชื่อตัวแปร | ชนิดข้อมูล | จำเป็น | รายละเอียดและคำอธิบาย |
+  |---|---|:---:|---|
+  | `customer_id` | integer | ✅ | รหัสลูกค้า (`customers.id`) |
+  | `quotation_date` | string (date) | ✅ | วันที่ออกเอกสาร รูปแบบ `YYYY-MM-DD` (ปี ค.ศ.) |
+  | `price_mode` | string (enum) | | โหมดภาษี: `price` (ไม่คิดภาษี), `vat` (รวมภาษี 7%), `novat` (แยกภาษี 7%) |
+  | `header_discount` | numeric | | ส่วนลดท้ายบิล (บาท หรือ %) |
+  | `header_discount_type` | string (enum) | | `amount` (บาท) หรือ `percent` (% ของยอดรวม) |
+  | `note` | string | | หมายเหตุท้ายเอกสาร |
+  | `status` | string (enum) | | `open` หรือ `confirmed` |
+  | `conditions` | array\<int\> | | รายการรหัสเงื่อนไขท้ายเอกสาร |
+  | `relationship_id` | integer | | รหัสแผนงานติดต่อลูกค้า |
 
-  ---
+  ### 2.2 ข้อมูลระดับรายการสินค้า (`quotation_lines[]`)
 
-  ## ตัวเลือกสินค้า — `option_ids`
-
-  ส่งเป็นอาเรย์ของ id (จาก `product_options` ใน `quotation/preload`) เลือกได้หลายหมวดหมู่
-  และหมวดหนึ่งเลือกได้หลายตัวเลือก
-
-  **`usd_price` ที่ส่งมาคือราคาสินค้าล้วน** — เซิร์ฟเวอร์บวกราคาตัวเลือกฝั่ง USD ให้เอง
-  แล้วค่อยแปลงเป็นเงินบาทรอบเดียว (ปัดขึ้นเป็นดอลลาร์เต็มครั้งเดียว ยอดจึงไม่เกินจริง)
-
-  ```
-  ราคาสินค้า $92,995 + TSC $7,495 + 10K-40T-GBX $16,195 = usd_price 116,685
-  ```
-
-  ชื่อกับราคาของตัวเลือกเซิร์ฟเวอร์อ่านจากฐานข้อมูลเอง แล้วเก็บเป็น**สำเนา** ณ วันที่ออกเอกสาร
-  แก้ชื่อ/ราคาที่หน้าสินค้าภายหลัง เอกสารเก่าจะยังแสดงค่าเดิมเสมอ
-
-  > ⚠️ **ตัวเลือกต้องเป็นของสินค้าในบรรทัดนั้น** — ส่ง id ของตัวเลือกที่สังกัดสินค้าตัวอื่นมา
-  > จะได้ `422` ที่คีย์ `quotation_lines.N.option_ids.M`
+  | ชื่อตัวแปร | ชนิดข้อมูล | จำเป็น | รายละเอียดและคำอธิบาย |
+  |---|---|:---:|---|
+  | `quotation_lines[N][product_id]` | integer | ✅ | รหัสสินค้า (`products.id`) |
+  | `quotation_lines[N][qty]` | numeric | ✅ | จำนวนสินค้า (หน่วยชิ้นต้องเป็นจำนวนเต็ม) |
+  | `quotation_lines[N][uom_code]` | string | ✅ | รหัสหน่วยนับ (`EA`, `BX`, `SET` ฯลฯ) |
+  | `quotation_lines[N][usd_price]` | numeric | ✅ | **ราคาต่อหน่วยในสกุลเงิน USD (บังคับต้องระบุทุกบรรทัด)** |
+  | `quotation_lines[N][manual_discount]` | numeric | | ส่วนลดพิเศษ (บาท หรือ %) |
+  | `quotation_lines[N][discount_type]` | string (enum) | | `amount` (บาท) หรือ `percent` (%) |
+  | `quotation_lines[N][option_ids][]` | array\<int\> | | รหัส Option สินค้าที่เลือก (Option USD จะถูกบวกในดอลลาร์ก่อนแปลง) |
 
   ---
 
-  ## Response
+  ## 3. กฎการปัดเศษและการคำนวณ USD (Rounding & Precision Rules)
 
-  `201 Created` — โครงสร้างเหมือน `quotation/create` ทุกประการ
-  ดู [api-quotation-create.md](api-quotation-create.md) หัวข้อ Response
+  1. **ราคา USD ต่อหน่วย (`usd_price`)**: หากส่งเป็นทศนิยม ระบบจะปัดขึ้นเป็นจำนวนเต็มดอลลาร์ก่อนแปลง เช่น `$129.50` -> `$130.00`
+  2. **อัตราแลกเปลี่ยนที่ใช้จริง (`rate_used`)**: อัตราขายถัวเฉลี่ยจาก ธปท. จะถูกปัดขึ้นเป็นบาทเต็มก่อนนำมาใช้ เช่น `33.2108` -> `฿34.00`
+  3. **การแปลงยอดต่อหน่วยเป็นบาท**: `฿ Unit Price = $ USD Price × ฿ Rate Used`
+  4. **ยอดรวมสุทธิ USD ในหัวเอกสาร (`total_after_discount_usd`)**: คำนวณจากยอดสุทธิบาทแปลงกลับเป็น USD แล้วปัดขึ้นเป็นดอลลาร์เต็ม

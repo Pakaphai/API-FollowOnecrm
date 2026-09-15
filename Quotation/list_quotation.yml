@@ -6,6 +6,40 @@ info:
 http:
   method: GET
   url: "{{sale_uat}}/api/v1/quotation/list?page=1&per_page=20&q="
+  params:
+    - name: page
+      value: "1"
+      type: query
+    - name: per_page
+      value: "20"
+      type: query
+    - name: q
+      value: ""
+      type: query
+    - name: customer_id
+      value: "4"
+      type: query
+      disabled: true
+    - name: status
+      value: open
+      type: query
+      disabled: true
+    - name: start_date
+      value: 2026-01-01
+      type: query
+      disabled: true
+    - name: end_date
+      value: 2026-12-31
+      type: query
+      disabled: true
+    - name: price_mode
+      value: price
+      type: query
+      disabled: true
+    - name: is_usd
+      value: "1"
+      type: query
+      disabled: true
   auth:
     type: bearer
     token: "{{token}}"
@@ -26,6 +60,11 @@ docs: |
   | `page` | integer >= 1 | 1 |
   | `per_page` | integer 1-200 | 20 |
   | `q` | string <= 100 | - |
+  | `customer_id` | integer | - |
+  | `status` | string | - |
+  | `start_date` / `end_date` | date | - |
+  | `price_mode` | string | - |
+  | `is_usd` | boolean (0/1) | - |
 
   ส่ง `per_page` เกิน 200 หรือ `q` ยาวเกิน 100 ตัว จะได้ 422
 
@@ -53,70 +92,3 @@ docs: |
   **สถานะของใบเสนอราคาเดินได้ทั้งสายแล้ว ไม่ได้หยุดที่ `confirmed`** — ระบบซิงก์สถานะใบเสนอราคา
   ให้เดินตามใบสั่งขายที่ผูกกันทุกครั้งที่ใบสั่งขายเปลี่ยนขั้น จึงเจอค่าอย่าง `pending_billing`
   `dispatch` `shipped` `completed` ในเส้นนี้ได้
-
-  | `status_en` | `status` (ป้ายไทย) |
-  |---|---|
-  | `open` | เปิดใบเสนอราคา |
-  | `confirmed` | ยืนยันใบเสนอราคา |
-  | `pending_billing` | เปิดบิล |
-  | `dispatch` | รอส่งของ |
-  | `shipped` | รอบัญชีแจ้งยอด |
-  | `pending_slip` | รอแนบสลิป |
-  | `pending_receipt` | รอออกใบเสร็จ |
-  | `completed` | การขายเสร็จสิ้น |
-  | `rejected` | สินค้าไม่เพียงพอ |
-  | `cancelled` | ยกเลิก |
-
-  > ⚠️ ของเดิมแปลเป็นไทยแค่ `open` กับ `confirmed` ค่าอื่นหลุดออกไปเป็นคีย์อังกฤษดิบ
-  > ตอนนี้ได้ป้ายไทยครบทุกค่า · ขั้น `approved` (ตรวจสอบสินค้า) ถูกตัดออกจากกระบวนการขายแล้ว
-
-  ## โครงสร้าง Response (ตัวอย่าง quotation_lines ที่มี options)
-
-  ```json
-  {
-    "status": "success",
-    "quotation_headers": [
-      {
-        "id": 10,
-        "customer_id": 4,
-        "quotation_number": "QT-2026-0010",
-        "quotation_date": "2026-08-22",
-        "status": "เปิดใบเสนอราคา",
-        "status_en": "open",
-        "total_before_discount": 70118.40,
-        "total_discount": 0.00,
-        "total_after_discount": 70118.40,
-        "quotation_lines": [
-          {
-            "id": 13,
-            "product_id": 6,
-            "qty": 1,
-            "discount_type": "amount",
-            "manual_discount": 0,
-            "uom_code": "EA",
-            "unit_price": 31181.70,
-            "discount": 0,
-            "total_line": 31181.70,
-            "options": [
-              {
-                "id": 1,
-                "group_name": "สี",
-                "name": "สีแดง",
-                "price": 50.00,
-                "usd": 1.50
-              }
-            ]
-          }
-        ],
-        "quotation_conditions": []
-      }
-    ],
-    "page": 1,
-    "size": 20,
-    "total_elements": 1,
-    "total_pages": 1,
-    "has_next": false,
-    "has_prev": false
-  }
-  ```
-

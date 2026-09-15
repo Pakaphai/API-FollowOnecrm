@@ -18,14 +18,26 @@ http:
       - name: additional_amount
         type: text
         value: "100"
+      - name: header_discount
+        type: text
+        value: "0"
+        disabled: true
+      - name: header_discount_type
+        type: text
+        value: amount
+        disabled: true
+      - name: note
+        type: text
+        value: สามารถจัดส่งสินค้าได้ภายในเดือนหน้า
+      - name: conditions[0]
+        type: text
+        value: "1"
+        disabled: true
       - name: quotation_image
         type: file
         value:
           - C:\Users\Softa-P\Pictures\Screenshots\image_commission_landingpage.png
         contentType: image/png
-      - name: note
-        type: text
-        value: สามารถจัดส่งสินค้าได้ภายในเดือนหน้า
   auth:
     type: bearer
     token: "{{token}}"
@@ -35,3 +47,15 @@ settings:
   timeout: 0
   followRedirects: true
   maxRedirects: 5
+
+docs: |
+  # API — แก้ไขใบเสนอราคาแบบแนบรูปภาพ (Quotation With Images Update)
+
+  ```
+  POST /api/v1/quotation/with-images/update/{id}
+  Authorization: Bearer <token>
+  Accept: application/json
+  Content-Type: multipart/form-data
+  ```
+
+  แก้ไขใบเสนอราคาโหมดแนบรูปภาพ โดยระบุยอดรวมสุทธิในช่อง `additional_amount` และแนบไฟล์ `quotation_image` (≤5MB)

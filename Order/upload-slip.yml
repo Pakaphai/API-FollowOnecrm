@@ -1,0 +1,48 @@
+info:
+  name: upload-slip
+  type: http
+  seq: 7
+
+http:
+  method: POST
+  url: "{{sale_uat}}/api/v1/order/uploade/slip/1"
+  body:
+    type: multipart-form
+    data:
+      - name: slip_amount
+        type: text
+        value: "1000.00"
+      - name: path[]
+        type: file
+        value:
+          - C:\Users\Softa-P\Pictures\Screenshots\slip_example.png
+        contentType: image/png
+  auth:
+    type: bearer
+    token: "{{token}}"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+
+docs: |
+  # API — อัปโหลดสลิปโอนเงิน (Upload Payment Slip)
+
+  ```
+  POST /api/v1/order/uploade/slip/{id}
+  Authorization: Bearer <token>
+  Accept: application/json
+  Content-Type: multipart/form-data
+  ```
+
+  | ฟิลด์ | บังคับ | ชนิด | หมายเหตุ |
+  |---|:---:|---|---|
+  | `slip_amount` | | numeric ≥0 | ยอดเงินตามสลิป (บาท) — ส่งค่ามีคอมมาได้ |
+  | `path` / `path[]` | ✅ | file array | ไฟล์สลิปรูปภาพ jpg, jpeg, png ≤5MB (อย่างน้อย 1 ไฟล์) |
+
+  ### พฤติกรรม
+  - ยอดรวมสลิปสะสม ≥ ยอดรวมใบสั่งขาย → อัปเดต `payment_status = 'paid'`, `status = 'pending_receipt'` ทั้ง Order และ Quotation
+  - ยอดรวมสลิปสะสม > 0 แต่ยังไม่ครบ → อัปเดต `payment_status = 'partial_paid'`, `status = 'pending_slip'`
+  - สลิปเกินยอดคงเหลือที่ต้องชำระ → คืน `422` พร้อมระบุยอดคงเหลือสูงสุดที่จ่ายได้

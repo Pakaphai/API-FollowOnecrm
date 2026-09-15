@@ -18,14 +18,34 @@ http:
       - name: additional_amount
         type: text
         value: "5000"
+      - name: header_discount
+        type: text
+        value: "0"
+        disabled: true
+      - name: header_discount_type
+        type: text
+        value: amount
+        disabled: true
+      - name: note
+        type: text
+        value: ทดสอบใบเสนอราคาแบบแนบรูป
+      - name: status
+        type: text
+        value: open
+        disabled: true
+      - name: conditions[0]
+        type: text
+        value: "1"
+        disabled: true
+      - name: relationship_id
+        type: text
+        value: "1"
+        disabled: true
       - name: quotation_image
         type: file
         value:
           - C:\Users\Softa-P\Pictures\Screenshots\image0001.png
         contentType: image/png
-      - name: note
-        type: text
-        value: ทดสอบใบเสนอราครา
   auth:
     type: bearer
     token: "{{token}}"
@@ -35,3 +55,15 @@ settings:
   timeout: 0
   followRedirects: true
   maxRedirects: 5
+
+docs: |
+  # API — สร้างใบเสนอราคาแบบแนบรูปภาพ (Quotation With Images Create)
+
+  ```
+  POST /api/v1/quotation/with-images/create
+  Authorization: Bearer <token>
+  Accept: application/json
+  Content-Type: multipart/form-data
+  ```
+
+  สร้างใบเสนอราคาโหมดแนบรูปภาพ โดยระบุยอดรวมสุทธิในช่อง `additional_amount` และแนบไฟล์ `quotation_image` (≤5MB)

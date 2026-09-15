@@ -7,58 +7,101 @@ http:
   method: POST
   url: "{{sale_uat}}/api/v1/order/update-api/1"
   body:
-    type: multipartForm
+    type: multipart-form
+    data:
+      - name: customer_id
+        type: text
+        value: "1"
+      - name: quotation_id
+        type: text
+        value: "1"
+      - name: order_date
+        type: text
+        value: 2026-08-19
+      - name: price_mode
+        type: text
+        value: price
+      - name: header_discount
+        type: text
+        value: "150.00"
+      - name: header_discount_type
+        type: text
+        value: amount
+      - name: note
+        type: text
+        value: แก้รูปและรายการสินค้าพร้อมกัน
+      - name: quotation_image
+        type: file
+        value:
+          - C:\Users\Softa-P\Pictures\Screenshots\imageee2.png
+        contentType: image/png
+      - name: order_lines[0][product_id]
+        type: text
+        value: "3"
+      - name: order_lines[0][qty]
+        type: text
+        value: "3"
+      - name: order_lines[0][uom_code]
+        type: text
+        value: EA
+      - name: order_lines[0][discount_type]
+        type: text
+        value: amount
+      - name: order_lines[0][manual_discount]
+        type: text
+        value: "0"
+      - name: order_lines[0][usd_price]
+        type: text
+        value: "116685"
+      - name: order_lines[0][option_ids][]
+        type: text
+        value: "2"
+      - name: order_lines[0][option_ids][]
+        type: text
+        value: "6"
+      - name: order_lines[1][product_id]
+        type: text
+        value: "1"
+      - name: order_lines[1][qty]
+        type: text
+        value: "1"
+      - name: order_lines[1][uom_code]
+        type: text
+        value: EA
+      - name: order_lines[1][discount_type]
+        type: text
+        value: amount
+      - name: order_lines[1][manual_discount]
+        type: text
+        value: "0"
   auth:
     type: bearer
     token: "{{token}}"
-
-body:multipart-form:
-  customer_id: 1
-  quotation_id: 1
-  order_date: "2026-08-19"
-  price_mode: price
-  header_discount: 150.00
-  note: แก้รูปและรายการสินค้าพร้อมกัน
-  order_lines[0][product_id]: 3
-  order_lines[0][qty]: 3
-  order_lines[0][uom_code]: EA
-  order_lines[0][discount_type]: amount
-  order_lines[0][manual_discount]: 0
-  # ราคาต่อหน่วย — usd_price (ดอลลาร์) มาแล้ว unit_price (บาท) จะถูกมองข้าม
-  # ราคานี้คือ "ราคาสินค้าล้วน" — เซิร์ฟเวอร์บวกราคาตัวเลือกให้เองจาก option_ids
-  # ไม่ส่งช่องราคาเลยก็ได้ ระบบจะใช้ราคาที่ตั้งไว้ที่สินค้าแทน
-  order_lines[0][usd_price]: 116685
-  # ตัวเลือกสินค้าที่ลูกค้าเลือก — ส่งเฉพาะ id (ดู product_options ใน quotation/preload)
-  # ไม่ส่งคีย์นี้ = คงตัวเลือกเดิมของบรรทัดนั้นไว้
-  order_lines[0][option_ids][0]: 2
-  order_lines[0][option_ids][1]: 6
-  order_lines[1][product_id]: 1
-  order_lines[1][qty]: 1
-  order_lines[1][uom_code]: EA
-  order_lines[1][discount_type]: amount
-  order_lines[1][manual_discount]: 0
-
-docs: |
-  แก้รูป + รายการสินค้าในคำขอเดียว (multipart/form-data)
-
-  - แนบไฟล์ที่ช่อง quotation_image (jpeg,png,jpg,gif,webp,pdf ≤5MB)
-    รูปเก็บที่ quotation_headers.quotation_image ของใบเสนอราคาต้นทาง
-    ใบสั่งขายที่ไม่ได้ออกจากใบเสนอราคา -> 422 code: order_has_no_quotation
-
-  - order_lines คือ "แทนที่ทั้งชุด" ไม่ใช่เพิ่มทีละรายการ
-    สินค้าที่ไม่ได้อยู่ใน payload จะถูกลบออกจากใบ (soft delete)
-    ถ้าอยากแก้แค่รูป: ตัด order_lines ออกให้หมด รายการสินค้าและยอดเดิมจะไม่ถูกแตะ
-
-  - ใบที่ขายเป็น USD ต้องส่ง order_lines[N][usd_price] กลับมาด้วยทุกบรรทัด
-    ไม่งั้นราคาจะเด้งกลับไปเป็นราคาบาทที่ตั้งไว้ที่สินค้า
-
-  - ตัวเลือกสินค้า: order_lines[N][option_ids][] เป็นอาเรย์ของ id (จาก product_options ใน preload)
-    ส่งเฉพาะ id เท่านั้น ชื่อกับราคาเซิร์ฟเวอร์อ่านจากฐานข้อมูลเองแล้วเก็บเป็นสำเนา
-    ราคาที่ส่งมาคือราคาสินค้าล้วน เซิร์ฟเวอร์บวกราคาตัวเลือกให้เสมอ
-    ไม่ส่งคีย์นี้ = คงตัวเลือกเดิมไว้ · ส่ง [] = ล้างตัวเลือกของบรรทัดนั้นทิ้ง
 
 settings:
   encodeUrl: true
   timeout: 0
   followRedirects: true
   maxRedirects: 5
+
+docs: |
+  # API — แก้ไขใบสั่งขายพร้อมแนบรูปภาพ (Order Update with Image)
+
+  ```
+  POST /api/v1/order/update-api/{id}
+  Authorization: Bearer <token>
+  Accept: application/json
+  Content-Type: multipart/form-data
+  ```
+
+  แก้รูป + รายการสินค้าในคำขอเดียว (multipart/form-data)
+
+  - แนบไฟล์ที่ช่อง `quotation_image` (jpeg,png,jpg,gif,webp,pdf ≤5MB)
+    รูปเก็บที่ `quotation_headers.quotation_image` ของใบเสนอราคาต้นทาง
+    ใบสั่งขายที่ไม่ได้ออกจากใบเสนอราคา -> 422 `code: order_has_no_quotation`
+
+  - `order_lines` คือ "แทนที่ทั้งชุด" ไม่ใช่เพิ่มทีละรายการ
+    สินค้าที่ไม่ได้อยู่ใน payload จะถูกลบออกจากใบ (soft delete)
+    ถ้าอยากแก้แค่รูป: ตัด `order_lines` ออกให้หมด รายการสินค้าและยอดเดิมจะไม่ถูกแตะ
+
+  - `header_discount_type`: `amount` (หน่วยบาท) หรือ `percent` (% 0-100)
