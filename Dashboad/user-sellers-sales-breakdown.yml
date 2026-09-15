@@ -44,8 +44,9 @@ docs: |-
 
   ### วิธีเรียก
 
-  - เปลี่ยนเลข `2` ใน URL เป็นรหัสเซลส์ที่ต้องการดู
-  - ดูของตัวเอง: ใช้ `data.user_id` จาก `GET /api/v1/user/dashboard`
+  - ใส่รหัสเซลส์ที่มีอยู่จริงแทนเลข `2` เช่น `data.user_id` จาก `GET /api/v1/user/dashboard`
+  - เส้นนี้คืนรายการเซลส์ทุกคนในตาราง ไม่ต้องเปลี่ยน ID แล้วเรียกซ้ำทีละคน
+  - สิทธิ์และ `is_owner` อ้างอิงบัญชีใน token ไม่ได้อ้างอิงเลขใน URL
   - ค่าเริ่มต้นดูสะสมทั้งหมด
   - เปิด Params `month` และ `year` พร้อมกันเพื่อกรองเดือน เช่น `month=9&year=2026` (ปี ค.ศ.)
 
@@ -65,10 +66,11 @@ docs: |-
   | sellers[].rank | อันดับ เริ่มที่ 1 |
   | sellers[].total_sales_all | ยอดสะสมทั้งหมด หน่วยบาท |
   | sellers[].total_sales_month | ยอดเดือนใน ranking_period หน่วยบาท |
-  | sellers[].seller | ข้อมูลเซลส์ ปกปิดชื่อ/รูปของคนอื่นตามสิทธิ์ |
-  | sellers[].summary, sellers[].contact_types, sellers[].customers | รายละเอียดของแต่ละคน รวมข้อมูลลูกค้าและการติดต่อที่ปกปิดตามสิทธิ์ |
+  | sellers[].seller.id | รหัสที่ใช้แยกเซลส์แต่ละคน แม้ชื่อแสดงผลจะเหมือนกัน |
+  | sellers[].seller.is_owner | true = ข้อมูลของบัญชีที่ใช้ token นี้, false = ข้อมูลของคนอื่น |
+  | sellers[].seller.name | ชื่อที่ใช้แสดงผล อาจเป็น "ไม่ระบุตัวตน" จึงไม่ควรใช้เป็นรหัสอ้างอิง |
+  | sellers[].seller.profile_img_url | รูปโปรไฟล์หรือรูปเริ่มต้นตามสิทธิ์ |
   | ranking_period | เดือน/ปีสำหรับอันดับและยอดรายเดือน ไม่ส่งตัวกรองใช้เดือนปัจจุบัน ส่วนรายละเอียดเป็นสะสมทั้งหมด |
-  | sellers[].seller | รหัส ชื่อ รูปโปรไฟล์ และ is_owner |
   | period | month, year และ has_filter |
   | sellers[].summary.total_sales | ยอดขายหน่วยบาท จากบิล completed และ paid |
   | sellers[].summary.order_count | จำนวนบิล |
@@ -80,6 +82,73 @@ docs: |-
 
   แสดงตารางจาก `data.sellers` และเปิดรายละเอียดจากรายการนั้นได้ทันที:
   `seller.name`, `total_sales_all / total_sales_month`, `summary`, `contact_types`, `customers`
+
+  ### แยกข้อมูลของแต่ละคนอย่างไร
+
+  หนึ่ง object ใน `data.sellers` คือข้อมูลของเซลส์หนึ่งคน
+  `summary`, `contact_types` และ `customers` ภายใน object นั้นเป็นของ `seller.id` คนเดียวกันทั้งหมด
+  ใช้ `seller.id` เป็น key ของแถว และใช้ `seller.is_owner` สำหรับติดดาว/ไฮไลต์แถวตัวเอง
+  `rank` ใช้แสดงอันดับเท่านั้น เพราะอันดับเปลี่ยนได้ตามเดือนและยอดขาย
+  หากหลายคนชื่อ "ไม่ระบุตัวตน" เหมือนกัน ให้แยกด้วย `seller.id` โดยไม่ต้องแสดงรหัสนี้บนหน้าจอ
+
+  ตัวอย่างโครงสร้างย่อ (ข้อมูลสมมติ ตัดฟิลด์รายละเอียดบางส่วนเพื่อให้อ่านง่าย):
+
+  ```json
+  {
+    "success": true,
+    "message": "Success",
+    "data": {
+      "period": { "month": null, "year": null, "has_filter": false },
+      "ranking_period": { "month": 9, "year": 2026 },
+      "sellers": [
+        {
+          "rank": 1,
+          "seller": { "id": 2, "name": "เซลส์ตัวอย่าง", "is_owner": true },
+          "total_sales_all": 1000,
+          "total_sales_month": 1000,
+          "summary": { "total_sales": 1000, "order_count": 1, "customer_count": 1, "total_contacts": 0, "customers_without_contact": 1 },
+          "contact_types": [],
+          "customers": [
+            { "customer_id": 10, "customer_name": "ลูกค้าตัวอย่าง", "total_sales": 1000 }
+          ]
+        },
+        {
+          "rank": 2,
+          "seller": { "id": 3, "name": "ไม่ระบุตัวตน", "is_owner": false },
+          "total_sales_all": 500,
+          "total_sales_month": 0,
+          "summary": { "total_sales": 500, "order_count": 1, "customer_count": 1, "total_contacts": 0, "customers_without_contact": 1 },
+          "contact_types": [],
+          "customers": [
+            { "customer_id": null, "customer_name": "ลูกค้ารายที่ 1", "total_sales": 500 }
+          ]
+        }
+      ]
+    }
+  }
+  ```
+
+  ### ตัวอย่างนำไปใช้ในแอป
+
+  ```javascript
+  // response คือ JSON ที่ได้จาก API
+  const rows = response.data.sellers;
+  const myRow = rows.find(row => row.seller.is_owner);
+
+  // เมื่อกดแถว ให้ส่ง seller.id ของแถวนั้นมาเลือกข้อมูล
+  function getSellerDetail(sellerId) {
+    return rows.find(row => String(row.seller.id) === String(sellerId));
+  }
+
+  const selected = getSellerDetail(3);
+  if (selected) {
+    const { seller, summary, contact_types, customers } = selected;
+    // ใช้ข้อมูลชุดนี้เปิดหน้าต่างรายละเอียดได้เลย ไม่ต้องเรียก API ซ้ำ
+  }
+  ```
+
+  `myRow` อาจไม่มีค่า หากบัญชีใน token ไม่อยู่ในรายการเซลส์ เช่น บัญชีแอดมิน
+  ช่วงเวลาใน `data.period` ใช้ร่วมกับรายละเอียดทุกคน ส่วน `data.ranking_period` ใช้กับยอดรายเดือนในตาราง
 
   `401` หมายถึงยังไม่ผ่านการยืนยันตัวตน และ `404` อาจเกิดจากไม่พบเซลส์หรือเซิร์ฟเวอร์ยังไม่มี route นี้
   หากได้รับข้อความ "ดูที่มาของยอดขายได้เฉพาะผู้ดูแลระบบเท่านั้น" ให้ตรวจว่าเลือก request นี้และ URL ไม่มี `/dashboard/admin/`
