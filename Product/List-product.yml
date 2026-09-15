@@ -91,7 +91,7 @@ docs: |
     "message": "OK",
     "data": {
       "products": [ ... ],
-      "counts":   { "product_types": 8, "models": 24, "brands": 12 },
+      "counts":   { "product_types": 8, "models": 24, "brands": 12, "low_stock_products": 3 },
       "page": 1,
       "size": 20,
       "total_elements": 137,
@@ -128,7 +128,7 @@ docs: |
 
   ### `counts` — ตัวเลขสรุปทั้งระบบ
 
-  จำนวน **ทั้งหมด** ของ product type / model / brand ที่ยังไม่ถูกลบ — **ไม่เกี่ยวกับผลการค้นหา** ส่งมาให้แอปเอาไปโชว์เป็นตัวเลขสรุปหน้าแรกได้เลย
+  จำนวน **ทั้งหมด** ของ product type / model / brand / **low_stock_products (จำนวนสินค้าเหลือน้อยทั้งหมดในระบบ)** ที่ยังไม่ถูกลบ — **ไม่เกี่ยวกับผลการค้นหา** ส่งมาให้แอปเอาไปโชว์เป็นตัวเลข Badge สรุปหน้าแรกได้เลย
 
   ---
 
