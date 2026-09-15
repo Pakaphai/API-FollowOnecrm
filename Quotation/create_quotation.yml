@@ -11,10 +11,10 @@ http:
     data:
       - name: customer_id
         type: text
-        value: "4"
+        value: "2"
       - name: quotation_date
         type: text
-        value: 2026-09-11
+        value: 2026-09-15
       - name: price_mode
         type: text
         value: price
@@ -44,7 +44,7 @@ http:
         disabled: true
       - name: quotation_lines[0][product_id]
         type: text
-        value: "9"
+        value: "47"
       - name: quotation_lines[0][qty]
         type: text
         value: "5"
@@ -76,18 +76,23 @@ http:
       - name: quotation_lines[1][product_id]
         type: text
         value: "6"
+        disabled: true
       - name: quotation_lines[1][qty]
         type: text
         value: "3"
+        disabled: true
       - name: quotation_lines[1][uom_code]
         type: text
         value: BX
+        disabled: true
       - name: quotation_lines[1][manual_discount]
         type: text
         value: "100"
+        disabled: true
       - name: quotation_lines[1][discount_type]
         type: text
         value: amount
+        disabled: true
       - name: quotation_image
         type: file
         value:
