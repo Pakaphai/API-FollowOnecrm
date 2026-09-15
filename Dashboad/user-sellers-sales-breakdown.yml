@@ -36,7 +36,9 @@ docs: |-
   ข้อมูลชุดเดียวกับหน้าต่าง "ที่มาของยอดขาย" บน `/dashboarduser`
   ส่งข้อมูลเซลส์ทุกคนในตารางอันดับพร้อมรายละเอียดใน `data.sellers` ภายในคำขอเดียว
   รวมคนที่ยอดขายเป็นศูนย์ โดยเลือกบัญชีเซลส์ที่ไม่ถูกลบและเคยล็อกอินแล้วเหมือนหน้าเว็บ
-  ไม่ต้องเรียกแยกทีละคน ส่วน `data.seller`, `data.summary`, `data.customers` เดิมยังเป็นของ ID ใน URL
+  ข้อมูลแต่ละคนอยู่ใน `data.sellers` เพียงครั้งเดียว ไม่มีรายละเอียดซ้ำที่ระดับ `data`
+  ลำดับ response: `data.period` → `data.ranking_period` → `data.sellers`
+  แต่ละคนเรียงฟิลด์: `rank` → `seller` → `total_sales_all` → `total_sales_month` → `summary` → `contact_types` → `customers`
   ใช้ Bearer token ของบัญชีเซลส์ในตัวแปร `token`
   และตั้ง `sale_uat` ให้เป็น URL ของบริษัทที่บัญชีนี้ใช้งาน
 
@@ -64,17 +66,17 @@ docs: |-
   | sellers[].total_sales_all | ยอดสะสมทั้งหมด หน่วยบาท |
   | sellers[].total_sales_month | ยอดเดือนใน ranking_period หน่วยบาท |
   | sellers[].seller | ข้อมูลเซลส์ ปกปิดชื่อ/รูปของคนอื่นตามสิทธิ์ |
-  | sellers[].summary, contact_types, customers, period | แต่ละรายการมีรายละเอียดเหมือนผลเดิม รวมข้อมูลลูกค้าและการติดต่อที่ปกปิดตามสิทธิ์ |
+  | sellers[].summary, sellers[].contact_types, sellers[].customers | รายละเอียดของแต่ละคน รวมข้อมูลลูกค้าและการติดต่อที่ปกปิดตามสิทธิ์ |
   | ranking_period | เดือน/ปีสำหรับอันดับและยอดรายเดือน ไม่ส่งตัวกรองใช้เดือนปัจจุบัน ส่วนรายละเอียดเป็นสะสมทั้งหมด |
-  | seller | รหัส ชื่อ รูปโปรไฟล์ และ is_owner |
+  | sellers[].seller | รหัส ชื่อ รูปโปรไฟล์ และ is_owner |
   | period | month, year และ has_filter |
-  | summary.total_sales | ยอดขายหน่วยบาท จากบิล completed และ paid |
-  | summary.order_count | จำนวนบิล |
-  | summary.customer_count | จำนวนลูกค้าที่เปิดบิล |
-  | summary.total_contacts | จำนวนการติดต่อที่เสร็จแล้วของเซลส์ในช่วงที่เลือก รวมลูกค้าที่ไม่ได้เปิดบิลด้วย |
-  | summary.customers_without_contact | ลูกค้าที่เปิดบิลแต่ไม่มีการติดต่อที่นับได้ในช่วงที่เลือก |
-  | contact_types | สรุปจำนวนการติดต่อแยกช่องทาง |
-  | customers | รายชื่อลูกค้าที่เปิดบิล ยอดขาย จำนวนบิล ช่องทางติดต่อ และวันที่ติดต่อล่าสุด |
+  | sellers[].summary.total_sales | ยอดขายหน่วยบาท จากบิล completed และ paid |
+  | sellers[].summary.order_count | จำนวนบิล |
+  | sellers[].summary.customer_count | จำนวนลูกค้าที่เปิดบิล |
+  | sellers[].summary.total_contacts | จำนวนการติดต่อที่เสร็จแล้วของเซลส์ในช่วงที่เลือก รวมลูกค้าที่ไม่ได้เปิดบิลด้วย |
+  | sellers[].summary.customers_without_contact | ลูกค้าที่เปิดบิลแต่ไม่มีการติดต่อที่นับได้ในช่วงที่เลือก |
+  | sellers[].contact_types | สรุปจำนวนการติดต่อแยกช่องทาง |
+  | sellers[].customers | รายชื่อลูกค้าที่เปิดบิล ยอดขาย จำนวนบิล ช่องทางติดต่อ และวันที่ติดต่อล่าสุด |
 
   แสดงตารางจาก `data.sellers` และเปิดรายละเอียดจากรายการนั้นได้ทันที:
   `seller.name`, `total_sales_all / total_sales_month`, `summary`, `contact_types`, `customers`
