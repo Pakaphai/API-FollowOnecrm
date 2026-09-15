@@ -1,0 +1,81 @@
+info:
+  name: sellers-sales-breakdown
+  type: http
+  seq: 6
+
+http:
+  method: GET
+  url: "{{sale_uat}}/api/v1/user/dashboard/admin/sellers/1/sales-breakdown"
+  auth:
+    type: bearer
+    token: "{{token}}"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+
+docs: |-
+  ## `GET /api/v1/user/dashboard/admin/sellers/{userId}/sales-breakdown`
+
+  กดการ์ดเซลส์ในอันดับยอดขายแล้วเปิดดูว่า **ยอดนี้มาจากลูกค้ารายไหน และเซลส์ติดต่อลูกค้ารายนั้นจริงไหม ด้วยวิธีอะไร กี่ครั้ง**
+  ชุดเดียวกับ modal บนแดชบอร์ดแอดมินฝั่งเว็บ — เรียกโค้ดคำนวณตัวเดียวกัน (`AdminController::sellerSalesBreakdown`) ตัวเลขจึงตรงกับเว็บเสมอ
+
+  **สิทธิ์:** level 0/1 เท่านั้น (ด่านเดียวกับ `is_admin` ของเว็บ — เข้มกว่าเส้น `user/dashboard/admin`)
+
+  **`{userId}`** เอามาจาก `top6_user_sales_order[].user_id` ของเส้น `user/dashboard/admin` ได้เลย
+
+  ```json
+  {
+    "success": true,
+    "message": "Success",
+    "data": {
+      "seller": {
+        "id": 12,
+        "name": "สมชาย ใจดี"
+      },
+      "summary": {
+        "total_sales": 158000,
+        "customer_count": 4,
+        "order_count": 9,
+        "total_contacts": 23,
+        "customers_without_contact": 1
+      },
+      "contact_types": [
+        { "name": "โทรศัพท์", "total": 15 },
+        { "name": "เข้าพบ", "total": 8 }
+      ],
+      "customers": [
+        {
+          "customer_id": 7,
+          "customer_name": "บริษัท ตัวอย่าง จำกัด",
+          "order_count": 3,
+          "total_sales": 90000,
+          "last_order_date": "2026-09-01",
+          "contacts": [
+            { "type": "โทรศัพท์", "total": 6 }
+          ],
+          "total_contacts": 6,
+          "last_contact_at": "2026-08-28 10:00:00"
+        }
+      ]
+    }
+  }
+  ```
+
+  | ฟิลด์ | ความหมาย |
+  |---|---|
+  | `summary.total_sales` · `customers[].total_sales` | **บาท** — ใบ `completed` + `paid` ทั้งหมด **ไม่กรองเดือน** · เจ้าของยอด = `COALESCE(orders.user_id, orders.created_by, customers.user_id)` |
+  | `customers[]` | เรียงจากยอดขายมากไปน้อย · `customer_name` ประกอบคำนำหน้านิติบุคคลแล้ว |
+  | `contacts[]` · `contact_types[]` | นับเฉพาะนัดหมายที่**ทำเสร็จแล้ว** (`mode = completed`) และ**เซลส์คนนี้เป็นผู้บันทึก** · ชื่อช่องทางตัดวงเล็บท้ายออกแล้ว |
+  | `last_contact_at` | เวลาปิดงานจริงก่อน (`early_closed_at`) แล้วค่อยวันนัด · `null` = ไม่เคยติดต่อ |
+  | `customers_without_contact` | จำนวนลูกค้าที่มียอดขายแต่ไม่มีการติดต่อที่นับได้เลย |
+
+  | HTTP | เงื่อนไข |
+  |:---:|---|
+  | `401` | token ไม่ผ่าน |
+  | `403` | ไม่ใช่ level 0/1 → `{success:false, message:"ดูที่มาของยอดขายได้เฉพาะผู้ดูแลระบบเท่านั้น"}` |
+  | `404` | ไม่พบผู้ใช้ id นี้ → `{success:false, message:"ไม่พบพนักงานขาย"}` |
+
+  ---

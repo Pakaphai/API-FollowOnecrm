@@ -22,6 +22,7 @@ docs:
 
     | เอกสารเจาะลึกรายหัวข้อ | |
     |---|---|
+    | [system-updates-summary.md](system-updates-summary.md) | **สรุปรายการเพิ่มฟีเจอร์ เงื่อนไข และการปรับปรุงระบบทั้งหมด** |
     | [api-login.md](api-login.md) | เข้าสู่ระบบ + วงจรอายุ token |
     | [api-login-google.md](api-login-google.md) | Google OAuth ผ่าน BukkhonID |
     | [api-subscription-status.md](api-subscription-status.md) | สถานะแพ็กเกจ / วันใช้งาน |
@@ -42,6 +43,7 @@ docs:
     | [api-forgot-password.md](api-forgot-password.md) | ลืมรหัสผ่านด้วย OTP — 3 ขั้น |
     | [api-notification-delete.md](api-notification-delete.md) | ลบการแจ้งเตือน — ทีละรายการ / ล้างกล่อง |
     | [maintenance-line-options-price.md](maintenance-line-options-price.md) | ตรวจ/ซ่อมเอกสารที่ราคาไม่รวมตัวเลือกสินค้า |
+    | [order-edit-status-impact.md](order-edit-status-impact.md) | เปิดปุ่มแก้ไขทุกสถานะ — ผลกระทบและแนวทางแก้ |
 
     ---
 
@@ -80,9 +82,6 @@ docs:
 
     ⚠️ **อย่าเอา 403 สองตัวนี้ไปรวมกับ token หมดอายุ** — ถ้า interceptor สั่ง refresh หรือเตะออก
     ผู้ใช้จะโดนเตะทุกครั้งที่บริษัทเกินโควตา ทั้งที่ token ยังดีอยู่ · แยกด้วย `code` เสมอ
-
-    `code` มีเหมือนกันทุกกรณี แต่ key ระดับบนสุดต่างกันตามชั้นที่ throw
-    (`POST login` ใช้ `success: false` ส่วนชั้น middleware ใช้ `status: "error"`) — **ตัดสินจาก `code` เท่านั้น**
 
     📄 **ครบทุกเคส + payload จริง → [api-seat-quota.md](api-seat-quota.md)**
 
@@ -127,19 +126,43 @@ docs:
     - `calendar/all/customer` — ปฏิทินต้องมีนัดหมายครบทั้งช่วงถึงจะวาดได้ถูก
     - `debt-reduction/list` → key `customers` — เป็นลิสต์ตัวเลือกตอนสร้างใบลดหนี้ ถ้าแบ่งหน้าจะเลือกลูกค้าที่อยู่หน้าอื่นไม่ได้ (เฉพาะ key `debtReductions` ที่แบ่งหน้า)
 
+    ### การค้นหาด้วยคีย์เวิร์ด — `q`
+
+    ทุกเส้นที่แบ่งหน้ารับพารามิเตอร์ `q` ตัวเดียวกัน ค้นที่ฐานข้อมูล **ก่อน** แบ่งหน้า
+
+    | พารามิเตอร์ | ชนิด | หมายเหตุ |
+    |---|---|---|
+    | `q` | string ≤100 ตัว | เว้นว่าง/ไม่ส่ง = ไม่กรอง · ส่งเกิน 100 ตัวได้ `422` |
+
+    ค้นแบบ **ไม่แยกตัวพิมพ์เล็กใหญ่** (`ILIKE`) และเป็นการค้นหาแบบ *มีคำนี้อยู่ตรงไหนก็ได้* ในคอลัมน์
+    `%` และ `_` ที่ผู้ใช้พิมพ์มาถูก escape ให้แล้ว จึงค้นหาอักขระพวกนี้ตรง ๆ ได้
+
+    คอลัมน์ที่แต่ละเส้นค้นให้:
+
+    | เส้น | ค้นจาก |
+    |---|---|
+    | `productlist` | ชื่อสินค้า · รุ่น · ยี่ห้อ · รหัสสินค้า (`products.code`) |
+    | `getCustomer-detail` | รหัสลูกค้า · ชื่อลูกค้า · ชื่อผู้ติดต่อ · เบอร์โทร · เลขผู้เสียภาษี · ชื่อประเภทธุรกิจ |
+    | `quotation/list` | เลขที่ใบเสนอราคา · ชื่อลูกค้า · รหัสลูกค้า · ชื่อผู้ติดต่อ |
+    | `order/list` | เลขที่ใบสั่งขาย · **เลขที่ใบกำกับภาษี** · ชื่อลูกค้า · รหัสลูกค้า · เบอร์โทร |
+    | `billing/list` | เลขที่ใบสั่งขาย · **เลขที่ใบกำกับภาษี** · **เลขที่ใบเสนอราคา** · ชื่อลูกค้า |
+    | `debt-reduction/list` | เลขที่เอกสาร · ชื่อลูกค้า · รหัสลูกค้า · ชื่อผู้ติดต่อ |
+
+    ```bash
+    curl -s "$BASE/quotation/list?q=สมชาย&per_page=20" -H "$AUTH" -H "Accept: application/json"
+    ```
+
+    > `billing/list` — ยอดรวมที่แนบมาด้วยคิดจาก **ผลการค้นหา** ไม่ใช่ทั้งตาราง ยอดจึงตรงกับรายการที่เห็นตรงหน้าเสมอ
+    >
+    > `debt-reduction/list` → key `customers` (ลิสต์ตัวเลือกตอนสร้างใบลดหนี้) **ไม่ถูกกรองด้วย `q`** เพราะไม่ใช่รายการในตาราง — กรองเฉพาะ key `debtReductions`
+
     ### หน่วยของเงินและจำนวน
 
     ทั้งระบบเก็บเงินเป็น **สตางค์ (จำนวนเต็ม ×100)** ใน DB — API ส่วนใหญ่หารกลับเป็นบาทให้แล้ว แต่ไม่ทุกเส้น ดูหมายเหตุรายเส้น จำนวนสินค้า (`qty`) ก็เก็บ ×100 เช่นกัน
 
-    ### ยอดรวมสุทธิถูกปัดขึ้นเป็นบาทเต็มจำนวน
-
-    `total_after_discount` ของใบเสนอราคาและใบสั่งขาย **ปัดขึ้นเป็นบาทเต็มเสมอ** — ฿54,943.60 → **฿54,944.00**
-    เพราะเป็นยอดที่เก็บเงินจริง เศษสตางค์ทำให้ยอดบนเอกสารกับที่โอนจริงไม่ตรงกัน (ดู [`CapsLineDiscount::ceilTotalCents()`](../app/Traits/CapsLineDiscount.php))
-
-    ยอดย่อย — `total_before_discount` · `total_discount` · `vat_amount` · `quotation_lines[].total_line` — **ยังคงเศษสตางค์ไว้ตามเดิม** เพื่อให้ตรวจย้อนได้ว่ายอดรวมมาจากไหน
-
-    > ⚠️ **ผลบวกของยอดย่อยจึงต่างจาก `total_after_discount` ได้ไม่เกิน 1 บาท** — อย่าเขียนเช็คว่าต้องเท่ากันเป๊ะ
-    > ข้อยกเว้น: เอกสารแบบ**แนบรูป** ที่ผู้ใช้พิมพ์ยอดเอง (`additional_amount`) จะไม่ถูกปัด เก็บตามที่กรอกมา
+    ### กฎการปัดเศษยอดเงิน (เฉพาะเอกสารสกุล USD)
+    - **เอกสารทั่วไป (THB):** **ไม่มีการปัดเศษใดๆ** ยอดสุทธิ `total_after_discount` และยอดย่อยทั้งหมดคิดตามจริงและคงเศษสตางค์ไว้
+    - **เอกสารที่ใช้สกุล USD:** มีการปัดเศษขึ้นเป็นบาทเต็มจำนวนเฉพาะเมื่อแปลงยอดเป็นเงินบาท เพื่อไม่ให้มียอดเศษสตางค์จากอัตราแลกเปลี่ยน
 
     ### รูปภาพจาก S3
 
@@ -163,6 +186,8 @@ docs:
     | | `POST` | `forgot-password/otp` | ลืมรหัสผ่าน — ขอรหัส OTP เข้าอีเมล |
     | | `POST` | `forgot-password/verify-otp` | ยืนยัน OTP → ได้ `reset_token` |
     | | `POST` | `forgot-password/reset` | ตั้งรหัสผ่านใหม่ด้วย `reset_token` |
+    | | `GET` | `privacy-policy` | นโยบายความเป็นส่วนตัว (ฉบับ Active) |
+    | | `GET` | `privacy-policy/v/{version}` | นโยบายความเป็นส่วนตัว ย้อนหลังตาม version |
     | 🔒 | `GET` | `logout` | ออกจากระบบ + เคลียร์ fcm_token |
     | 🔒 | `POST` | `update-password` | เปลี่ยนรหัสผ่าน |
     | 🔒 | `POST` | `connect/google` | เชื่อม/ยกเลิกการเชื่อมบัญชี Google |
@@ -178,7 +203,7 @@ docs:
 
     📄 **อธิบายทุกพารามิเตอร์ + รหัส error → [api-forgot-password.md](api-forgot-password.md)**
 
-    ### 2. User & Profile — 9 เส้น
+    ### 2. User & Profile — 11 เส้น
 
     | | Method | Path | ใช้ทำอะไร |
     |:---:|---|---|---|
@@ -189,6 +214,7 @@ docs:
     | 🔒 | `POST` | `device-token` | บันทึก FCM token |
     | 🔒 | `GET` | `user/dashboard` | แดชบอร์ดเซลส์ |
     | 🔒 | `GET` | `user/dashboard/admin` | แดชบอร์ดแอดมิน (level 2 โดน 403) |
+    | 🔒 | `GET` | `user/dashboard/admin/sellers/{userId}/sales-breakdown` | ที่มาของยอดขาย + การติดต่อลูกค้าของเซลส์ 1 คน (เฉพาะ level 0/1) |
     | 🔒 | `GET` | `sale-summary-user` | สรุปการขายของตัวเอง |
     | 🔒 | `GET` | `contact-rank` | อันดับการติดต่อรายเดือน |
     | 🔒 | `GET` | `sales-rank` | อันดับยอดขายรายเดือน |
@@ -213,12 +239,11 @@ docs:
     | 🔒 | `GET` | `calendar` | ตารางนัดหมายเดือนปัจจุบันของตัวเอง |
     | 🔒 | `GET` | `calendar/all/customer` | นัดหมายทั้งบริษัท (ทุกเซลส์) |
 
-    ### 5. Customer — 9 เส้น
+    ### 5. Customer — 8 เส้น
 
     | | Method | Path | ใช้ทำอะไร |
     |:---:|---|---|---|
     | 🔒 | `GET` | `master-data` | ข้อมูลตั้งต้นทั้งหมด + โลโก้/แบนเนอร์ |
-    | 🔒 | `GET` | `credit-terms` | เงื่อนไขเครดิตที่เลือกได้ (dropdown ช่องเครดิต) |
     | 🔒 | `GET` | `getCustomer-detail` | รายชื่อลูกค้าของตัวเอง (`?business_type_id=` กรองประเภทธุรกิจ) |
     | 🔒 | `POST` | `create-customer` | เพิ่มลูกค้า |
     | 🔒 | `GET` | `customer/edit/{id}` | ข้อมูลลูกค้าสำหรับฟอร์มแก้ไข |
@@ -246,7 +271,7 @@ docs:
     | 🔒 | `POST` | `relationship-detail/create-contact` | สร้างนัดหมาย |
     | 🔒 | `GET` | `relationship-detail/edit-contact/{id}` | ข้อมูลนัดหมายสำหรับฟอร์มแก้ไข |
     | 🔒 | `POST` | `relationship-detail/update-contact/{id}` | แก้ไขนัดหมาย |
-    | 🔒 | `POST` | `relationship-detail/submit-contact/{id}` | **ปิดงานนัดหมาย** — ถูกบล็อกถ้าล่าช้า · ปิดก่อนวันนัดต้องมีเหตุผล |
+    | 🔒 | `POST` | `relationship-detail/submit-contact/{id}` | **ปิดงานนัดหมาย** — ถูกบล็อกถ้าล่าช้า |
     | 🔒 | `GET` | `relationship-detail/late-status/{id}` | เช็คว่าล่าช้าไหม / ควรโชว์ปุ่มอะไร |
     | 🔒 | `POST` | `relationship-detail/late-request/{id}` | ยื่นคำขออนุมัติล่าช้า |
     | 🔒 | `POST` | `relationship-detail/cancel/{id}` | **ยกเลิกนัดหมาย** — เก็บประวัติ + เหตุผล |
@@ -324,17 +349,7 @@ docs:
     สองเส้นนี้ **ยกเว้นจากด่านเกินโควตา** จึงเรียกได้เสมอแม้บริษัทกำลังถูกกั้นอยู่
     (เส้นที่ยกเว้นทั้งหมด: `seats` · `logout` · `consent/*` · `privacy-policy*`)
 
-    `POST login` มีฟิลด์ใหม่ `seat_quota` — ถ้า `is_over_limit = true` ให้พาไปหน้าจัดการโควตาทันที
-    ไม่ต้องรอโดน 403
-
     📄 **[api-seat-quota.md](api-seat-quota.md)**
-
-    ### 14. Policy & Legal (นโยบายความเป็นส่วนตัว) — 2 เส้น
-
-    | | Method | Path | ใช้ทำอะไร |
-    |:---:|---|---|---|
-    | | `GET` | `privacy-policy` | ดึงนโยบายความเป็นส่วนตัวฉบับปัจจุบัน (`is_active = true`) |
-    | | `GET` | `privacy-policy/v/{version}` | ดึงนโยบายความเป็นส่วนตัวตามเลขเวอร์ชันที่ระบุ |
 
     ### 15. Commission (ค่าคอมของฉัน) — 2 เส้น
 
@@ -360,7 +375,9 @@ docs:
     ไม่ต้อง auth · คืน `{success, message, data:{is_valid, url}}` · ไม่พบ = **404** · โหมด standalone คืน host ตัวเอง
 
     ### `POST login`
-    `{username, password}` → `{message, user_detail, first_login, token}` · ไม่พบ user = 404 · รหัสผิด = 401
+    `{username, password}` → `{message, user_detail, first_login, seat_quota, token}` · ไม่พบ user = 404 · รหัสผิด = 401
+
+    `seat_quota` เป็นฟิลด์ใหม่ — ถ้า `seat_quota.is_over_limit = true` ให้พาไปหน้าจัดการโควตาทันที ไม่ต้องรอโดน 403 (ดู [api-seat-quota.md](api-seat-quota.md)) · บัญชีที่ถูกระงับ / บริษัทเกินโควตา = **403** พร้อม `code`
 
     ### `POST login/google`
     `{id_token, device_id?}` → โครงสร้างเดียวกับ `/login`
@@ -397,6 +414,9 @@ docs:
 
     ### `POST user/update/{id}` 🔒 · `multipart/form-data`
 
+    > 🔐 **สิทธิ์:** เจ้าของบัญชี `{id}` หรือแอดมิน (level 0/1) เท่านั้น · แอดมิน level 1 แก้บัญชี level 0 ไม่ได้
+    > นอกนั้น **403** `{success: false, message: "ไม่มีสิทธิ์จัดการบัญชีผู้ใช้รายนี้"}`
+
     | ฟิลด์ | กติกา |
     |---|---|
     | `profile_img` | `image` · jpeg,png,jpg · ≤ 2MB |
@@ -412,6 +432,9 @@ docs:
     { "users": {...}, "positions": [...], "totalsByUserOrder": "...", "orderCount": 0,
       "userRank": {...}, "userRanks": "ชื่อ rank", "rankImage": "...", "company": {...} }
     ```
+    > 🔐 **ดูของคนอื่นได้ แต่ได้ข้อมูลไม่ครบ** — ถ้าคนดูไม่ใช่เจ้าของบัญชีและไม่ใช่แอดมิน
+    > `users` จะไม่มี `tax_id` · `address` · `subdistrict` / `district` / `province` (+ `_name` และ `zip_code`)
+    > · `commission_type` · `commission_rate` · `fcm_token` · `bukkhon_id` และ `bukkhon_connection` = `null`
     > `userRanks` / `rankImage` เป็นฟิลด์เก่า เก็บไว้เพื่อ backward-compat กับแอปเวอร์ชันเดิม — ของใหม่ใช้ `userRank`
 
     ### `DELETE delete-user/{id}` 🔒
@@ -419,6 +442,7 @@ docs:
 
     | HTTP | เงื่อนไข |
     |:---:|---|
+    | `403` | **ไม่มีสิทธิ์** — ไม่ใช่บัญชีตัวเองและไม่ใช่แอดมิน (หรือแอดมิน level 1 สั่งลบบัญชี level 0) · ตรวจก่อนหา user จึงไม่ได้ 404 มาไล่เดา id |
     | `404` | ไม่พบผู้ใช้ |
     | `403` | เป็นแอดมินคนแรก **หรือ** ลบแล้วจะไม่เหลือแอดมินที่เคย login |
     | `200` | `{success, message}` |
@@ -452,6 +476,20 @@ docs:
                      pending_dispatch_Count, shippedCount, completedCount, cancelledCount},
       relationship_type_by_user, top6_user_sales_order, total_all_sales }}
     ```
+
+    ### `GET user/dashboard/admin/sellers/{userId}/sales-breakdown` 🔒
+    ที่มาของยอดขายเซลส์ 1 คน — ยอดมาจากลูกค้ารายไหน และติดต่อลูกค้ารายนั้นด้วยวิธีอะไรกี่ครั้ง
+    ชุดเดียวกับ modal การ์ดอันดับยอดขายบนแดชบอร์ดแอดมินฝั่งเว็บ · **เฉพาะ level 0/1** อื่น ๆ โดน 403 · ไม่พบเซลส์ = 404
+
+    ```
+    {success: true, message, data: {
+      seller:{id, name},
+      summary:{total_sales, customer_count, order_count, total_contacts, customers_without_contact},
+      contact_types:[{name, total}],
+      customers:[{customer_id, customer_name, order_count, total_sales, last_order_date,
+                  contacts:[{type, total}], total_contacts, last_contact_at}] }}
+    ```
+    ยอดขาย = ใบ `completed` + `paid` ทั้งหมด (ไม่กรองเดือน) เป็น**บาท** · นับการติดต่อเฉพาะนัดหมายที่ทำเสร็จแล้วและเซลส์คนนี้เป็นผู้บันทึก
 
     ### `GET sale-summary-user` 🔒
     ```
@@ -498,9 +536,6 @@ docs:
 
     > ⚠️ **ยึดเดือนปัจจุบันตายตัว** — โค้ดอ่าน `Carbon::now()` ไม่ได้รับ query param ส่ง `?month=` มาก็ไม่มีผล
 
-    แต่ละแถวมี `early_close_reason` / `early_closed_at` ด้วย — ใบที่ปิดงานก่อนถึงวันนัดจะมีค่า
-    เอาไปโชว์บนการ์ดปฏิทินได้เลย (ปิดตรงวันหรือหลังวันนัด = `null` ทั้งคู่)
-
     ### `GET calendar/all/customer`
     นัดหมาย **ทั้งบริษัท** ทุกเซลส์ ไม่กรองเดือน → `{global_schedule: [...]}` แต่ละแถวมี `formatted_name` (ชื่อบริษัทเติมคำนำหน้าตาม `business_type_id`) และ `visit_pic_url` (presigned 10 นาที)
 
@@ -520,10 +555,6 @@ docs:
 
     ### `GET getCustomer-detail`
     ลูกค้าของตัวเอง เรียงตาม `customer_code` — **แบ่งหน้า** (`page`, `per_page`)
-
-    ค้นด้วย `q` (รหัสลูกค้า · ชื่อลูกค้า · ชื่อผู้ติดต่อ · เบอร์โทร · เลขผู้เสียภาษี · **ชื่อประเภทธุรกิจ**)
-    หรือกรองประเภทธุรกิจแบบเจาะจงด้วย `business_type_id=3` / `business_type_id[]=3&business_type_id[]=4`
-    (ค่าที่ไม่ใช่ตัวเลขได้ 422 · ค่าว่างถือว่าไม่ได้กรอง)
 
     ```json
     { "datas": [...], "user": 4,
@@ -567,18 +598,6 @@ docs:
 
     ### `GET api/customer/purchased-product/{id}`
     สินค้าที่ลูกค้ารายนี้เคยซื้อ นับเฉพาะ order ที่ `status = completed` **และ** `payment_status = paid` — รวม qty ต่อสินค้า เรียงมากไปน้อย → `{success, data: [{product_name, product_code, total_qty, uom_name}]}`
-
-    ### `GET credit-terms`
-    เงื่อนไขเครดิตที่เลือกได้ → `{success, credit_terms: [{days, label, description, is_cash}]}`
-
-    ส่ง `?customer_id=` **ทุกครั้งตอนเปิดหน้าแก้ไขลูกค้า** เพื่อให้ค่าเดิมของลูกค้ารายนั้นติดมาในรายการเสมอ
-    แม้ตัวเลือกจะถูกปิด/ลบไปแล้ว — ไม่งั้น dropdown ไม่มีค่าเดิม พอบันทึกเครดิตจะกลายเป็น `0` เงียบ ๆ
-
-    `days` คือค่าที่ต้องส่งกลับในฟิลด์ `credit` ตอน create/update ลูกค้า และตรงกับที่สองเส้นนั้นตรวจด้วย
-    `Rule::in(CreditTermModel::selectableDays())` ชุดเดียวกัน
-
-    > **ห้ามฝังตัวเลือกไว้ในแอป** — แต่ละบริษัทแก้รายการนี้เองได้จากหน้าตั้งค่า
-    > ปัจจุบันมีบริษัทหนึ่งที่มี `45` วันเพิ่มจากชุดมาตรฐาน `0/30/60/90`
 
     ### `GET contact-type`
     → `{contact_types: [...]}`
@@ -635,6 +654,7 @@ docs:
     ## 7. Relationship Detail 🔒
 
     ฟีเจอร์นัดหมายล่าช้าดูเต็ม ๆ ที่ [api-late-appointment.md](api-late-appointment.md)
+    ฟีเจอร์ยกเลิกนัดหมายดูเต็ม ๆ ที่ [api-cancel-appointment.md](api-cancel-appointment.md)
     รายละเอียดทุกเส้นของกลุ่มนี้ที่ [api-relationship.md](api-relationship.md)
 
     ### `POST relationship-detail/create-contact` · `multipart/form-data`
@@ -665,15 +685,6 @@ docs:
     ```
     **422** → แอปเจอ `require_late_request: true` ให้เด้ง modal ขออนุมัติแทน
 
-    **ปิดงานก่อนถึงวันนัดต้องมีเหตุผล** — ถ้า `follow_date` ที่ส่งมายังมาไม่ถึง (เช่น วันนี้ 27 นัดไว้ 29
-    แต่ลูกค้าโทรมาคุยจบก่อน) ปิดได้ แต่ต้องส่ง `early_close_reason` (≤1000) มาด้วย ไม่งั้น **422**
-
-    ```json
-    { "message": "Validation failed.",
-      "errors": { "early_close_reason": ["ปิดงานก่อนถึงวันนัดหมาย กรุณาระบุเหตุผลที่ปิดงานก่อนกำหนด"] } }
-    ```
-    ปิดตรงวันนัดหรือหลังวันนัดไม่ต้องส่ง — ส่งมาก็ถูกล้างเป็น `null` พร้อม `early_closed_at`
-
     ผ่านแล้ว → `{success, message, customer_id, image_path, relationship_status_id}`
 
     > `relationship_status_id` ในผลลัพธ์คืน **ทั้งก้อน `$data`** ไม่ใช่ตัวเลข — ชื่อ key ไม่ตรงกับค่าที่ส่ง
@@ -682,14 +693,10 @@ docs:
     ```json
     { "success": true, "relationship_detail_id": 1, "mode": "scheduled",
       "is_late": true, "can_submit": false, "can_request_late": true,
-      "is_cancelled": false, "cancel_reason": null, "cancelled_at": null,
-      "can_cancel": true, "can_restore": false,
       "visit_pic": "crm/visit_pics/...", "visit_pic_url": "https://...",
       "late_request": { "id": 7, "status": "pending", "status_label": "รอพิจารณา", ... } }
     ```
     ไม่มีสิทธิ์ = **403** · `late_request` เป็น `null` ถ้าไม่เคยยื่น
-
-    นัดที่ยกเลิกแล้ว (`is_cancelled: true`) จะได้ `can_submit` / `can_request_late` เป็น `false` ทั้งคู่
 
     ### `POST relationship-detail/late-request/{id}` · `multipart/form-data`
     | ฟิลด์ | บังคับ | กติกา |
@@ -705,31 +712,8 @@ docs:
     | `422` | ปิดงานไปแล้ว / ยังไม่ล่าช้า / มีคำขอค้างอยู่ |
     | `201` | `{success, message, customer_id, image_path, late_request:{id,status,late_days,reason}}` |
 
-    ### `POST relationship-detail/cancel/{id}` · `POST relationship-detail/restore/{id}`
-
-    **ยกเลิกนัดหมาย** (เก็บประวัติ ต่างจาก `delete-contact` ที่หายไปเลย) และ **คืนสถานะ**
-    สถานะเก็บที่ `follow_status_id` — `2` = ลูกค้ายกเลิก · คนละแกนกับ `mode`
-
-    | ฟิลด์ | บังคับ | กติกา |
-    |---|:---:|---|
-    | `cancel_reason` | ✅ | ≤500 · เฉพาะเส้น `cancel` — เส้น `restore` ไม่ต้องส่งอะไร |
-
-    | HTTP | เงื่อนไข |
-    |:---:|---|
-    | `403` | ไม่มีสิทธิ์เข้าถึงบันทึกนี้ |
-    | `422` (cancel) | ไม่ส่งเหตุผล / ปิดงานไปแล้ว / ยกเลิกไปแล้ว |
-    | `422` (restore) | ไม่ได้อยู่ในสถานะยกเลิก / **มีนัดอื่นจองเวลาเดิมไปแล้ว** |
-    | `200` | `{success, message, customer_id, is_cancelled}` |
-
-    ยกเลิกแล้ว → เส้น `update-contact` / `submit-contact` / `late-request` จะตอบ `422`
-    พร้อม `is_cancelled: true` จนกว่าจะเรียก `restore` · คำขอล่าช้าที่ค้าง `pending` ถูกปิดทิ้งอัตโนมัติ
-    · ช่วงเวลาของนัดที่ยกเลิก **ถือว่าว่าง** จองทับได้ (จึงเป็นเหตุให้ `restore` อาจไม่สำเร็จ)
-
-    รายละเอียดเต็มที่ [api-cancel-appointment.md](api-cancel-appointment.md)
-
     ### `DELETE relationship-detail/delete-contact/{id}` · `GET relationship-detail/{id}`
     delete → `{success, message}` · get → `{status:"success", data:{details}}`
-    แต่ละใบใน `details` มี `early_close_reason` / `early_closed_at` ติดมาด้วย (ใบที่ไม่ได้ปิดก่อนกำหนด = `null`)
 
     ### `GET getcustomer/detail/byid/{id}`
     เส้นหลักของหน้ารายละเอียดลูกค้า `{id}` = **customer_id**
@@ -741,11 +725,7 @@ docs:
         "relationship_details_scheduled": [...],
         "global_schedule": [...] }}
     ```
-    นัดหมายแต่ละรายการมี flag ให้แอปเรนเดอร์ปุ่มได้เลย: `is_late`, `can_submit`, `can_request_late`, `late_request_status`, `late_request_note`,
-    `is_cancelled`, `cancel_reason`, `can_cancel`, `can_restore`
-
-    ใบที่ปิดงานก่อนถึงวันนัดจะมี `early_close_reason` (เหตุผลที่เซลส์กรอกไว้) และ `early_closed_at` (เวลาที่กดปิด)
-    มาด้วยทั้งใน `relationship_details_completed` และ `global_schedule` — ใบอื่นเป็น `null`
+    นัดหมายแต่ละรายการมี flag ให้แอปเรนเดอร์ปุ่มได้เลย: `is_late`, `can_submit`, `can_request_late`, `late_request_status`, `late_request_note`
 
     ---
 
@@ -761,7 +741,7 @@ docs:
     | `brand_id` · `model_id` | integer |
     | `min_price` · `max_price` | numeric (หน่วย**สตางค์** — เทียบกับคอลัมน์ดิบ) |
     | `sort` | `price_asc` · `price_desc` · `created_asc` · `created_desc` (ดีฟอลต์) |
-    | `low_stock` | `1` · `0` · `true` · `false` — เหลือเฉพาะสินค้าที่ **พร้อมขายต่ำกว่าจุดแจ้งเตือน** (เกณฑ์เดียวกับปุ่มบนหัวตารางฝั่งเว็บ) |
+    | `low_stock` | boolean — เหลือเฉพาะสินค้าที่ **พร้อมขายต่ำกว่าจุดแจ้งเตือน** (เกณฑ์เดียวกับปุ่มบนหัวตารางฝั่งเว็บ) |
 
     คืน paginator มาตรฐาน แต่ละสินค้ามี `brand_name`, `model_name`, `product_price` (บาท), ตัวเลขสต๊อกสามช่อง `min_stock_level` (ของจริงบนชั้น) · `reserved_qty` (ของที่ใบอื่นจองไว้) · `stock_qty` = `available_qty` (**คงเหลือพร้อมขาย** = ของจริง − จอง ติดลบได้) พร้อม `low_stock_threshold` / `is_low_stock`, รูป (presigned 10 นาที เรียงรูปหลักก่อน) และรายการหน่วยนับพร้อมราคา/บาร์โค้ด/`usd_price` (หน่วยหลัก `is_current` มาก่อน)
 
@@ -796,32 +776,12 @@ docs:
 
     ```json
     { "success": true, "has_promotion": true,
-      "promotion": {
-        "source": "product",
-        "discount_type": "percent",
-        "discount_value": 20,
-        "min_qty": 2,
-        "min_value": 1000.0,
-        "max_discount_value": 500.0,
-        "is_qualified": true,
-        "product_type_name": null
-      },
-      "calculation": {
-        "price_mode": "price",
-        "unit_price": 500.0,
-        "qty": 2.0,
-        "line_amount": 1000.0,
-        "promo_discount": 200.0,
-        "special_discount": 0.0,
-        "total_discount": 200.0,
-        "net_price": 800.0
-      }
-    }
+      "promotion": {"source":"product","discount_type":"percent","discount_value":10,"min_qty":null},
+      "calculation": {"price_mode":"price","unit_price":100,"qty":2,"line_amount":200,
+                      "promo_discount":20,"special_discount":0,"total_discount":20,"net_price":180} }
     ```
 
-    - **เงื่อนไข:** `min_qty` (จำนวนขั้นต่ำ), `min_value` (ยอดซื้อขั้นต่ำ), `max_discount_value` (เพดานส่วนลดสูงสุดสำหรับ %)
-    - **`is_qualified`:** `true` เมื่อผ่านทุกเงื่อนไขขั้นต่ำ · หากไม่ผ่าน `has_promotion: false`, `is_qualified: false`, `promo_discount: 0`
-    - **ความแม่นยำ:** ทุกยอดคำนวณด้วย `bcmath` และ `net_price` ไม่ติดลบ
+    ไม่มีราคาสำหรับหน่วยนั้น = **422** · ทุกยอดคำนวณด้วย `bcmath` (ไม่ใช้ float) · `net_price` ไม่ติดลบ
 
     ---
 
@@ -860,6 +820,7 @@ docs:
     | `quotation_lines.*.uom_code` | ✅ | ≤3 + ต้องมีใน `uoms` |
     | `status` | | `open` (ค่าเริ่มต้น) · `confirmed` — ค่าอื่นได้ 422 |
     | `header_discount` · `vat_amount` · `additional_amount` · `total_after_discount` | | ≥0 (**ห้ามติดลบ**) |
+    | `header_discount_type` | | `amount` (ค่าเริ่มต้น — `header_discount` เป็นบาท) · `percent` (`header_discount` เป็นเปอร์เซ็นต์ บีบให้อยู่ใน 0–100 คิดจากยอดรวมหลังหักส่วนลดรายการ) · ใช้ได้ทั้ง `quotation/create` และ `quotation/update/{id}` |
     | `quotation_image` | | image ≤5MB |
     | `conditions` | | array ของ condition id |
     | `note` · `price_mode` | | string |
@@ -1029,7 +990,15 @@ docs:
 
     **แบ่งหน้า** (`page`, `per_page`) — นับเป็น "ใบ" ไม่ใช่ "บรรทัดสินค้า" · เรียงจากใบใหม่ไปเก่า
 
-    แต่ละใบมี `order_number` (เลข PO) · **`quotation_number`** (เลข QT ของใบเสนอราคาต้นทาง — เลขที่ฝั่งเว็บแสดงในตาราง · `null` = ใบเก่าที่ไม่มีต้นทาง) · **`invoice_number`** (เลขที่ใบกำกับภาษี กรอกตอนอนุมัติผ่านขั้น "เปิดบิล" · ค้นด้วย `q` ได้) · `status_en` (คีย์อังกฤษ) + `status` (ป้ายไทยชุดเดียวกับฝั่งเว็บ)
+    > 🔻 **Breaking (2026-09-11)** — `order_number` เปลี่ยนมาคืน **เลข QT** ของใบเสนอราคาต้นทาง
+    > ให้ตรงกับตารางเอกสารขายฝั่งเว็บ · ใบเก่าที่ไม่มีต้นทางยังคืนเลข PO เหมือนเดิม
+    > แอปที่ต้องใช้เลข PO จริงให้ย้ายไปอ่าน `sale_order_number` ที่เพิ่มเข้ามาใหม่
+
+    แต่ละใบมี `order_number` (เลขที่หลักสำหรับแสดง — เลข QT ก่อน ไม่มีจึงตกไปใช้เลข PO) · **`sale_order_number`** (เลข PO จริงของใบสั่งขาย) · **`quotation_number`** (เลข QT ของใบเสนอราคาต้นทาง · `null` = ใบเก่าที่ไม่มีต้นทาง) · **`invoice_number`** (เลขที่ใบกำกับภาษี กรอกตอนอนุมัติผ่านขั้น "เปิดบิล") · **`sales_document_no`** (เลขที่เอกสารการขาย กรอกตอนอนุมัติผ่านขั้น "รอบัญชีแจ้งยอด") · `status_en` (คีย์อังกฤษ) + `status` (ป้ายไทยชุดเดียวกับฝั่งเว็บ)
+
+    ไฟล์ที่แอดมินแนบตอนเลื่อนสถานะ: **`invoice_attachment_url`** (ไฟล์ใบกำกับภาษี) · **`sales_document_url`** (ไฟล์เอกสารการขาย) — ลิงก์ S3 อายุ 10 นาที · `null` = ไม่ได้แนบ · ค้นหาด้วย `q` ได้ทั้ง `invoice_number` และ `sales_document_no`
+
+    ข้อมูลลูกค้าแนบมาด้วย: `customer_name` · **`contact_name`** (ชื่อผู้ติดต่อ) · **`customer_code`** (รหัสลูกค้า) · `customer_phone` · `tax_id` · ที่อยู่พร้อมชื่อตำบล/อำเภอ/จังหวัด · สองคีย์ที่ทำตัวหนาเคยคืน `null` ตลอดเพราะไม่ได้ถูก select มา แก้แล้ว (2026-09-11)
 
     ### `GET order/edit-api/{id}`
     → `{success, message, data:{quotation_header:{..., quotation_lines:[...]}}, products, customers, conditions, order_conditions, user, usd_pricing, usd_rate}`
@@ -1044,7 +1013,8 @@ docs:
 
     ### `POST order/update-api/{id}` · `multipart/form-data`
 
-    **เช็คสถานะก่อน** — ใบสั่งขายที่ไม่อยู่ในสถานะแก้ไขได้ = **403**
+    **เช็คสถานะก่อน** — ใบสั่งขายที่ไม่อยู่ในสถานะที่บทบาทของผู้เรียกแก้ได้ = **403**
+    ฝ่ายขายแก้ได้เฉพาะ `open` · แอดมินแก้ได้ถึง `shipped` (รอบัญชีแจ้งยอด) — ดู `App\Support\DocumentEditPolicy`
 
     แก้รูป (`quotation_image`) กับรายการสินค้า (`order_lines[]` — ส่งชื่อ `quotation_lines` มาก็ได้) พร้อมกันในคำขอเดียวได้ · รายการสินค้า = **แทนที่ทั้งชุด** สินค้าที่ไม่ได้ส่งมาถูกลบออกจากใบ · ไม่ส่งมาเลย = แตะแค่รูป ไม่ยุ่งกับสินค้าเดิม
 
@@ -1063,6 +1033,7 @@ docs:
     | `order_lines.*.discount_type` | | `amount` · `percent` |
     | `quotation_id` | | ต้องมีจริง |
     | `header_discount` | | ≥0 |
+    | `header_discount_type` | | `amount` (ค่าเริ่มต้น) · `percent` = `header_discount` เป็นเปอร์เซ็นต์ 0–100 |
     | `price_mode` | | `price` · `vat` · `novat` |
     | `reduction` | | ≥0 และ **≤ ยอดรวมของใบนั้น** |
     | `reduction_pdf` | | jpg,jpeg,png,pdf ≤5MB |
@@ -1091,10 +1062,14 @@ docs:
     **แบ่งหน้า** (`page`, `per_page`) เฉพาะ `order_dispatch` — ส่วน `total_unpaid` / `total_paid` เป็นยอดรวม
     ของ **ทุกรายการ** ไม่ใช่เฉพาะหน้าที่ขอมา จึงไม่เปลี่ยนตามขนาดหน้า
 
-    แต่ละรายการมี `quotation_number` (เลขที่ใบเสนอราคาต้นทาง) และ `invoice_number` (เลขที่ใบกำกับภาษี) เพิ่มมาจากเลขใบสั่งขาย · ค้นด้วยทั้งสองเลขได้
+    แต่ละรายการมี `quotation_number` (เลขที่ใบเสนอราคาต้นทาง) และ `invoice_number` (เลขที่ใบกำกับภาษี) เพิ่มมาจากเลขใบสั่งขาย
+    พร้อม `sales_document_no` (เลขที่เอกสารการขาย) · `invoice_attachment_url` / `sales_document_url` (ลิงก์ไฟล์ S3 อายุ 10 นาที · `null` = ไม่ได้แนบ) · ค้นหาด้วยเลขที่เอกสารการขายได้ด้วย
 
     ### `GET api/order/details/{id}`
     คืน **object ดิบ** ไม่มี wrapper — แต่ละบรรทัดใน `order_lines[]` มี `options_list[]`
+
+    มี `invoice_number` / `sales_document_no` มากับข้อมูลใบ และ `invoice_attachment_url` / `sales_document_url` (ลิงก์ไฟล์ S3 อายุ 10 นาที · `null` = ไม่ได้แนบ)
+    **`seller_name`** = ชื่อพนักงานขายเจ้าของเอกสาร (`orders.user_id` → `created_by` → เซลส์ผู้ดูแลลูกค้า · ไม่มีชื่อ-นามสกุลใช้ชื่อผู้ใช้แทน)
     (ตัวเลือกที่ลูกค้าเลือกไว้ · `id` `group` `name` `price` เป็น**สตางค์** `usd`)
 
     เส้นนี้เป็นเส้นแสดงผล `unit_price` จึงเป็นราคา**รวมตัวเลือก**ตามที่เก็บในฐานข้อมูล
@@ -1111,53 +1086,35 @@ docs:
 
     แต่ละใบมี `quotation_number` (เลขใบเสนอราคาต้นทางของใบสั่งขายที่อ้างอิง) และ `reference_number` (เลขที่ควรเอาไปแสดง — ใช้เลข QT ก่อน ไม่มีจึงตกไปใช้เลข PO) พร้อมความสัมพันธ์ `order.quotation`
 
-    ### `GET debt-reduction/orders/{customer_id}`
-    คืน **array ดิบ** ของใบสั่งขาย · **403** ถ้าลูกค้ารายนั้นไม่ใช่ของผู้ใช้ที่ล็อกอิน
+    ข้อมูลที่แอดมินกรอกตอนอนุมัติ: **`credit_note_no`** (เลขที่ใบลดหนี้จากระบบบัญชี · คนละตัวกับ `document_no` ที่ระบบรัน) · **`attachment_url`** (ไฟล์ใบลดหนี้ ลิงก์ S3 อายุ 10 นาที) — ทั้งคู่ `null` = ไม่ได้กรอก/ไม่ได้แนบ
 
-    มี `quotation_number` / `reference_number` มาให้แสดงด้วย แต่ค่าที่ส่งกลับตอนสร้างใบลดหนี้ยังเป็น `id` ของ **ใบสั่งขาย** เหมือนเดิม
+    > เลขใบลดหนี้เปลี่ยน prefix จาก `DR-` เป็น **`SR-`** แล้ว ใบเก่าถูกเปลี่ยนตาม (migration v0112)
+
+    ### `GET debt-reduction/orders/{customer_id}`
+    คืน **array ดิบ** ของใบสั่งขาย — มี `quotation_number` / `reference_number` มาให้แสดงด้วย แต่ค่าที่ส่งกลับตอนสร้างใบลดหนี้ยังเป็น `id` ของ **ใบสั่งขาย** เหมือนเดิม
 
     ### `GET debt-reduction/order-items/{order_id}`
     ```json
-    { "items": [{ "order_item_id": 45, "product_name": "...", "qty": 10,
-                  "unit_price_baht": 10000, "total_line_baht": 100000 }],
-      "quotation_image_url": "https://...",
-      "total_after_discount_baht": 100000 }
+    { "items": [...], "quotation_image_url": "https://...",
+      "total_after_discount_baht": 12000 }
     ```
     > `total_after_discount_baht` = ผลรวม (ราคาปกติ × จำนวน) **ไม่คิดส่วนลด/VAT** — ใช้ฐานเดียวกับใบลดหนี้
-    >
-    > `qty` ของแต่ละบรรทัด = **จำนวนสูงสุดที่ลดหนี้ได้** · **403** ถ้าใบสั่งขายไม่ใช่ของผู้ใช้ที่ล็อกอิน
 
     ### `POST debt-reduction/store` · `multipart/form-data`
 
     | ฟิลด์ | บังคับ | กติกา |
     |---|:---:|---|
-    | `customer_id` | ✅ | ต้องเป็นลูกค้าของผู้ใช้ที่ล็อกอิน |
-    | `order_id` | ✅ | ต้องเป็นใบสั่งขาย**ของลูกค้ารายนั้น** |
+    | `customer_id` | ✅ | |
+    | `order_id` | ✅ | |
     | `total_amount` | ✅ | numeric — **รับค่าที่มีคอมมาได้** (`1,200.00`) ระบบตัดให้ก่อนตรวจ |
     | `note` / `note_other` | | ถ้า `note = "อื่นๆ"` จะใช้ `note_other` แทน |
-    | `items[].quantity` | ✅ | **ห้ามเกิน `qty` ของบรรทัดนั้นใน order-items** |
-    | `items[].unit_price` | | **ไม่มีผลกับเพดาน** — เซิร์ฟเวอร์ใช้ราคาจริงเสมอ |
     | `image` | | jpeg,png,jpg,gif ≤**2MB** |
 
-    **เพดานยอดลดหนี้** = Σ (ราคาจริงในใบสั่งขาย × `items[].quantity`)
-    คิดจากฝั่งเซิร์ฟเวอร์เท่านั้น — ส่ง `unit_price` สูงกว่าความจริงไม่ช่วยให้เพดานสูงขึ้น
+    ไม่เลือกสินค้าเลย = 422 `"กรุณาเลือกรายการสินค้าอย่างน้อย 1 รายการ"`
 
-    422 ที่เจอได้: `จำนวนที่ลดหนี้ของ "…" มากกว่าจำนวนในใบสั่งขาย (ลดได้สูงสุด N)` ·
-    `ยอดลดหนี้สุทธิห้ามมากกว่ายอดของรายการที่เลือก (N บาท)` ·
-    `มีรายการสินค้าที่ไม่ได้อยู่ในใบสั่งขายที่เลือก` ·
-    `ใบสั่งขายที่เลือกไม่ใช่ของลูกค้ารายนี้` ·
-    `กรุณาเลือกรายการสินค้าอย่างน้อย 1 รายการ`
-
-    > `errors.items` เป็นอาร์เรย์ (ผิดหลายบรรทัดพร้อมกันได้) ส่วน `message` คือข้อความแรก
+    ⚠️ `items[].unit_price` ที่ส่งมา**ไม่ถูกใช้แล้ว** — ราคา/หน่วยของแต่ละรายการอ่านจากใบสั่งขาย (ราคาเดียวกับ `debt-reduction/order-items`) กติกาเดียวกับฝั่งเว็บ
 
     ### `DELETE debt-reduction/delete/{id}`
-    soft delete → **คืน HTTP 200 เสมอ** พร้อม `success: true/false` ไม่ใช่ 403/404
-
-    | เงื่อนไข | ผล |
-    |---|---|
-    | ใบของตัวเอง สถานะ `pending` · `rejected` · `cancelled` | ลบได้ |
-    | สถานะ `approved` · `commissioned` | ลบไม่ได้ — ตัดยอดลูกหนี้แล้ว ต้องให้แอดมินยกเลิก |
-    | ไม่พบใบ **หรือ** เป็นใบของเซลส์คนอื่น | `"ใบลดยอดหนี้ไม่พบ"` (ข้อความเดียวกันโดยตั้งใจ กันไล่เดา id) |
 
     ---
 
@@ -1280,30 +1237,34 @@ docs:
 
     ---
 
-    ## 14. Policy & Legal
+    ## 14. Seat Quota 🔒
 
-    ### `GET privacy-policy`
-    ดึงนโยบายความเป็นส่วนตัวฉบับที่กำลังมีผลบังคับใช้อยู่ในปัจจุบัน (`is_active = true`) — **ไม่ต้องแนบ token**
+    ### `GET seats`
 
-    ```json
-    {
-      "success": true,
-      "data": {
-        "id": 1,
-        "type": "privacy_policy",
-        "version": "1.0",
-        "title": "นโยบายความเป็นส่วนตัว (Privacy Policy)",
-        "content": "<h2>นโยบายความเป็นส่วนตัว</h2>...",
-        "content_format": "html",
-        "content_hash": "...",
-        "is_active": true,
-        "effective_date": "2026-08-23T00:00:00.000000Z"
-      }
-    }
-    ```
+    สถานะโควตา + รายชื่อบัญชี · **ทุก level เรียกได้** แต่ `can_manage` บอกว่าแก้ได้หรือแค่ดู
 
-    ### `GET privacy-policy/v/{version}`
-    ดึงนโยบายความเป็นส่วนตัวตามเลขเวอร์ชันที่ระบุ เช่น `/api/v1/privacy-policy/v/1.0` — ไม่พบนโยบายคืน **404** `{success: false, message: "Policy not found"}`
+    - `can_manage: true` (level 0/1) → มี `users[]` ครบ พร้อม `role_label`, `customer_count`,
+      `is_active_seat` (ค่าเริ่มต้นของช่องติ๊ก) และ `is_self` (**ล็อกช่องนี้ไว้**)
+    - `can_manage: false` (level 2–4) → **ไม่มี `users[]`** โดยตั้งใจ · มี `message` เมื่อบริษัทเกินโควตา
+
+    `users[]` เรียงมาให้แล้ว — แอดมินก่อน แล้วคนที่เคยล็อกอิน คนที่ยังไม่เคยล็อกอินอยู่ท้ายสุด
+
+    ### `POST seats`
+
+    `{active_ids: [1, 2, 13]}` — **ชุดเต็ม** ของบัญชีที่จะใช้งานต่อ ไม่ใช่เฉพาะที่เปลี่ยน
+    · ส่งซ้ำได้ผลเดิม (idempotent) · id ที่ไม่มีอยู่จริงถูกตัดทิ้งเงียบ ๆ
+
+    | กรณี | ผลลัพธ์ |
+    |---|---|
+    | เลือกเกิน `seats.limit` | `422` |
+    | ไม่มี id ของตัวเองใน `active_ids` | `422` — กันแอดมินล็อกตัวเองออก |
+    | ไม่เหลือบัญชี level 0/1 เลย | `422` — บริษัทจะติดตายทั้งบริษัท |
+    | ผู้ยิงไม่ใช่ level 0/1 | `403` |
+
+    ⚠️ ทุก error **ไม่เขียนอะไรลงฐานข้อมูลเลย** — ตรวจครบก่อนค่อยบันทึกในทรานแซกชันเดียว
+    · ทุก response (รวม error) แนบ `seats` ล่าสุดมาด้วย ใช้รีเฟรชหน้าจอได้โดยไม่ต้องยิง `GET` ซ้ำ
+
+    📄 **ครบทุกเคส + payload จริง + ลอจิกที่แอปต้องเขียน → [api-seat-quota.md](api-seat-quota.md)**
 
     ---
 
@@ -1355,7 +1316,8 @@ docs:
 
     ---
 
-    *อัปเดตล่าสุด: 2026-08-23 · อ้างอิงจาก [`routes/api/api_v1.php`](../routes/api/api_v1.php)*
+    *อัปเดตล่าสุด: 2026-08-27 · อ้างอิงจาก [`routes/api/api_v1.php`](../routes/api/api_v1.php)*
+
   type: text/markdown
 bundled: false
 extensions:
