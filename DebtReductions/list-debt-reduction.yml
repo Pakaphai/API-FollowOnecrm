@@ -6,6 +6,9 @@ info:
 http:
   method: GET
   url: "{{sale_uat}}/api/v1/debt-reduction/list?page=1&per_page=20&q="
+  headers:
+    - name: Accept
+      value: application/json
   auth:
     type: bearer
     token: "{{token}}"
@@ -17,6 +20,29 @@ settings:
   maxRedirects: 5
 
 docs: |
+  ## การคืนของ
+
+  แต่ละรายการใน `debtReductions[]` มี `is_returned` เป็น string ที่บันทึกในฐานข้อมูล:
+  - `"Y"` = มีการคืนของ
+  - `"N"` = ไม่มีการคืนของ
+
+  Mobile แสดงค่า `item.is_returned` ในคอลัมน์ "การคืนของ" ได้เลย
+  ห้ามตรวจด้วย `if (item.is_returned)` เพราะ string "N" ก็เป็น truthy ให้ใช้ `item.is_returned === "Y"`
+
+  ตัวอย่าง response ย่อ (ข้อมูลสมมติ ตัดฟิลด์อื่นและ pagination เพื่อให้อ่านง่าย):
+
+  ```json
+  {
+    "debtReductions": [
+      { "id": 123, "is_returned": "Y", "display_note": null },
+      { "id": 124, "is_returned": "N", "display_note": "ปรับราคา" }
+    ]
+  }
+  ```
+
+  `display_note` อาจเป็น null เมื่อไม่ได้ระบุหมายเหตุ แสดงเป็น `-` ได้
+  ค่า `is_returned` อยู่ระดับใบลดหนี้หนึ่งใบ ไม่ได้แยกตามสินค้าแต่ละรายการ
+
   ## การแบ่งหน้า (pagination)
 
   เส้นนี้แบ่งหน้าเสมอ ไม่ส่งอะไรมาก็ได้ 20 รายการแรก

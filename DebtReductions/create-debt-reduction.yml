@@ -6,6 +6,9 @@ info:
 http:
   method: POST
   url: "{{sale_uat}}/api/v1/debt-reduction/store"
+  headers:
+    - name: Accept
+      value: application/json
   body:
     type: json
     data: |-
@@ -13,7 +16,8 @@ http:
           "customer_id": 4 ,
           "order_id": 4,
           "total_amount": 2997.00,
-          "note": "สินค้าชำรุด",
+          "note": null,
+          "is_returned": "N",
           "items": [
             { "selected": "1", "order_item_id": 7, "quantity": 6, "unit_price": 1500 },
             { "selected": "0", "order_item_id": 8, "quantity": 6, "unit_price": 666 }
@@ -40,12 +44,38 @@ docs: |-
   | `customer_id` | ✅ | ต้องเป็นลูกค้าของผู้ใช้ที่ล็อกอิน |
   | `order_id` | ✅ | ต้องเป็นใบสั่งขาย**ของลูกค้ารายนั้น** |
   | `total_amount` | ✅ | numeric — รับค่าที่มีคอมมาได้ (`1,200.00`) ระบบตัดให้ก่อนตรวจ |
-  | `note` / `note_other` | ✅ | ถ้า `note = "อื่นๆ"` จะใช้ `note_other` แทน |
+  | `note` | | เว้นว่างหรือส่ง null ได้ สูงสุด 255 ตัวอักษร |
+  | `note_other` | เฉพาะเลือกอื่นๆ | ถ้า `note = "อื่นๆ"` ต้องกรอก `note_other` สูงสุด 255 ตัวอักษร |
+  | `is_returned` | | string: "Y" = มีการคืนของ, "N" = ไม่มีการคืนของ · ไม่ส่งใช้ "N" · รับเฉพาะ Y/N ตัวใหญ่ ทั้ง JSON และ multipart · เก็บ Y/N ในฐานข้อมูลและส่งกลับใน response |
   | `items[].order_item_id` | ✅ | id ของบรรทัดสินค้าจาก `order-items/{order_id}` |
   | `items[].quantity` | ✅ | **ห้ามเกินจำนวนในใบสั่งขาย** |
   | `items[].selected` | ✅ | `"1"` = เลือก · `"0"` = ไม่เลือก |
   | `items[].unit_price` | | **ไม่มีผลกับเพดาน** — เซิร์ฟเวอร์ใช้ราคาจริงเสมอ |
   | `image` | | jpeg,png,jpg,gif ≤ **2MB** |
+
+  ### การบันทึกและแสดงการคืนของ
+
+  ส่ง `"is_returned": "Y"` เมื่อติ๊ก Yes หรือ `"is_returned": "N"` เมื่อติ๊ก No
+  หลังสร้างสำเร็จอ่านค่าที่ `data.is_returned`
+  เรียก `GET /api/v1/debt-reduction/list` แล้วอ่าน `debtReductions[].is_returned` เพื่อแสดง Y/N ในแต่ละแถว
+  หมายเหตุส่ง `null` ได้ ส่วน is_returned ห้ามส่ง null หรือ boolean (คืน 422)
+
+  ตัวอย่าง response ย่อหลังสร้างใบลดหนี้ที่มีการคืนของ (ข้อมูลสมมติ):
+
+  ```json
+  {
+    "success": true,
+    "message": "บันทึกใบลดหนี้สำเร็จ",
+    "data": {
+      "id": 123,
+      "is_returned": "Y",
+      "status": "pending"
+    }
+  }
+  ```
+
+  Body ตัวอย่างของ request นี้ตั้งเป็น `"N"` เปลี่ยนเป็น `"Y"` เพื่อทดสอบมีการคืนของ
+  เปลี่ยน customer_id, order_id และ order_item_id ให้ตรงกับข้อมูลที่บัญชีเซลส์เข้าถึงได้ก่อนส่ง
 
   ### เพดานยอดลดหนี้
 
