@@ -20,6 +20,37 @@ settings:
   maxRedirects: 5
 
 docs: |
+  ## สถานะใบลดหนี้ (ชุดเดียวกับตารางฝั่งเว็บ)
+
+  แต่ละรายการใน `debtReductions[]` มีฟิลด์สำหรับแสดงสถานะมาให้ครบ แอปไม่ต้อง map เอง
+
+  | ฟิลด์ | ชนิด | ความหมาย |
+  |---|---|---|
+  | `status` | string | ค่าดิบ `pending` · `approved` · `rejected` · `cancelled` · `commissioned` |
+  | `status_text` | string | ข้อความเต็ม เช่น `รออนุมัติใบลดหนี้` — ใช้ในหน้ารายละเอียด |
+  | `status_short` | string | ข้อความสั้นสำหรับป้ายในรายการ เช่น `รออนุมัติ` · `ออกคอมแล้ว` |
+  | `status_color` | string | โทนสีของป้าย: `warning` · `success` · `info` · `danger` · `secondary` |
+  | `status_icon` | string | ชื่อไอคอน Remix Icon เช่น `ri-time-line` (แอปจะ map เป็นไอคอนของตัวเองก็ได้) |
+  | `can_delete` | boolean | `true` = แสดงปุ่มลบได้ · ใช้กติกาเดียวกับ `DELETE debt-reduction/delete/{id}` |
+
+  | status | status_short | status_color | status_icon |
+  |---|---|---|---|
+  | `pending` | รออนุมัติ | warning | ri-time-line |
+  | `approved` | อนุมัติแล้ว | success | ri-checkbox-circle-line |
+  | `rejected` | ไม่อนุมัติ | danger | ri-close-circle-line |
+  | `cancelled` | ยกเลิก | danger | ri-indeterminate-circle-line |
+  | `commissioned` | ออกคอมแล้ว | info | ri-hand-coin-line |
+
+  > `commissioned` เปลี่ยนสีจาก `success` เป็น `info` เพื่อแยกจาก `approved` ให้เห็นชัด
+
+  ตัวอย่าง (ข้อมูลสมมติ ตัดฟิลด์อื่นออก):
+
+  ```json
+  { "id": 123, "status": "pending", "status_text": "รออนุมัติใบลดหนี้",
+    "status_short": "รออนุมัติ", "status_color": "warning",
+    "status_icon": "ri-time-line", "can_delete": true }
+  ```
+
   ## การคืนของ
 
   แต่ละรายการใน `debtReductions[]` มี `is_returned` เป็น string ที่บันทึกในฐานข้อมูล:
