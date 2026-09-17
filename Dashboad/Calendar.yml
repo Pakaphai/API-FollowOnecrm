@@ -15,3 +15,34 @@ settings:
   timeout: 0
   followRedirects: true
   maxRedirects: 5
+
+docs: |
+  ## สถานะปิดงานก่อนกำหนด / ล่าช้า (เพิ่ม 2026-09-17)
+
+  ทุกนัดหมายในผลลัพธ์มีฟิลด์เหล่านี้เพิ่ม — ป้ายชุดเดียวกับการ์ดนัดหมายฝั่งเว็บ
+
+  | ฟิลด์ | ชนิด | อธิบาย |
+  |---|---|---|
+  | `closed_early` | boolean | `true` = ปิดงานแล้ว (`mode = completed`) และตอนกดปิดยังไม่ถึงวันนัด |
+  | `closed_early_days` | integer \| null | ปิดก่อนวันนัดกี่วัน (นับตามวันไทย) · ไม่ได้ปิดก่อนกำหนด = `null` |
+  | `closed_early_label` | string \| null | ป้ายภาษาไทย `"ปิดงานก่อนวันนัด"` · ไม่ได้ปิดก่อนกำหนด = `null` |
+  | `closed_late` | boolean | `true` = ปิดงานแล้ว และปิดได้เพราะแอดมินอนุมัติคำขอนัดหมายล่าช้า |
+  | `closed_late_days` | integer \| null | จำนวนวันที่ล่าช้าตามคำขอ · ไม่ได้ปิดงานล่าช้า = `null` |
+  | `closed_late_label` | string \| null | ป้ายชุดเดียวกับเว็บ เช่น `"ปิดงานล่าช้า 5 วัน"` · ไม่ได้ปิดงานล่าช้า = `null` |
+  | `is_late` | boolean | นัดเลยวันนัดแล้วแต่ยังไม่ปิดงาน |
+
+  ```json
+  {
+    "mode": "completed",
+    "follow_date": "2026-08-29",
+    "early_close_reason": "ลูกค้าโทรมาแจ้งผลก่อน",
+    "early_closed_at": "2026-08-27T03:00:00.000000Z",
+    "closed_early": true,
+    "closed_early_days": 2,
+    "closed_early_label": "ปิดงานก่อนวันนัด",
+    "closed_late": false,
+    "closed_late_days": null,
+    "closed_late_label": null,
+    "is_late": false
+  }
+  ```

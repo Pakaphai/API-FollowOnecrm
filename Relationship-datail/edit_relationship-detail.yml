@@ -64,6 +64,14 @@ docs: |-
   | `time_start` / `time_end` | string \| null | 🟡 | เวลานัด รูปแบบ `HH:MM:SS` — **ตอนส่งกลับต้องตัดเหลือ `HH:MM`** ไม่งั้นติด validate `date_format:H:i` |
   | `contact_detail` | string \| null | 🟡 | บันทึกย่อ |
   | `latitude` / `longitude` | string \| null | 🟡 | พิกัด คืนมาเป็น string ต้อง `parseFloat` ก่อนใช้ |
+  | `early_close_reason` / `early_closed_at` | string \| null | 🟡 | เหตุผลและเวลาที่ปิดงานก่อนวันนัด · ไม่ได้ปิดก่อนกำหนด = `null` |
+  | `closed_early` | boolean | 🔴 | **ธงปิดงานก่อนกำหนด** (เพิ่ม 2026-09-17) — `true` = ปิดงานแล้วและตอนปิดยังไม่ถึงวันนัด |
+  | `closed_early_days` | integer \| null | 🟡 | ปิดก่อนวันนัดกี่วัน (วันไทย) · ไม่ได้ปิดก่อนกำหนด = `null` |
+  | `closed_early_label` | string \| null | 🟡 | ป้าย `"ปิดงานก่อนวันนัด"` · ไม่ได้ปิดก่อนกำหนด = `null` |
+  | `closed_late` | boolean | 🔴 | **ธงปิดงานล่าช้า** (เพิ่ม 2026-09-17) — `true` = ปิดงานแล้ว และปิดได้เพราะแอดมินอนุมัติคำขอนัดหมายล่าช้า |
+  | `closed_late_days` | integer \| null | 🟡 | จำนวนวันที่ล่าช้าตามคำขอ · ไม่ได้ปิดงานล่าช้า = `null` |
+  | `closed_late_label` | string \| null | 🟡 | ป้ายชุดเดียวกับเว็บ เช่น `"ปิดงานล่าช้า 5 วัน"` · ไม่ได้ปิดงานล่าช้า = `null` |
+  | `is_late` | boolean | 🔴 | นัดเลยวันนัดแล้วแต่ยังไม่ปิดงาน — ต้องขออนุมัติล่าช้าก่อนปิดงาน |
   | `occasion` | integer \| null | 🟢 | ไม่ได้ใช้แล้ว |
   | `relationship_id` | integer \| null | 🟢 | แผนที่ผูกอยู่ — `null` ถ้าสร้างจากเส้น 6 หรือ 8 |
   | `follow_status_id` | integer | 🟢 | ค่า default `0` ระบบไม่ได้ใช้ |

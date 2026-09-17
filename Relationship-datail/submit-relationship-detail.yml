@@ -222,8 +222,30 @@ docs: |-
       "updated_by": 4,
       "updated_at": "2026-08-18T05:05:35.531581Z",
       "visit_pic": "crm/visit_pics/1787029535-9b9a734a-80c2-4f25-abdd-525c786e7813.png"
-    }
+    },
+    "closed_early": false,
+    "closed_early_days": null,
+    "closed_early_label": null,
+    "closed_late": false,
+    "closed_late_days": null,
+    "closed_late_label": null
   }
+  ```
+
+  ปิดก่อนวันนัด (วันนี้ 27 นัดไว้ 29 พร้อมส่ง `early_close_reason`) จะได้
+
+  ```json
+  "closed_early": true,
+  "closed_early_days": 2,
+  "closed_early_label": "ปิดงานก่อนวันนัด"
+  ```
+
+  ปิดงานนัดที่เลยวันนัด (หลังแอดมินอนุมัติคำขอล่าช้า 5 วัน) จะได้
+
+  ```json
+  "closed_late": true,
+  "closed_late_days": 5,
+  "closed_late_label": "ปิดงานล่าช้า 5 วัน"
   ```
 
   ### อธิบายตัวแปรใน response ทุกตัว
@@ -235,6 +257,12 @@ docs: |-
   | `customer_id` | string \| integer | 🟡 | id ลูกค้า ใช้ redirect กลับหน้ารายละเอียด · ⚠️ **ยิง multipart จะได้ `"1"` เป็น string** เพราะ echo ค่าจาก request ที่ยังไม่ถูก cast — อย่าเทียบด้วย `===` |
   | `image_path` | string \| null | 🟡 | path ดิบบน S3 ของรูปที่อัปในรอบนี้ · ไม่ได้แนบรูปใหม่ = `null` **แม้นัดหมายจะมีรูปเดิมอยู่** · ไม่ใช่ URL แสดงรูปไม่ได้ ต้องดึง `visit_pic_url` จากเส้นอ่าน |
   | `relationship_status_id` | **object** | 🔴 | 🐞 **ชื่อผิดความหมาย** — ไม่ใช่ id สถานะ แต่เป็น **ก้อนข้อมูลทั้งชุดที่เพิ่งเขียนลงฐานข้อมูล** ใช้ตรวจว่าค่าอะไรถูกบันทึกไปบ้าง |
+  | `closed_early` | boolean | 🔴 | **ผลการปิดงานรอบนี้** (เพิ่ม 2026-09-17) — `true` = ปิดก่อนถึงวันนัด ใช้โชว์ toast/ป้ายได้เลย |
+  | `closed_early_days` | integer \| null | 🟡 | ปิดก่อนวันนัดกี่วัน (วันไทย) · ไม่ได้ปิดก่อนกำหนด = `null` |
+  | `closed_early_label` | string \| null | 🟡 | ป้าย `"ปิดงานก่อนวันนัด"` · ไม่ได้ปิดก่อนกำหนด = `null` |
+  | `closed_late` | boolean | 🔴 | **ธงปิดงานล่าช้า** (เพิ่ม 2026-09-17) — `true` = ปิดงานแล้ว และปิดได้เพราะแอดมินอนุมัติคำขอนัดหมายล่าช้า |
+  | `closed_late_days` | integer \| null | 🟡 | จำนวนวันที่ล่าช้าตามคำขอ · ไม่ได้ปิดงานล่าช้า = `null` |
+  | `closed_late_label` | string \| null | 🟡 | ป้ายชุดเดียวกับเว็บ เช่น `"ปิดงานล่าช้า 5 วัน"` · ไม่ได้ปิดงานล่าช้า = `null` |
   | `require_late_request` | boolean | 🔴 | **มีเฉพาะตอนถูกบล็อก (422)** — `true` = ให้แอปเด้ง modal ขออนุมัติล่าช้าแทน |
 
   **ฟิลด์ข้างใน `relationship_status_id`** — คือ array `$data` ที่ controller เอาไป `update()` ตรง ๆ
