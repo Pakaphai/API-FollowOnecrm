@@ -182,7 +182,13 @@ docs: |
         "order_number": "PO-260911-0002",
         "quotation_number": "QT-2026-0006",
         "invoice_number": null,
-        "sales_document_no": null,
+        "invoice_attachment_url": null,
+        "receipt_url": null,
+        "documents": {
+          "invoice": { "number": null, "url": null, "type": null },
+          "receipt": { "url": null, "type": null },
+          "slips": []
+        },
         "order_date": "2026-09-11",
         "status": "open",
         "status_label": "เปิดใบสั่งขาย",

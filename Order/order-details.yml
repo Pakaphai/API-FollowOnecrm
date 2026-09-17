@@ -45,9 +45,13 @@ docs: |
     "order_number": "PO-260822-0002",
     "quotation_number": "QT-2026-0011",
     "invoice_number": "INV-2026-0007",
-    "sales_document_no": "SD-2026-0005",
     "invoice_attachment_url": null,
-    "sales_document_url": null,
+    "receipt_url": null,
+    "documents": {
+      "invoice": { "number": "INV-2026-0007", "url": null, "type": null },
+      "receipt": { "url": null, "type": null },
+      "slips": []
+    },
     "seller_name": "สมชาย ใจดี",
     "status": "pending_billing",
     "status_label": "เปิดบิล",
@@ -83,12 +87,38 @@ docs: |
   |---|---|
   | `quotation_number` | **เลขที่ใบเสนอราคาต้นทาง** · `null` = ใบเก่าที่ไม่มีต้นทาง ให้ตกไปใช้ `order_number` |
   | `invoice_number` | เลขที่ใบกำกับภาษี |
-  | `sales_document_no` | เลขที่เอกสารการขาย |
   | `invoice_attachment_url` | ลิงก์ S3 ไฟล์ใบกำกับภาษี (10 นาที · `null` = ไม่ได้แนบ) |
-  | `sales_document_url` | ลิงก์ S3 ไฟล์เอกสารการขาย (10 นาที · `null` = ไม่ได้แนบ) |
+  | `receipt_url` | ลิงก์ S3 ไฟล์ใบเสร็จ แนบตอนผ่านขั้น "ตรวจสอบการชำระเงิน" (10 นาที · `null` = ไม่ได้แนบ) |
+  | `documents` | เอกสารแนบทั้งชุด (ใบกำกับภาษี / ใบเสร็จ / สลิป) — ดูหัวข้อถัดไป |
   | `seller_name` | ชื่อพนักงานขายเจ้าของเอกสาร |
   | `header_discount_type` | ประเภทส่วนลดท้ายบิล `amount` หรือ `percent` |
   | `status_label` | ป้ายภาษาไทยของ `status` ชุดเดียวกับฝั่งเว็บ |
+
+  ---
+
+  ## `documents` — เอกสารแนบทั้งชุด (เพิ่ม 2026-09-17)
+
+  ชุดเดียวกับส่วน "เอกสารแนบ" ในแผงรายละเอียดฝั่งเว็บ — รูปแบบเดียวกันใน `order/list`, `order/edit-api`, `billing/list`, `order/details`
+
+  ```json
+  "documents": {
+    "invoice": { "number": "IV-2569-0123", "url": "https://…", "type": "pdf" },
+    "receipt": { "url": "https://…", "type": "pdf" },
+    "slips": [ { "id": 12, "url": "https://…", "type": "jpg", "amount": 1500.00, "uploaded_at": "2026-09-17 10:21:00" } ]
+  }
+  ```
+
+  | ฟิลด์ | ความหมาย |
+  |---|---|
+  | `invoice` | เลขที่ (`number` ค่าเดียวกับ `invoice_number`) + ไฟล์ใบกำกับภาษี แนบตอนผ่านขั้น "เปิดบิล" |
+  | `receipt` | ไฟล์ใบเสร็จ แนบตอนผ่านขั้น "ตรวจสอบการชำระเงิน" |
+  | `slips[]` | สลิปโอนเงินทั้งหมดของใบ เรียงตามลำดับที่อัปโหลด |
+  | `slips[].amount` | ยอดในสลิป หน่วยเป็น **บาท** |
+  | `*.url` | ลิงก์ S3 อายุ 10 นาที · `null` = ไม่ได้แนบ |
+  | `*.type` | นามสกุลไฟล์ (`pdf` · `jpg` · `png` …) ใช้เลือกแสดงเป็นรูปหรือ PDF · `null` = ไม่ได้แนบ |
+
+  > 🔻 **Breaking (2026-09-17)** — ถอด `sales_document_no` / `sales_document_url` (เอกสารการขาย) ออกแล้ว
+  > ใช้ไฟล์ใบเสร็จ `receipt_url` แทน · ค้นหาด้วยเลขที่เอกสารการขายไม่ได้แล้ว
 
   ---
 
