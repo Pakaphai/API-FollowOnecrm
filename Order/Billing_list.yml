@@ -114,7 +114,24 @@ docs: |
     "vat_amount": 10951.15,
     "total_after_discount": 167396.15,
     "note": "สามารถจัดส่งสินค้าได้ภายในสิ้นเดือนนี้",
-    "quotation_image_url": null
+    "quotation_image_url": null,
+    "quotation_lines": [
+      {
+        "id": 5351,
+        "product_id": 44,
+        "product_code": "P-15-00-00-0001",
+        "product_name": "กระเป๋า 2",
+        "uom_code": "EA",
+        "uom_name": "Each (ชิ้น)",
+        "qty": 10,
+        "unit_price": 600,
+        "discount_type": "amount",
+        "manual_discount": 0,
+        "discount": 555,
+        "total_line": 5445,
+        "options": []
+      }
+    ]
   }
   ```
 
@@ -126,5 +143,24 @@ docs: |
   | `total_before_discount` · `total_discount` · `vat_amount` · `total_after_discount` | ยอดของ **ใบเสนอราคา** หน่วย **บาท** (อาจต่างจาก `total_after_discount` ระดับรายการซึ่งเป็นยอดของใบสั่งขาย) |
   | `note` | หมายเหตุในใบเสนอราคา |
   | `quotation_image_url` | รูปใบเสนอราคาแบบแนบรูป (S3 60 นาที · `null` = ไม่มี) |
+  | `quotation_lines[]` | รายการสินค้าของใบเสนอราคา — ดูหัวข้อถัดไป · `[]` = ใบแบบแนบรูป/ไม่ได้คีย์สินค้า |
 
   > `quotation_image_url` ระดับรายการเดิมเป็น `null` ตลอด — แก้แล้ว ค่าเดียวกับใน `quotation`
+
+  ## `quotation.quotation_lines[]` — รายการสินค้า
+
+  เรียงตามลำดับบรรทัด · ไม่รวมบรรทัดที่ถูกลบ · ตัวเลขทุกช่องหารร้อยเป็น **บาท/จำนวนจริง** แล้ว
+
+  | ฟิลด์ | ความหมาย |
+  |---|---|
+  | `id` | รหัสบรรทัด (`quotation_lines.id`) |
+  | `product_id` · `product_code` · `product_name` | สินค้า |
+  | `uom_code` · `uom_name` | หน่วยนับ (`uom_code` ตัดช่องว่างท้ายแล้ว · `uom_name` เช่น `Each (ชิ้น)`) |
+  | `qty` | จำนวน |
+  | `unit_price` | ราคาต่อหน่วย **รวมราคาตัวเลือกแล้ว** — ใช้แสดงผล |
+  | `discount_type` · `manual_discount` · `discount` | ประเภทส่วนลด / ส่วนลดที่กรอก / ส่วนลดรวมของบรรทัด (บาท) |
+  | `total_line` | ยอดสุทธิของบรรทัด |
+  | `options[]` | ตัวเลือกที่ลูกค้าเลือก `{id, group_name, name, price (บาท), usd}` · สำเนา ณ วันที่ออกเอกสาร |
+
+  > เส้นนี้ใช้**แสดงผล**เท่านั้น — ถ้าจะแก้ไขใบเสนอราคา ให้ดึงค่าจาก `quotation/edit/{quotation.id}`
+  > (เส้นนั้นแยก `unit_price` สินค้าล้วนกับ `unit_price_total` ไว้ให้ ส่งกลับไปบันทึกได้ตรง ๆ)
