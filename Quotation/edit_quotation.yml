@@ -41,6 +41,7 @@ docs: |
     "quotation_headers": {
       "id": 12,
       "quotation_number": "QT-2026-0012",
+      "credit_note_numbers": ["SR-202608-0004"],
       "quotation_date": "2026-08-22",
       "status": "open",
       "price_mode": "price",
@@ -57,6 +58,9 @@ docs: |
     "conditions": [ ... ]
   }
   ```
+
+  `credit_note_numbers` — เลขที่ใบลดหนี้ (`SR-xxxxxx-xxxx`) ของใบสั่งขายที่ผูกกับใบนี้
+  ตัดใบที่ยกเลิก/ไม่อนุมัติออก · `[]` = ไม่มี หรือยังไม่ยืนยันเป็นใบสั่งขาย (รายละเอียดดู `list_quotation`)
 
   ---
 

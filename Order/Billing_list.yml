@@ -70,6 +70,8 @@ docs: |
   | `invoice_attachment_url` | ลิงก์ไฟล์ใบกำกับภาษี (S3 10 นาที · `null` = ไม่ได้แนบ) |
   | `receipt_url` | ลิงก์ไฟล์ใบเสร็จ แนบตอนผ่านขั้น "ตรวจสอบการชำระเงิน" (S3 10 นาที · `null` = ไม่ได้แนบ) |
   | `documents` | เอกสารแนบทั้งชุด (ใบกำกับภาษี / ใบเสร็จ / สลิป) — ดูหัวข้อถัดไป |
+  | `quotation` | ข้อมูลหัวใบเสนอราคาต้นทาง — ดูหัวข้อ `quotation` ด้านล่าง |
+  | `credit_note_numbers` | เลขที่ใบลดหนี้ของใบสั่งขายนี้ (`SR-xxxxxx-xxxx`) ตัดใบยกเลิก/ไม่อนุมัติ · `[]` = ไม่มี |
 
   ## `documents` — เอกสารแนบทั้งชุด (เพิ่ม 2026-09-17)
 
@@ -94,3 +96,35 @@ docs: |
 
   > 🔻 **Breaking (2026-09-17)** — ถอด `sales_document_no` / `sales_document_url` (เอกสารการขาย) ออกแล้ว
   > ใช้ไฟล์ใบเสร็จ `receipt_url` แทน · ค้นหาด้วยเลขที่เอกสารการขายไม่ได้แล้ว
+
+  ## `quotation` — ข้อมูลใบเสนอราคาต้นทาง (เพิ่ม 2026-09-17)
+
+  `null` = ใบสั่งขายเก่าที่ไม่ได้มาจากใบเสนอราคา
+
+  ```json
+  "quotation": {
+    "id": 2692,
+    "quotation_number": "QT-2026-0059",
+    "quotation_date": "2026-09-17",
+    "status": "completed",
+    "status_label": "การขายเสร็จสิ้น",
+    "price_mode": "novat",
+    "total_before_discount": 156445,
+    "total_discount": 555,
+    "vat_amount": 10951.15,
+    "total_after_discount": 167396.15,
+    "note": "สามารถจัดส่งสินค้าได้ภายในสิ้นเดือนนี้",
+    "quotation_image_url": null
+  }
+  ```
+
+  | ฟิลด์ | ความหมาย |
+  |---|---|
+  | `id` | รหัสใบเสนอราคา — ใช้เรียก `quotation/edit/{id}` เมื่อต้องการรายการสินค้า |
+  | `status` · `status_label` | คีย์อังกฤษ + ป้ายไทยชุดเดียวกับฝั่งเว็บ (สถานะเดินตามใบสั่งขาย) |
+  | `price_mode` | โหมดภาษีของใบ |
+  | `total_before_discount` · `total_discount` · `vat_amount` · `total_after_discount` | ยอดของ **ใบเสนอราคา** หน่วย **บาท** (อาจต่างจาก `total_after_discount` ระดับรายการซึ่งเป็นยอดของใบสั่งขาย) |
+  | `note` | หมายเหตุในใบเสนอราคา |
+  | `quotation_image_url` | รูปใบเสนอราคาแบบแนบรูป (S3 60 นาที · `null` = ไม่มี) |
+
+  > `quotation_image_url` ระดับรายการเดิมเป็น `null` ตลอด — แก้แล้ว ค่าเดียวกับใน `quotation`
