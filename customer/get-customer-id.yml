@@ -38,6 +38,15 @@ docs: |-
   | `late_request_status` | ทั้ง 3 ชุด | `pending` / `approved` / `rejected` / `null` |
   | `late_request_note` | scheduled | `admin_note` ของใบล่าสุด (เหตุผลที่ถูกตีกลับ) |
   | `late_request` | ทั้ง 3 ชุด | อ็อบเจกต์คำขอเต็มใบ (ดูด้านล่าง) — `null` ถ้าไม่เคยยื่น |
+  | `is_not_visited` | scheduled, global_schedule | **ไม่ได้เข้าพบลูกค้า** (เพิ่ม 2026-09-21) — `true` = แอดมินไม่อนุมัติคำขอล่าช้า **ปฏิทินให้แสดงเป็นสีแดง** ไม่ใช่สีของนัดที่ยังต้องตาม |
+  | `not_visited_label` | scheduled, global_schedule | ป้ายภาษาไทย `"ไม่ได้เข้าพบลูกค้า"` — `null` ถ้าไม่ได้อยู่ในสถานะนี้ |
+  | `can_cancel` · `can_restore` | scheduled, global_schedule | โชว์ปุ่มยกเลิกนัด / คืนสถานะได้ไหม · นัดที่ `is_not_visited = true` เป็น `false` ทั้งคู่ |
+
+  > `is_not_visited` ดูผลคำขอล่าสุดควบกับ `follow_status_id` — นัดที่ถูกตีกลับก่อนระบบจะตั้งสถานะให้
+  > (ข้อมูลเก่า) จึงได้ `true` เหมือนกัน แอปไม่ต้องไปเทียบ `late_request_status` เอง
+  >
+  > เป็นสถานะปลายทาง — `can_submit` / `can_request_late` / `can_cancel` เป็น `false` หมด และไม่มีปุ่มคืนสถานะ
+  > ถ้าจะตามลูกค้ารายนั้นต่อต้องสร้างนัดใหม่ · ยิงเส้น 10 / 11 / 12 / 17 ทับจะได้ `422` พร้อม `is_not_visited: true`
 
   **โครงสร้าง `late_request`**
 
