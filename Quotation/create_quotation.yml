@@ -178,7 +178,7 @@ docs: |
   | `quotation_lines[N][uom_code]` | string | ✅ | รหัสหน่วยนับ (`uoms.uom_code`) เช่น `EA`, `BX`, `SET`, `HRS` |
   | `quotation_lines[N][unit_price]` | numeric | | ราคาต่อหน่วย (บาท) — หากไม่ระบุ ระบบจะดึงราคามาตรฐานจาก `product_prices` ตาม `price_mode` และหน่วยนับ (ระบบตรวจไม่ให้ต่ำกว่า Min Price) |
   | `quotation_lines[N][usd_price]` | numeric | | ราคาต่อหน่วย (USD) — หากระบุ ระบบจะใช้ราคานี้แปลงเป็นบาทตามอัตราแลกเปลี่ยน ธปท. วันนั้นทันที (ข้ามการตรวจ Min Price บาท) |
-  | `quotation_lines[N][manual_discount]` | numeric | | ส่วนลดพิเศษที่พนักงานขายกรอกเอง (ไม่ส่ง = `0`) |
+  | `quotation_lines[N][manual_discount]` | numeric | | ส่วนลดพิเศษที่พนักงานขายกรอกเอง (ไม่ส่ง = `0`) — เมื่อ `discount_type = percent` ระบบปรับค่าที่เกิน `100` เป็น `100` อัตโนมัติ |
   | `quotation_lines[N][discount_type]` | string (enum) | | ประเภทส่วนลดพิเศษ: `amount` (บาท) หรือ `percent` (% ของยอดก่อนลดของบรรทัดนั้น) |
   | `quotation_lines[N][option_ids][]` | array\<int\> | | รายการรหัส Option สินค้าที่เลือก (`product_options.id`) ราคา Option จะถูกนำไปบวกเพิ่มในราคาต่อหน่วยอัตโนมัติ |
 

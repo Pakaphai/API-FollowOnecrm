@@ -18,7 +18,7 @@ docs:
   content: |
     # API Reference — `/api/v1` ทั้งหมด
 
-    สารบัญเส้น API ของแอปมือถือทุกเส้นใน [`routes/api/api_v1.php`](../routes/api/api_v1.php) — **94 เส้น** จาก 17 controller
+    สารบัญเส้น API ของแอปมือถือจาก [`routes/api/api_v1.php`](../routes/api/api_v1.php) — อ้างอิง route ที่ใช้งานปัจจุบัน
 
     | เอกสารเจาะลึกรายหัวข้อ | |
     |---|---|
@@ -44,6 +44,13 @@ docs:
     | [api-notification-delete.md](api-notification-delete.md) | ลบการแจ้งเตือน — ทีละรายการ / ล้างกล่อง |
     | [maintenance-line-options-price.md](maintenance-line-options-price.md) | ตรวจ/ซ่อมเอกสารที่ราคาไม่รวมตัวเลือกสินค้า |
     | [order-edit-status-impact.md](order-edit-status-impact.md) | เปิดปุ่มแก้ไขทุกสถานะ — ผลกระทบและแนวทางแก้ |
+
+    ## อัปเดต 22/09/2569 — เอกสารขาย, ค่าคอมมิชชั่น และใบลดหนี้
+
+    - เพิ่ม `GET reports/seller/commissions` สำหรับรายงานค่าคอมของพนักงานขาย โดยสรุปยอดก่อนหัก ภาษีหัก ณ ที่จ่าย และยอดสุทธิ
+    - เพิ่ม `GET debt-reduction/{id}` สำหรับเปิดรายละเอียดใบลดหนี้: ลูกค้า เอกสารอ้างอิง รายการสินค้า เหตุผล หมายเหตุ และยอดสรุป
+    - เพิ่มข้อมูล `commission` ในข้อมูลใบเสนอราคาและใบสั่งขาย เพื่อแสดงเลขที่ใบค่าคอม ยอดก่อนหัก ภาษีหัก ณ ที่จ่าย และยอดสุทธิ
+    - ส่วนลดพิเศษรายบรรทัดที่เป็นเปอร์เซ็นต์ (`discount_type = percent`) จำกัดสูงสุด `100%` โดยระบบปรับค่าให้เอง
 
     ---
 
@@ -315,11 +322,12 @@ docs:
     | 🔒 | `GET` | `billing/list` | รายการติดตามเก็บเงิน |
     | 🔒 | `GET` | `api/order/details/{id}` | รายละเอียดใบสั่งขาย |
 
-    ### 11. Debt Reduction (ใบลดหนี้) — 5 เส้น
+    ### 11. Debt Reduction (ใบลดหนี้) — 6 เส้น
 
     | | Method | Path | ใช้ทำอะไร |
     |:---:|---|---|---|
     | 🔒 | `GET` | `debt-reduction/list` | รายการใบลดหนี้ + ลูกค้า |
+    | 🔒 | `GET` | `debt-reduction/{id}` | รายละเอียดใบลดหนี้ พร้อมยอดสรุปและเอกสารอ้างอิง |
     | 🔒 | `GET` | `debt-reduction/orders/{customer_id}` | ใบสั่งขายของลูกค้ารายนั้น |
     | 🔒 | `GET` | `debt-reduction/order-items/{order_id}` | รายการสินค้าในใบสั่งขาย |
     | 🔒 | `POST` | `debt-reduction/store` | สร้างใบลดหนี้ |
@@ -351,12 +359,13 @@ docs:
 
     📄 **[api-seat-quota.md](api-seat-quota.md)**
 
-    ### 15. Commission (ค่าคอมของฉัน) — 2 เส้น
+    ### 15. Commission (ค่าคอมมิชชั่น) — 3 เส้น
 
     | | Method | Path | ใช้ทำอะไร |
     |:---:|---|---|---|
     | 🔒 | `GET` | `my/commission` | การ์ดสรุป + ใบค่าคอมทั้งปี (`?year=` เป็น **ค.ศ.**) |
     | 🔒 | `GET` | `my/commission/{id}` | ใบค่าคอมใบเดียว — ใบของคนอื่นได้ **404** |
+    | 🔒 | `GET` | `reports/seller/commissions` | รายงานค่าคอมตามเดือนสำหรับพนักงานขาย |
 
     ข้อมูลชุดเดียวกับหน้าเว็บ `/my/commission` · ผูกกับผู้ที่ล็อกอินเสมอ ไม่รับ `user_id` · `level` ต้องเป็น 0/1/2
     ตัวเลขเงินใน response **หารด้วย 100 มาให้แล้ว** (บาท) และ `commission_rate` เป็นเปอร์เซ็นต์จริง — ห้ามหารซ้ำ
@@ -1107,6 +1116,11 @@ docs:
 
     > เลขใบลดหนี้เปลี่ยน prefix จาก `DR-` เป็น **`SR-`** แล้ว ใบเก่าถูกเปลี่ยนตาม (migration v0112)
 
+    ### `GET debt-reduction/{id}`
+    → `{debt_reduction, customer, source_document, items, summary}`
+
+    ใช้เปิดแผงรายละเอียดใบลดหนี้ โดย `summary` คืนยอดก่อนลด ยอดหลังลด VAT ยอดลดหนี้ และยอดคงเหลือ; `source_document` คืนเลข QT/PO/IV และรูปแบบราคา/ภาษี; ส่วน `debt_reduction` คืนเหตุผล หมายเหตุ สถานะ และไฟล์แนบ
+
     ### `GET debt-reduction/orders/{customer_id}`
     คืน **array ดิบ** ของใบสั่งขาย — มี `quotation_number` / `reference_number` มาให้แสดงด้วย แต่ค่าที่ส่งกลับตอนสร้างใบลดหนี้ยังเป็น `id` ของ **ใบสั่งขาย** เหมือนเดิม
 
@@ -1335,7 +1349,7 @@ docs:
 
     ---
 
-    *อัปเดตล่าสุด: 2026-08-27 · อ้างอิงจาก [`routes/api/api_v1.php`](../routes/api/api_v1.php)*
+    *อัปเดตล่าสุด: 2026-09-22 · อ้างอิงจาก [`routes/api/api_v1.php`](../routes/api/api_v1.php)*
 
   type: text/markdown
 bundled: false

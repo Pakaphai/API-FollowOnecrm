@@ -55,6 +55,25 @@ settings:
   maxRedirects: 5
 
 docs: |
+  ## ค่าคอมมิชชั่นของเอกสาร (`commission`) — เพิ่ม 22/09/2569
+
+  ทุกแถวมี `commission` เพื่อใช้แสดงค่าคอมมิชชั่นของเอกสารขายโดยไม่ต้องเรียก API เพิ่ม
+
+  ```json
+  "commission": {
+    "is_issued": true,
+    "document_numbers": ["CM-202609-0002"],
+    "rate_percent": 10,
+    "before_withholding": 28284.20,
+    "withholding_tax": 848.53,
+    "net_commission": 27435.67
+  }
+  ```
+
+  - เงินทั้งหมดเป็น **บาท** แล้ว
+  - `is_issued: false` หมายถึงเอกสารยังไม่ถูกนำไปออกใบค่าคอม ฟิลด์ยอดจะเป็น `null`
+  - `net_commission = before_withholding - withholding_tax`
+
   ## การแบ่งหน้า (pagination)
 
   เส้นนี้แบ่งหน้าเสมอ ไม่ส่งอะไรมาก็ได้ 20 รายการแรก

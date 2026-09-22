@@ -139,7 +139,7 @@ docs: |
   | `quotation_lines[N][uom_code]` | string | ✅ | รหัสหน่วยนับ (`EA`, `BX`, `SET` ฯลฯ) |
   | `quotation_lines[N][unit_price]` | numeric | | ราคาต่อหน่วย (บาท) — ตรวจสอบไม่ให้ต่ำกว่า Min Price |
   | `quotation_lines[N][usd_price]` | numeric | | ราคาต่อหน่วย (USD) — หากขายเป็น USD ต้องส่งค่านี้กลับมาเพื่อคงราคา USD |
-  | `quotation_lines[N][manual_discount]` | numeric | | ส่วนลดพิเศษ (ไม่ส่ง = `0`) |
+  | `quotation_lines[N][manual_discount]` | numeric | | ส่วนลดพิเศษ (ไม่ส่ง = `0`) — เมื่อ `discount_type = percent` ระบบปรับค่าที่เกิน `100` เป็น `100` อัตโนมัติ |
   | `quotation_lines[N][discount_type]` | string (enum) | | ประเภทส่วนลดพิเศษ: `amount` (บาท) หรือ `percent` (%) |
   | `quotation_lines[N][option_ids]` | array\<int\> | | รหัส Option สินค้า (**ไม่ส่งคีย์นี้ = คง Option เดิมไว้**, ส่ง `[]` = ลบ Option ทั้งหมด) |
 
