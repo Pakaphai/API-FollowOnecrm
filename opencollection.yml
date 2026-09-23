@@ -548,6 +548,12 @@ docs:
     ### `GET calendar/all/customer`
     นัดหมาย **ทั้งบริษัท** ทุกเซลส์ ไม่กรองเดือน → `{global_schedule: [...]}` แต่ละแถวมี `formatted_name` (ชื่อบริษัทเติมคำนำหน้าตาม `business_type_id`) และ `visit_pic_url` (presigned 10 นาที)
 
+    **สถานะคำขอนัดหมายล่าช้า** (เพิ่ม 2026-09-23) — `late_request_status` (`pending` · `approved` · `rejected` · `null` = ยังไม่เคยยื่นคำขอ) และ `late_request_status_label` (ป้ายไทย: รออนุมัติ · อนุมัติแล้ว · ไม่อนุมัติ)
+
+    > ⚠️ `is_late: true` คู่กับ `late_request_status: null` เป็นสถานะปกติและพบบ่อยที่สุด — แปลว่า "เลยวันนัดแล้วแต่ยังไม่ได้ยื่นคำขอ" คือนัดที่ควรขึ้นปุ่ม "ขออนุมัติล่าช้า" · `rejected` จะมาคู่กับ `is_not_visited: true` เสมอ
+
+    รายละเอียดคำขอเต็ม (เหตุผล รูปภาพ หมายเหตุแอดมิน) อยู่ที่คีย์ `late_request` ของเส้นตระกูล `relationship-detail` ไม่ได้ส่งมากับเส้นปฏิทิน
+
     ---
 
     ## 5. Customer 🔒
