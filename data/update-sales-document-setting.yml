@@ -1,0 +1,77 @@
+info:
+  name: update-sales-document-setting
+  type: http
+  seq: 4
+
+http:
+  method: POST
+  url: "{{sale_uat}}/api/v1/sales-document-setting"
+  auth:
+    type: bearer
+    token: "{{token}}"
+  body:
+    type: json
+    data: |-
+      {
+        "price_mode": "novat"
+      }
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+
+docs: |-
+  ## POST `/api/v1/sales-document-setting`
+
+  Updates the company sales-document settings. This endpoint requires an administrator token (`level` 0 or 1).
+  Every field is optional: omitted fields keep their existing values.
+
+  ### Request body
+
+  ```json
+  {
+    "price_mode": "novat"
+  }
+  ```
+
+  | Field | Type | Accepted values | Description |
+  |---|---|---|---|
+  | `price_mode` | string | Values returned in `selectable_price_modes` | `price`: no VAT; `novat`: add VAT 7% to total; `vat`: price already includes VAT 7%. |
+  | `allow_pending` | boolean | `true` / `false` | Enables the pending-approval document action. |
+  | `allow_direct_order` | boolean | `true` / `false` | Enables the direct-order document action. |
+  | `allow_lines` | boolean | `true` / `false` | Enables product-line entry. |
+  | `allow_image` | boolean | `true` / `false` | Enables image attachment entry. |
+
+  `vat` is a legacy mode. It is returned as selectable only for a company that is currently using it. Once changed to another mode, it cannot be selected again.
+
+  ### Response (200)
+
+  ```json
+  {
+    "success": true,
+    "message": "Sales document settings updated.",
+    "data": {
+      "price_mode": "novat",
+      "price_mode_label": "Price excludes 7% VAT (Exclude)",
+      "price_mode_short_label": "VAT 7% excluded",
+      "price_mode_hint": "The entered price excludes VAT; the system adds 7% VAT to the grand total.",
+      "selectable_price_modes": ["price", "novat"],
+      "price_mode_options": [
+        { "value": "price", "selectable": true },
+        { "value": "vat", "selectable": false },
+        { "value": "novat", "selectable": true }
+      ]
+    }
+  }
+  ```
+
+  The response `data` has the same complete structure as `GET /api/v1/sales-document-setting`; use it to refresh the configuration screen after saving.
+
+  ### Validation and permissions
+
+  | HTTP | Condition |
+  |---|---|
+  | `403` | Current user is not level 0 or 1. |
+  | `422` | `price_mode` is not selectable, or both document actions / both input methods would be disabled. |

@@ -19,12 +19,35 @@ settings:
 docs: |-
   ## 2. `GET sales-document-setting`
 
+  ### Price format and VAT fields
+
+  The response now includes the company price format. Use `price_mode` when calculating totals and commission:
+
+  | Field | Description |
+  |---|---|
+  | `price_mode` | `price` = no VAT, `novat` = price excludes VAT (add 7%), `vat` = price already includes VAT (legacy). |
+  | `price_mode_label`, `price_mode_short_label`, `price_mode_hint` | Display-ready labels and explanation from the server. |
+  | `selectable_price_modes` | The only values the client may submit to `POST sales-document-setting`. |
+  | `price_mode_options` | All modes with labels, hints, and a `selectable` flag for building the settings UI. |
+
+  For commission, only `vat` documents require VAT to be removed from the post-discount amount (`VAT = amount * 7 / 107`). `price` and `novat` use the pre-VAT amount as the commission base.
+
   ไม่รับพารามิเตอร์ · อ่านได้ทุกคนที่ล็อกอิน (พนักงานขายต้องใช้ประกอบหน้าจอ)
 
   ```json
   {
     "success": true,
     "data": {
+      "price_mode": "novat",
+      "price_mode_label": "Price excludes 7% VAT (Exclude)",
+      "price_mode_short_label": "VAT 7% excluded",
+      "price_mode_hint": "The entered price excludes VAT; the system adds 7% VAT to the grand total.",
+      "selectable_price_modes": ["price", "novat"],
+      "price_mode_options": [
+        { "value": "price", "selectable": true },
+        { "value": "vat", "selectable": false },
+        { "value": "novat", "selectable": true }
+      ],
       "document_actions": { "pending": true, "order": false },
       "allowed_statuses": ["open"],
       "default_status": "open",
