@@ -966,6 +966,9 @@ docs:
 
     แต่ละใบมี `total_after_discount_usd` (ยอดสุทธิเทียบ USD สำหรับแสดง `≈ $43.00` ใต้ยอดเงินบาท) + `usd_rate_used` + `usd_rate_from_document`
 
+    **ยอดในกล่องสรุป + สีป้ายสถานะ** (เพิ่ม 2026-09-23 · ชุดเดียวกับ `order/list`) — ดูรายละเอียดที่หัวข้อ `GET order/list`
+    `total_after_bill_discount` (ยอดรวมหลังหักส่วนลด) · `total_before_vat` (มูลค่าก่อนภาษี) · `vat_rate` · `price_mode_label` · `status_color`
+
     ### `POST quotation/with-images/create` · `.../update/{id}`
     สำหรับใบเสนอราคาที่ **แนบรูปแทนการคีย์รายการสินค้า**
 
@@ -1025,6 +1028,38 @@ docs:
     > ใช้ไฟล์ใบเสร็จ `receipt_url` แทน · ค้นหาด้วยเลขที่เอกสารการขายไม่ได้แล้ว
 
     ข้อมูลลูกค้าแนบมาด้วย: `customer_name` · **`contact_name`** (ชื่อผู้ติดต่อ) · **`customer_code`** (รหัสลูกค้า) · `customer_phone` · `tax_id` · ที่อยู่พร้อมชื่อตำบล/อำเภอ/จังหวัด · สองคีย์ที่ทำตัวหนาเคยคืน `null` ตลอดเพราะไม่ได้ถูก select มา แก้แล้ว (2026-09-11)
+
+    **ยอดในกล่องสรุป** (เพิ่ม 2026-09-23 · มีทั้งใน `order/list` และ `quotation/list`) — เดิมแอปต้องคำนวณเองจาก `total_before_discount` กับ `header_discount` ตอนนี้ส่งมาให้ครบ ตรงกับกล่องสรุปฝั่งเว็บบรรทัดต่อบรรทัด
+
+    | ฟิลด์ | บรรทัดบนเว็บ |
+    |---|---|
+    | `total_after_bill_discount` | ยอดรวมหลังหักส่วนลด (= `total_before_discount - header_discount`) |
+    | `total_before_vat` | มูลค่าก่อนภาษี (ฐานภาษีของใบนี้) |
+    | `vat_rate` | `7` · `0` เมื่อใบนี้ไม่คิดภาษี |
+    | `price_mode` / `price_mode_label` | รูปแบบราคา + ป้ายไทย เช่น "ราคาแยกภาษีมูลค่าเพิ่ม 7% (Exclude)" |
+
+    ⚠️ `total_before_vat` **ไม่ใช่** `total_after_bill_discount - vat_amount` เสมอไป — โหมด `vat` (รวมภาษี) เท่านั้นที่ถอดภาษีแฝงออก ส่วน `novat` (**แยกภาษี** ไม่ใช่ไม่มีภาษี) และ `price` (ไม่มีภาษี) ใช้ยอดหลังหักส่วนลดเป็นฐานตรง ๆ · เว็บซ่อนบรรทัด "มูลค่าก่อนภาษี" เมื่อไม่ใช่โหมด `vat`
+
+    ```json
+    "price_mode": "novat", "total_before_discount": 900.00, "header_discount": 90.00,
+    "total_after_bill_discount": 810.00, "total_before_vat": 810.00,
+    "vat_amount": 56.70, "vat_rate": 7, "total_after_discount": 866.70
+    ```
+
+    **ใบลดหนี้ · ยอดที่ต้องชำระ · วันครบกำหนด** (เพิ่ม 2026-09-23) — ชุดเดียวกับตารางเอกสารขายฝั่งเว็บ
+
+    | ฟิลด์ | ความหมาย |
+    |---|---|
+    | `credit_note_numbers` | เลขที่ใบลดหนี้ (`SR-xxxxxx-xxxx`) · `[]` = ไม่มี |
+    | `credit_note_total` | ยอดใบลดหนี้ที่อนุมัติแล้ว (บาท) |
+    | `payable_amount` | ยอดที่ต้องชำระจริงหลังหักใบลดหนี้ · `null` = ไม่มีใบลดหนี้ ใช้ `total_after_discount` ได้เลย |
+    | `due` | วันครบกำหนดชำระ — `{credit_days, due_date, text, days_remaining, days_overdue, is_overdue, level}` · `text: ""` = ไม่ต้องแสดง |
+    | `status_color` | สี hex ของ badge ชุดเดียวกับเว็บ (`OrderModel::STATUS_COLORS`) |
+    | `payment_status` | `unpaid` · `partial_paid` · `paid` |
+    | `delivery_date` | วันส่งของ · `null` = ยังไม่ส่ง |
+    | `reject_reason` | เหตุผลที่คลังแจ้งว่าสินค้าไม่เพียงพอ · `null` = ไม่ได้ถูกตีกลับ |
+
+    `due` มีค่าเฉพาะใบที่ให้เครดิตไว้ + ยังไม่ชำระ + อยู่ขั้น `shipped` นับจากวันส่งของ (ไม่มีจึงใช้วันที่เอกสาร แล้วจึงวันที่สร้าง) — ตัวคำนวณตัวเดียวกับเว็บ (`OrderModel::creditDueInfo`) · `level` = `danger` (เลยกำหนด/ครบวันนี้) · `warning` (เหลือไม่เกิน 30% ของวันเครดิต) · `success`
 
     ### `GET order/edit-api/{id}`
     → `{success, message, data:{quotation_header:{..., quotation_lines:[...]}}, products, customers, conditions, order_conditions, user, usd_pricing, usd_rate}`
@@ -1115,6 +1150,12 @@ docs:
     ข้อมูลที่แอดมินกรอกตอนอนุมัติ: **`credit_note_no`** (เลขที่ใบลดหนี้จากระบบบัญชี · คนละตัวกับ `document_no` ที่ระบบรัน) · **`attachment_url`** (ไฟล์ใบลดหนี้ ลิงก์ S3 อายุ 10 นาที) — ทั้งคู่ `null` = ไม่ได้กรอก/ไม่ได้แนบ
 
     > เลขใบลดหนี้เปลี่ยน prefix จาก `DR-` เป็น **`SR-`** แล้ว ใบเก่าถูกเปลี่ยนตาม (migration v0112)
+
+    **VAT และยอดรวมของแต่ละใบ** (เพิ่ม 2026-09-23 · ชุดเดียวกับคอลัมน์ใหม่ในตาราง `/debt-reduction/list` และ `/admin/reduction` ฝั่งเว็บ) — `vat_amount` · `total_with_vat` · `show_vat` (`false` = ใบไม่คิดภาษี ให้แสดงขีดแทน `0.00`) · `price_mode` (โหมดของใบสั่งขายต้นทาง)
+
+    แยกจาก `total_amount` ด้วยกฎ `price_mode`: `novat` บวก 7% เพิ่ม · `vat` ถอด 7/107 ออก (`total_with_vat = total_amount`) · `price` ไม่คิดภาษี
+
+    > ⚠️ ยอดเงินในเส้นนี้เป็น **สตางค์** (เหมือน `total_amount` เดิม) ต่างจาก `GET debt-reduction/{id}` ที่เป็นบาทแล้ว
 
     ### `GET debt-reduction/{id}`
     → `{debt_reduction, customer, source_document, items, summary}`
