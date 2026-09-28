@@ -53,12 +53,13 @@ docs:
     - **ลำดับแถวเรียงตามความเร่งด่วน** ค้างชำระแบบเครดิต → ค้างชำระเงินสด → ชำระแล้วท้ายสุด — เดิมเรียงตาม `updated_at` อย่างเดียว หน้าแรกจึงไม่ใช่รายการที่ต้องตามเก็บเงินจริง
     - แอดมิน/เจ้าของ (level 0/1) ยังเห็นทั้งบริษัทเหมือนเดิม · ค้นหา `q` และยอดรวม `total_paid` / `total_unpaid` ทำงานเหมือนเดิม
 
-    ## อัปเดต 28/09/2569 — ใบลดหนี้ (`debt-reduction/list`) รายละเอียดครบในเส้นเดียว
+    ## อัปเดต 28/09/2569 — 🔻 `debt-reduction/list` โครงสร้างใหม่ ส่งเฉพาะที่หน้าจอใช้ (Breaking)
 
-    - แต่ละรายการใน `debtReductions[]` มี **`items[]`** (สินค้าที่ลดหนี้) · **`summary`** (สรุปยอด) · **`source_document`** (ใบเสนอราคา → ใบสั่งขายต้นทางทั้งใบ พร้อม `lines[]` และ `is_reduced`) · `quotation_image_url` · `seller_name` · `reason` และชื่อจังหวัด/อำเภอ/ตำบลของลูกค้า — ชุดเดียวกับแผงรายละเอียดฝั่งเว็บ แอปไม่ต้องยิง `debt-reduction/{id}` ทีละใบ
-    - ตัวเลขในก้อนใหม่เป็น **บาท** · ฟิลด์เดิมระดับใบ (`total_amount` `vat_amount` `total_with_vat`) ยังเป็น **สตางค์** เหมือนเดิม
+    - แต่ละรายการใน `debtReductions[]` จัดเป็น 3 ส่วนตามหน้าเว็บ: **ฟิลด์ระดับบน = แถวในตาราง** · **`quotation`** = การ์ดใบเสนอราคา (หัวใบ · `lines[]` ที่ขายจริงพร้อม `is_reduced` · `totals`) · **`credit_note`** = การ์ดใบลดหนี้ (หัวใบ · `reason` · `items[]` · `summary` ยอดเดิม/ยอดลดหนี้/ยอดคงเหลือ)
+    - ตัวเลข**ทุกช่องเป็นบาท** · สถานะจัดเป็นก้อน `status {code,text,short,color,icon}` · `is_returned` เป็น boolean
+    - **ตัด model ดิบออก** (`order`, `customer.user`, `creator`) — เดิมหลุดอีเมล เบอร์ เลขภาษี fcm_token ของพนักงานออกไปทั้งก้อน
     - "ใบของฉัน" ใช้กติกาเดียวกับเว็บ: ลูกค้าที่ดูแล **หรือ** ใบที่ตัวเองออก (`created_by`) — เดิม API ดูแค่ลูกค้าที่ดูแล
-    - รายละเอียดอยู่ใน `DebtReductions/list-debt-reduction.yml`
+    - ตารางเทียบฟิลด์เดิม → ใหม่ และตัวอย่างเต็มอยู่ใน `DebtReductions/list-debt-reduction.yml`
 
     ---
 
@@ -1180,8 +1181,9 @@ docs:
 
     **แบ่งหน้าเฉพาะ `debtReductions`** ส่วน `customers` เป็นลิสต์ตัวเลือกตอนสร้างใบลดหนี้ จึงคืนมาครบเสมอ
 
-    **รายละเอียดครบในเส้นเดียว (ปรับ 28/09/2569)** — แต่ละใบมี `items[]` · `summary` · `source_document` (ใบเสนอราคา/ใบสั่งขายต้นทางทั้งใบ + `lines[]` พร้อม `is_reduced`) · `quotation_image_url` · `seller_name` · `reason` และ `customer.province_name` / `district_name` / `subdistrict_name` / `subdistrict_zip_code`
-    ชุดเดียวกับแผงรายละเอียดฝั่งเว็บ · ก้อนใหม่เป็น **บาท** ส่วนฟิลด์เดิมระดับใบยังเป็นสตางค์ · ดูรายละเอียดฟิลด์ใน `DebtReductions/list-debt-reduction.yml`
+    **🔻 โครงสร้างใหม่ 28/09/2569** — แต่ละใบ = แถวตาราง (`id` `document_no` `reduction_date` `reference_number` `customer{id,customer_code,name,contact_name}` `amount{total,vat,total_with_vat,show_vat}` `is_returned` `status{code,text,short,color,icon}` `attachment_url` `can_delete`)
+    + `quotation` (การ์ดใบเสนอราคา: หัวใบ · `lines[]` พร้อม `is_reduced` · `totals`) + `credit_note` (การ์ดใบลดหนี้: `seller_name` `credit_note_no` `reason` · `items[]` · `summary{original,reduction,vat,reduction_with_vat,remaining}`)
+    ทุกช่องเป็น **บาท** · ไม่ส่ง model ดิบ (`order` / `customer.user` / `creator`) แล้ว · ตารางเทียบฟิลด์เดิม→ใหม่ใน `DebtReductions/list-debt-reduction.yml`
 
     **ใบของฉัน** = ลูกค้าที่ฉันดูแล **หรือ** ใบที่ฉันออก (`created_by`) — กติกาเดียวกับหน้าเว็บ `/debt-reduction/list`
 
