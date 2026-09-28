@@ -20,9 +20,108 @@ settings:
   maxRedirects: 5
 
 docs: |
+  ## รายละเอียดครบในเส้นเดียว — ปรับ 28/09/2569
+
+  แต่ละรายการใน `debtReductions[]` มีข้อมูล**ชุดเดียวกับแผงรายละเอียดฝั่งเว็บ** (`/debt-reduction/list` → ปุ่มดูรายละเอียด)
+  ติดมาด้วยแล้ว แอปวาดหน้ารายละเอียดได้จากเส้นนี้เส้นเดียว ไม่ต้องยิง `GET debt-reduction/{id}` ทีละใบ
+  (เส้นนั้นยังใช้ได้เหมือนเดิม)
+
+  > ⚠️ ตัวเลขใน `items[]` / `summary` / `source_document` เป็น **บาท** แล้ว
+  > ต่างจาก `total_amount` / `vat_amount` / `total_with_vat` ระดับใบที่ยังเป็น **สตางค์** (คงไว้ไม่ให้แอปรุ่นเดิมพัง)
+
+  | ฟิลด์ใหม่ | ความหมาย |
+  |---|---|
+  | `items[]` | รายการสินค้าที่ลดหนี้ — ดูตารางถัดไป · `[]` = ใบที่กรอกยอดมาตรง ๆ |
+  | `summary` | สรุปยอดของใบ (บาท) — สูตรเดียวกับใบพิมพ์และแผงรายละเอียด |
+  | `source_document` | **ใบเสนอราคา → ใบสั่งขายต้นทางทั้งใบ** พร้อมรายการที่ขายจริง · `null` = หาต้นทางไม่เจอ |
+  | `quotation_image_url` | รูปใบเสนอราคาแบบแนบรูป (S3 10 นาที) · `null` = ไม่มี |
+  | `seller_name` | ชื่อผู้ขาย — คนออกใบ ถ้าแอดมินออกให้จะเป็นเซลล์ของออเดอร์ต้นทาง · ไม่มีชื่อใช้ชื่อผู้ใช้ |
+  | `reason` | เหตุผลการลดหนี้ = หมายเหตุแรกที่ไม่ว่าง · `null` = ไม่ได้ระบุ (ต่างจาก `display_note` ที่คืน `-`) |
+  | `customer.province_name` · `district_name` · `subdistrict_name` · `subdistrict_zip_code` | ชื่อจังหวัด/อำเภอ/ตำบล + รหัสไปรษณีย์ของลูกค้า (เดิมมีแต่รหัส) |
+
+  ### `items[]` — รายการสินค้าที่ลดหนี้
+
+  | ฟิลด์ | ความหมาย |
+  |---|---|
+  | `id` · `order_item_id` | รหัสบรรทัดลดหนี้ · รหัสบรรทัดขาย (`order_lines.id`) ที่อ้างอิง |
+  | `product_code` · `product_name` | สินค้า |
+  | `quantity_baht` · `unit_price_baht` · `subtotal_baht` | จำนวน · ราคา/หน่วย · ยอดลดหนี้ตามราคาที่เสนอ (ค่า 0 ตกไปใช้ค่าจากบรรทัดขายเดิม) |
+  | `net_amount_baht` · `vat_amount_baht` · `total_line_baht` | ยอดก่อนภาษี · ภาษี · ยอดรวมของบรรทัด (แยกตาม `price_mode` ของใบสั่งขายต้นทาง) |
+  | `note` | หมายเหตุ/เหตุผลของบรรทัด |
+  | `image_url` | รูปประกอบของบรรทัดนี้ (S3 10 นาที) · `null` = ไม่มี · **ไม่** fallback เป็นรูปใบเสนอราคา |
+  | `quantity` · `unit_price` · `subtotal` · `image_path` · `original_*` | ค่าดิบจากฐานข้อมูล (สตางค์) — ใช้ช่อง `*_baht` แทน |
+
+  ### `summary` — สรุปยอด (บาท)
+
+  | ฟิลด์ | ความหมาย |
+  |---|---|
+  | `gross` | ยอดลดหนี้ตามราคาที่เสนอลูกค้า (ใบที่ไม่มีรายการใช้ `total_amount` ของหัวเอกสาร) |
+  | `original` | ยอดขายเดิมก่อนภาษี (หลังหักส่วนลดท้ายบิล) · `null` = ไม่มีใบสั่งขายต้นทาง |
+  | `correct` | ยอดที่ถูกต้องหลังลดหนี้ = `original - diff` · `null` เมื่อไม่มี `original` |
+  | `diff` | ยอดลดหนี้ก่อนภาษี |
+  | `vat` | ภาษีของยอดลดหนี้ |
+  | `total` | ยอดลดหนี้รวมภาษี |
+  | `show_vat` | `false` = ใบไม่คิดภาษี ให้แสดงขีดแทน `0.00` |
+
+  ### `source_document` — ใบเสนอราคา / ใบสั่งขายต้นทาง (บาท)
+
+  ก้อนเดียวกับที่แผงรายละเอียดฝั่งเว็บใช้ (`DebtReductionModel::sourceDocumentPayload`) คืนมา**ทั้งใบ** ไม่ใช่เฉพาะบรรทัดที่ถูกลดหนี้
+  เพื่อให้เทียบได้ว่าลดหนี้ไปเท่าไรจากใบที่ขายจริงเท่าไร
+
+  | ฟิลด์ | ความหมาย |
+  |---|---|
+  | `quotation_number` · `quotation_date` | เลขที่ / วันที่ใบเสนอราคาต้นทาง · `null` = ใบเก่าที่ไม่ได้มาจากใบเสนอราคา |
+  | `order_number` · `order_date` · `invoice_number` | เลขที่ / วันที่ใบสั่งขาย · เลขที่ใบกำกับภาษี |
+  | `status` · `status_label` · `status_color` | สถานะใบสั่งขาย + ป้ายไทย + สี ชุดเดียวกับเว็บ |
+  | `note` | หมายเหตุในใบ |
+  | `price_mode` · `price_mode_label` · `vat_rate` | โหมดภาษี (`price` · `novat` · `vat`) + ป้ายไทย + อัตรา (`0` หรือ `7`) |
+  | `total_before_discount` | ยอดก่อนส่วนลดท้ายบิล |
+  | `header_discount` · `header_discount_type` · `header_discount_percent` | ส่วนลดท้ายบิล (บาท) · ชนิด (`amount` / `percent`) · เปอร์เซ็นต์ที่กรอก |
+  | `total_after_bill_discount` | ยอดหลังหักส่วนลดท้ายบิล |
+  | `total_before_vat` · `vat_amount` · `total_after_discount` | ฐานภาษี · ภาษี · ยอดสุทธิของใบ |
+  | `lines[]` | รายการที่ขายจริงทุกบรรทัด: `id` `product_code` `product_name` `uom_code` `uom_label` `qty` `unit_price` `discount` `total_line` และ **`is_reduced`** (`true` = บรรทัดนี้ถูกนำมาลดหนี้ ใช้ไฮไลต์) |
+
+  ตัวอย่างย่อ (ข้อมูลสมมติ ตัดฟิลด์เดิมออก):
+
+  ```json
+  {
+    "id": 123, "document_no": "SR-202609-0007", "price_mode": "novat",
+    "total_amount": 150000, "vat_amount": 10500, "total_with_vat": 160500,
+    "reason": "สินค้าชำรุด", "seller_name": "สมชาย ใจดี", "quotation_image_url": null,
+    "items": [
+      { "id": 9, "order_item_id": 5351, "product_code": "P-15-00-00-0001", "product_name": "กระเป๋า 2",
+        "quantity_baht": 2, "unit_price_baht": 600, "subtotal_baht": 1200,
+        "net_amount_baht": 1200, "vat_amount_baht": 84, "total_line_baht": 1284,
+        "note": "สินค้าชำรุด", "image_url": null }
+    ],
+    "summary": { "gross": 1500, "original": 9000, "correct": 7500, "diff": 1500, "vat": 105, "total": 1605, "show_vat": true },
+    "source_document": {
+      "quotation_number": "QT-2026-0059", "quotation_date": "2026-09-17",
+      "order_number": "PO-2026-0031", "order_date": "2026-09-18", "invoice_number": "IV-2569-0123",
+      "status": "completed", "status_label": "การขายเสร็จสิ้น", "status_color": "#28C76F",
+      "price_mode": "novat", "price_mode_label": "แยกภาษี 7%", "vat_rate": 7,
+      "total_before_discount": 10000, "header_discount": 1000, "header_discount_type": "amount", "header_discount_percent": null,
+      "total_after_bill_discount": 9000, "total_before_vat": 9000, "vat_amount": 630, "total_after_discount": 9630,
+      "lines": [
+        { "id": 5351, "product_code": "P-15-00-00-0001", "product_name": "กระเป๋า 2", "uom_code": "EA", "uom_label": "ชิ้น",
+          "qty": 10, "unit_price": 600, "discount": 0, "total_line": 6000, "is_reduced": true }
+      ]
+    }
+  }
+  ```
+
+  ## ใบที่แสดง — กติกาเดียวกับหน้าเว็บ (ปรับ 28/09/2569)
+
+  "ใบของฉัน" = ใบของลูกค้าที่ฉันดูแลอยู่ **หรือ** ใบที่ฉันเป็นคนออก (`created_by`)
+  เดิม API ดูแค่ลูกค้าที่ดูแล พอลูกค้าถูกย้ายไปให้เซลส์คนอื่น ใบเก่าที่ตัวเองออกจะหายจากแอปทั้งที่ยังอยู่บนเว็บ ตอนนี้ตรงกันแล้ว
+
+  > key `customers` (ตัวเลือกตอนสร้างใบ) ยังตัดลูกค้าที่ออเดอร์ทุกใบมีใบลดหนี้สถานะ `pending` / `approved` / `commissioned` แล้ว
+  > (เว็บตัดแค่ `pending` / `approved`) — เพราะ `debt-reduction/orders/{customer_id}` ก็ตัด `commissioned` เหมือนกัน เลือกไปก็ไม่มีออเดอร์ให้เลือกอยู่ดี
+
   ## เปิดรายละเอียดใบลดหนี้ — เพิ่ม 22/09/2569
 
   เมื่อผู้ใช้กดรายการ ให้เรียก `GET /api/v1/debt-reduction/{id}` เพื่อรับสินค้า, เหตุผล, เอกสารอ้างอิง, รูปแบบราคา/ภาษี และยอดสรุปครบในครั้งเดียว
+  (ตั้งแต่ 28/09/2569 ข้อมูลชุดนี้ติดมากับรายการใน `debt-reduction/list` แล้ว — ดูหัวข้อด้านบน)
 
   ## สถานะใบลดหนี้ (ชุดเดียวกับตารางฝั่งเว็บ)
 
