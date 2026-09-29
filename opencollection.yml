@@ -782,6 +782,8 @@ docs:
 
     > 🔻 **`stock_qty` เปลี่ยนความหมาย** — เดิมเป็นของบนชั้นดิบ ๆ ตอนนี้เป็นยอดที่ขายได้ (หักยอดจองแล้ว) ตรงกับคอลัมน์ "คงเหลือ (พร้อมขาย)" ของตารางสินค้าฝั่งเว็บ · ของบนชั้นอ่านจาก `min_stock_level`
 
+    > แต่ละหน่วยใน `uoms[]` มีกติกาการกรอกจำนวน `is_whole_number` · `qty_step` · `qty_min` · `qty_decimals` — `is_whole_number: true` = หน่วยนั้นต้องกรอกเป็นจำนวนเต็ม · `false` = ทศนิยมได้ 2 ตำแหน่ง ค่ามาจากการตั้งค่าในหน้าจัดการหน่วยนับ (UOM) ฝั่งเว็บ กติกาผูกกับหน่วยนับ ไม่ใช่ตัวสินค้า
+
     > ระดับ `data` มี `usd_pricing` + `usd_rate` (ก้อนเดียวกับ `quotation/preload`) — `usd_pricing: false` เมื่อไรให้ซ่อนราคา USD ทิ้ง
 
     > รูปดึงแยกหลังแบ่งหน้า **จงใจไม่ join** เพราะสินค้าที่มีหลายรูปจะกลายเป็นหลายแถว ทำให้ `total` เพี้ยน
@@ -823,7 +825,9 @@ docs:
     ## 9. Quotation 🔒
 
     ### `GET quotation/preload`
-    → `{customers, products, user, product_price, pomotionLines, conditions, ...}` + รายการหน่วยนับที่ต้องกรอกจำนวนเป็นจำนวนเต็ม (ต้องตรงกับ `UomRules::WHOLE_NUMBER_CODES` — server ตรวจซ้ำตอนบันทึก)
+    → `{customers, products, user, product_price, pomotionLines, conditions, ...}` + `whole_number_uom_codes` รายการหน่วยนับที่ต้องกรอกจำนวนเป็นจำนวนเต็ม (อ่านจากการตั้งค่าหน่วยนับของบริษัท รวมหน่วยที่ผู้ใช้เพิ่มเอง — server ตรวจซ้ำตอนบันทึก)
+
+    > แถวราคาแต่ละหน่วยใน `products[].prices[]` และ `product_price[id][]` มี `is_whole_number` · `qty_step` · `qty_min` · `qty_decimals` บอกว่าหน่วยนั้นกรอกจำนวนเป็นทศนิยมได้หรือต้องเป็นจำนวนเต็ม
 
     > ราคาแยกตามหน่วยนับถูกฝังไว้ใน `products[].prices` แล้ว (แถวเดียวกับ `product_price[id]`) ส่วน `product_price` ระดับบนสุดยังส่งเหมือนเดิม
 

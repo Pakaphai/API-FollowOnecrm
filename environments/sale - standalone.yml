@@ -1,0 +1,8 @@
+name: sale - standalone
+variables:
+  - name: sale_uat
+    value: https://st-followonecrm.com
+  - secret: true
+    name: token
+  - name: sale
+    value: https://jiwonmeaosomzaa.followonecrm.com

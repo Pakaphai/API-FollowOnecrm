@@ -11,16 +11,16 @@ http:
     data:
       - name: customer_id
         type: text
-        value: "2"
+        value: "6"
       - name: quotation_date
         type: text
-        value: 2026-09-15
+        value: 2026-09-28
       - name: price_mode
         type: text
-        value: price
+        value: novat
       - name: header_discount
         type: text
-        value: "100"
+        value: "1000"
       - name: header_discount_type
         type: text
         value: amount
@@ -44,13 +44,13 @@ http:
         disabled: true
       - name: quotation_lines[0][product_id]
         type: text
-        value: "47"
+        value: "6"
       - name: quotation_lines[0][qty]
         type: text
         value: "5"
       - name: quotation_lines[0][uom_code]
         type: text
-        value: EA
+        value: BX
       - name: quotation_lines[0][unit_price]
         type: text
         value: "1000"
@@ -61,7 +61,7 @@ http:
         disabled: true
       - name: quotation_lines[0][manual_discount]
         type: text
-        value: "100"
+        value: "0"
       - name: quotation_lines[0][discount_type]
         type: text
         value: amount
@@ -75,30 +75,40 @@ http:
         disabled: true
       - name: quotation_lines[1][product_id]
         type: text
-        value: "6"
-        disabled: true
+        value: "12"
       - name: quotation_lines[1][qty]
         type: text
-        value: "3"
-        disabled: true
+        value: "7"
       - name: quotation_lines[1][uom_code]
         type: text
-        value: BX
-        disabled: true
+        value: EA
       - name: quotation_lines[1][manual_discount]
         type: text
-        value: "100"
-        disabled: true
+        value: "0"
       - name: quotation_lines[1][discount_type]
         type: text
         value: amount
-        disabled: true
       - name: quotation_image
         type: file
         value:
           - C:\Users\Softa-P\Pictures\image33.png
         contentType: image/png
         disabled: true
+      - name: quotation_lines[2][product_id]
+        type: text
+        value: "7"
+      - name: quotation_lines[2][qty]
+        type: text
+        value: "12"
+      - name: quotation_lines[2][uom_code]
+        type: text
+        value: EA
+      - name: quotation_lines[2][manual_discount]
+        type: text
+        value: "13"
+      - name: quotation_lines[2][discount_type]
+        type: text
+        value: percent
   auth:
     type: bearer
     token: "{{token}}"
