@@ -14,7 +14,7 @@ http:
           "contact_type_id": 1,
           "relationship_status_id": 1,
           "visit_conclusion_id": 1,
-          "follow_date": "2026-07-30",
+          "follow_date": "2026-09-30",
           "time_start": "09:00",
           "time_end": "10:30",
           "contact_detail": "นัดเข้าพบลูกค้าเพื่อเสนอราคา",
