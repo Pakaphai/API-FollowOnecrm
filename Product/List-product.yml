@@ -20,6 +20,10 @@ http:
       value: "1"
       type: query
       disabled: true
+    - name: product_type_id
+      value: "21"
+      type: query
+      disabled: true
   auth:
     type: bearer
     token: "{{token}}"
@@ -57,9 +61,10 @@ docs: |
   |---|---|---|---|
   | `page` | integer ≥1 | 1 | หน้าที่ต้องการ |
   | `per_page` | integer 1–200 | **20** | จำนวนต่อหน้า |
-  | `q` | string <=100 | — | ค้นหาจาก ชื่อสินค้า / ชื่อรุ่น / ชื่อแบรนด์ / รหัสสินค้า — ไม่แยกตัวพิมพ์เล็กใหญ่ |
+  | `q` | string <=100 | — | ค้นหาจาก ชื่อสินค้า / ชื่อรุ่น / ชื่อแบรนด์ / **ชื่อหมวดหมู่** / รหัสสินค้า — ไม่แยกตัวพิมพ์เล็กใหญ่ |
   | `brand_id` | integer | — | กรองตามแบรนด์ |
   | `model_id` | integer | — | กรองตามรุ่น |
+  | `product_type_id` | integer | — | กรองตามหมวดหมู่ (`product_types.id`) ใช้คู่กับ `q` ได้ |
   | `min_price` | numeric | — | ⚠️ หน่วยเป็น **สตางค์** ไม่ใช่บาท |
   | `max_price` | numeric | — | ⚠️ หน่วยเป็น **สตางค์** ไม่ใช่บาท |
   | `sort` | enum | `created_desc` | `price_asc` · `price_desc` · `created_asc` · `created_desc` |

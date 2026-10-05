@@ -12,24 +12,13 @@ http:
       {
         "quotation_date": "2026-10-05",
         "price_mode": "novat",
-        "header_discount": "10",
-        "header_discount_type": "percent",
+        "header_discount": "500",
+        "header_discount_type": "amount",
         "quotation_lines": [
-          {
-            "product_id": 6,
-            "qty": 5,
-            "uom_code": "BX",
-            "manual_discount": "0",
-            "discount_type": "amount"
-          },
-          {
-            "product_id": 7,
-            "qty": 12,
-            "uom_code": "EA",
-            "unit_price": "1,250.00",
-            "manual_discount": "13",
-            "discount_type": "percent"
-          }
+          { "product_id": 43, "qty": 2,   "uom_code": "EA",  "manual_discount": "100", "discount_type": "amount" },
+          { "product_id": 44, "qty": 3,   "uom_code": "EA",  "unit_price": "550", "manual_discount": "5", "discount_type": "percent" },
+          { "product_id": 53, "qty": 12,  "uom_code": "BOT" },
+          { "product_id": 54, "qty": 2.5, "uom_code": "HRS" }
         ]
       }
   auth:
@@ -70,6 +59,18 @@ docs: |
   | `quotation_date` | | ไม่ส่ง = ใช้วันนี้ (เวลาไทย) ในการเลือกโปรโมชัน · ค่าที่ใช้จริงตอบกลับใน `data.quotation_date` |
   | `price_mode` | | `price` · `novat` (ในกรอบที่บริษัทเลือกได้) · ไม่ส่ง/ส่งค่านอกกรอบ = โหมดของบริษัท |
   | `header_discount` + `header_discount_type` | | ส่วนลดท้ายบิล บาท (`amount`) หรือ % (`percent`, บีบ 0–100) |
+
+  ### ตัวอย่างข้อมูลจริง (tenant sunnypop · โหมดบริษัท = novat · ไม่มีโปรโมชันที่ active)
+
+  | product_id | สินค้า | หน่วย | ราคาตั้ง | ราคาขั้นต่ำ |
+  |---|---|---|---|---|
+  | 43 | กระเป๋าสะพาย | EA | 1,000.00 | ไม่กำหนด (ห้ามต่ำกว่าราคาตั้ง) |
+  | 44 | กระเป๋า 2 | EA | 600.00 | 500.00 |
+  | 53 | น้ำผลไม้ | BOT | 44.00 | ไม่กำหนด |
+  | 54 | ล้างแอร์ | HRS (ทศนิยมได้) | 500.00 | ไม่กำหนด |
+
+  payload ด้านบน → `total_before_discount` 5,245.50 · ส่วนลดท้ายบิล 500 · ฐานภาษี 4,745.50 · VAT 332.19 · **รวมทั้งสิ้น 5,077.69**
+  ส่ง `unit_price: 450` ให้สินค้า 44 → `422 errors["quotation_lines.N.unit_price"]` "ต้องไม่ต่ำกว่าราคาขายขั้นต่ำ 500.00 บาท"
 
   ## Response 200
 
