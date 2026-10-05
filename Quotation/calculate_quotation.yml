@@ -57,8 +57,9 @@ docs: |
   | ฟิลด์ | บังคับ | หมายเหตุ |
   |---|:---:|---|
   | `quotation_lines[]` | ✅ | อย่างน้อย 1 บรรทัด — กฎรายบรรทัดเหมือน `quotation/create` ทุกข้อ (`product_id`, `qty`, `uom_code` บังคับ · `unit_price` / `usd_price` / `manual_discount` + `discount_type` / `option_ids[]` เลือกได้) |
+  | `quotation_id` | | **พรีวิวหน้าแก้ไข** — ส่ง id ใบที่กำลังแก้ ระบบใช้โหมดภาษีของใบนั้น (มองข้าม `price_mode`) และตัวเลือกเดิมของบรรทัดที่ไม่ส่ง `option_ids` มา = ชุดเดียวกับที่ `quotation/update/{id}` บันทึก |
   | `quotation_date` | | ไม่ส่ง = ใช้วันนี้ (เวลาไทย) ในการเลือกโปรโมชัน · ค่าที่ใช้จริงตอบกลับใน `data.quotation_date` |
-  | `price_mode` | | `price` · `novat` (ในกรอบที่บริษัทเลือกได้) · ไม่ส่ง/ส่งค่านอกกรอบ = โหมดของบริษัท |
+  | `price_mode` | | `price` · `novat` (ในกรอบที่บริษัทเลือกได้) · ไม่ส่ง/ส่งค่านอกกรอบ = โหมดของบริษัท · ถูกมองข้ามเมื่อส่ง `quotation_id` |
   | `header_discount` + `header_discount_type` | | ส่วนลดท้ายบิล บาท (`amount`) หรือ % (`percent`, บีบ 0–100) |
 
   ### ตัวอย่างข้อมูลจริง (tenant sunnypop · โหมดบริษัท = novat · ไม่มีโปรโมชันที่ active)
