@@ -1,0 +1,152 @@
+info:
+  name: calculate_quotation
+  type: http
+  seq: 11
+
+http:
+  method: POST
+  url: "{{sale_uat}}/api/v1/quotation/calculate"
+  body:
+    type: json
+    data: |
+      {
+        "quotation_date": "2026-10-05",
+        "price_mode": "novat",
+        "header_discount": "10",
+        "header_discount_type": "percent",
+        "quotation_lines": [
+          {
+            "product_id": 6,
+            "qty": 5,
+            "uom_code": "BX",
+            "manual_discount": "0",
+            "discount_type": "amount"
+          },
+          {
+            "product_id": 7,
+            "qty": 12,
+            "uom_code": "EA",
+            "unit_price": "1,250.00",
+            "manual_discount": "13",
+            "discount_type": "percent"
+          }
+        ]
+      }
+  auth:
+    type: bearer
+    token: "{{token}}"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+
+docs: |
+  # API — คิดยอดใบเสนอราคา (Quotation Calculate)
+
+  คิดราคา/ส่วนลด/ภาษี/ยอดสุทธิของใบเสนอราคาให้แอป **แสดงผลก่อนกดบันทึก** โดยไม่เขียนอะไรลงฐานข้อมูล
+
+  ```
+  POST /api/v1/quotation/calculate
+  Authorization: Bearer <token>
+  Accept: application/json
+  Content-Type: application/json          ← หรือ multipart/form-data แบบเดียวกับ quotation/create
+  ```
+
+  - ใช้ **สูตรตัวเดียวกับ `POST quotation/create`** (`ApiQuotationController::calculateQuotation`) และ trait ชุดเดียวกับหน้าเว็บ
+    → ยอดที่เส้นนี้ตอบ = ยอดที่จะถูกบันทึกจริง = ยอดที่หน้าเว็บแสดง
+  - แอป **ไม่ต้องคิดสูตรเองอีก** (เดิมต้องทำตาม docs/quotation-calculation.md ซึ่งมีจุดปัดเศษหลายแบบ)
+  - ยอดเงินใน response เป็น **บาท** ทั้งหมด (ต่างจากเส้นสร้าง/แก้ที่คืนเป็นสตางค์)
+
+  ## Request
+
+  ส่ง `quotation_lines[]` ชุดเดียวกับที่จะส่งไป `quotation/create` ได้เลย — ฟิลด์อื่นที่ไม่เกี่ยวกับการคิดยอด
+  (`customer_id`, `status`, `note`, `conditions`, `quotation_image`, …) ส่งมาด้วยก็ได้ ระบบไม่สนใจ
+
+  | ฟิลด์ | บังคับ | หมายเหตุ |
+  |---|:---:|---|
+  | `quotation_lines[]` | ✅ | อย่างน้อย 1 บรรทัด — กฎรายบรรทัดเหมือน `quotation/create` ทุกข้อ (`product_id`, `qty`, `uom_code` บังคับ · `unit_price` / `usd_price` / `manual_discount` / `discount_type` / `option_ids[]` เลือกได้) |
+  | `quotation_date` | | ไม่ส่ง = ใช้วันนี้ (เวลาไทย) ในการเลือกโปรโมชัน · ค่าที่ใช้จริงตอบกลับใน `data.quotation_date` |
+  | `price_mode` | | `price` · `novat` (ในกรอบที่บริษัทเลือกได้) · ไม่ส่ง/ส่งค่านอกกรอบ = โหมดของบริษัท |
+  | `header_discount` + `header_discount_type` | | ส่วนลดท้ายบิล บาท (`amount`) หรือ % (`percent`, บีบ 0–100) |
+
+  ## Response 200
+
+  ```json
+  {
+    "success": true,
+    "message": "คำนวณยอดใบเสนอราคาสำเร็จ",
+    "data": {
+      "price_mode": "novat",
+      "price_mode_label": "ราคาแยกภาษีมูลค่าเพิ่ม 7% (Exclude)",
+      "quotation_date": "2026-10-05",
+      "lines": [
+        {
+          "line_index": 0,
+          "product_id": 6, "product_code": "P-006", "product_name": "สินค้า A", "uom_code": "BX",
+          "qty": 5,
+          "unit_price": 1000,            // ราคาสินค้าล้วน (บาท) — ส่งกลับเข้า quotation/create ได้ตรง ๆ
+          "options_price": 0,            // ราคาตัวเลือกรวม (บาท)
+          "unit_price_total": 1000,      // ราคาต่อหน่วยที่ใช้คิดยอดจริง = สินค้า + ตัวเลือก
+          "usd_price": null, "usd_price_total": null,
+          "line_sum_price": 5000,        // จำนวน × ราคาต่อหน่วย ก่อนหักส่วนลด
+          "promotion": {                 // ก้อนเดียวกับ quotationLines[].promotion ของเส้นสร้าง + condition
+            "has_promotion": true, "discount_type": "percent", "discount_value": 10,
+            "discount_amount": 500, "discount_percent": 10, "label": "10 %",
+            "condition": {               // null = ไม่มีโปรโมชันที่เกี่ยวกับบรรทัดนี้เลย
+              "is_qualified": true, "source": "product", "product_type_name": null,
+              "discount_type": "percent", "discount_value": 10, "label": "10 %",
+              "min_qty": 3, "min_value": null, "max_discount_value": null
+            }
+          },
+          "promotion_discount": 500,
+          "special_discount": 0, "special_discount_type": "amount", "special_discount_input": 0,
+          "total_discount": 500,
+          "discount_capped": false,      // true = ส่วนลดเกินยอดบรรทัด ถูกบีบลงมา (total_line = 0)
+          "total_line": 4500,            // ยอดสุทธิบรรทัด ("ราคาสุทธิ" บนหน้าเว็บ)
+          "total_line_usd": null,
+          "options": []                  // [{id, group_name, name, price(บาท), usd}]
+        }
+      ],
+      "summary": {
+        "total_line_sum": 20000,               // ผลรวมยอดบรรทัดก่อนส่วนลดใด ๆ
+        "promotion_discount": 500,
+        "special_discount": 1950,
+        "total_line_discount": 2450,
+        "total_before_discount": 17550,        // "รวมเป็นเงิน" = ผลรวมยอดสุทธิบรรทัด (ยังไม่หักท้ายบิล)
+        "header_discount": 1755,               // บาทเสมอ
+        "header_discount_type": "percent",
+        "header_discount_percent": 10,
+        "total_after_header_discount": 15795,  // ฐานภาษี = ยอดหลังหักส่วนลดทุกก้อน
+        "total_exclude_vat": 15795,            // มูลค่าก่อนภาษี (ต่างจากบรรทัดบนเฉพาะโหมดรวมภาษี)
+        "vat_rate": 7,
+        "vat_amount": 1105.65,
+        "total_after_discount": 16900.65,      // จำนวนเงินรวมทั้งสิ้น (ใบ USD ปัดขึ้นเต็มบาทแล้ว)
+        "total_after_discount_usd": null,
+        "usd_rounded_up": false,
+        "has_usd_lines": false
+      },
+      "display": {                             // แถวสรุปที่หน้าเว็บโชว์ในกรณีนี้ — แสดงให้เหมือนกัน
+        "show_header_discount_row": true,
+        "show_after_discount_row": true,
+        "show_vat_breakdown_row": false,       // เฉพาะโหมดรวมภาษี (vat) ที่มีภาษีแฝง
+        "show_vat_row": true
+      },
+      "usd_rate": null                         // {rate, rate_used, as_of, source, display} เมื่อใบนี้ใช้ราคา USD
+    }
+  }
+  ```
+
+  ## Error
+
+  | HTTP | `code` / `errors` | สาเหตุ |
+  |:---:|---|---|
+  | `422` | `errors["quotation_lines"]` ฯลฯ | validation ไม่ผ่าน — คีย์เดียวกับ `quotation/create` |
+  | `422` | `errors["quotation_lines.N.unit_price"]` | ราคาต่อหน่วยต่ำกว่าที่ขายได้ (ราคาขั้นต่ำ / ราคาที่ตั้งไว้) — บันทึกไม่ผ่านแน่ จึงตีกลับตั้งแต่พรีวิว |
+  | `422` | `errors["quotation_lines.N.qty"]` | หน่วยนับชิ้น (EA, BX, SET …) กรอกทศนิยม |
+  | `422` | `quotation_lines_disabled` | บริษัทปิดโหมดกรอกรายการสินค้า |
+  | `422` | `usd_pricing_disabled` / `usd_rate_unavailable` | ส่ง `usd_price` มาแต่ใช้ราคา USD ไม่ได้ |
+
+  > ยอดที่ตอบกลับคิดจากราคาสินค้า/โปรโมชัน/อัตราแลกเปลี่ยน **ณ ตอนเรียก** — ถ้ากดบันทึกข้ามวัน
+  > หรือมีคนแก้ราคาสินค้าระหว่างนั้น ยอดที่บันทึกจริงอาจต่างได้ ให้ยึดตัวเลขจาก response ของ `quotation/create`
