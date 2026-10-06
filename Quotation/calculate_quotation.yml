@@ -15,10 +15,10 @@ http:
         "header_discount": "500",
         "header_discount_type": "amount",
         "quotation_lines": [
-          { "product_id": 43, "qty": 2,   "uom_code": "EA",  "manual_discount": "100", "discount_type": "amount" },
-          { "product_id": 44, "qty": 3,   "uom_code": "EA",  "unit_price": "550", "manual_discount": "5", "discount_type": "percent" },
-          { "product_id": 53, "qty": 12,  "uom_code": "BOT" },
-          { "product_id": 54, "qty": 2.5, "uom_code": "HRS" }
+          { "product_id": 12, "qty": 2,   "uom_code": "EA",  "manual_discount": "100", "discount_type": "amount" },
+          { "product_id": 7, "qty": 3,   "uom_code": "EA",  "unit_price": "550", "manual_discount": "5", "discount_type": "percent" },
+          { "product_id": 6, "qty": 12,  "uom_code": "BX" },
+          { "product_id": 8, "qty": 40, "uom_code": "KG" }
         ]
       }
   auth:
