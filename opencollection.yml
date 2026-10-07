@@ -277,7 +277,7 @@ docs:
     | | Method | Path | ใช้ทำอะไร |
     |:---:|---|---|---|
     | 🔒 | `GET` | `master-data` | ข้อมูลตั้งต้นทั้งหมด + โลโก้/แบนเนอร์ |
-    | 🔒 | `GET` | `getCustomer-detail` | รายชื่อลูกค้าของตัวเอง (`?business_type_id=` กรองประเภทธุรกิจ) |
+    | 🔒 | `GET` | `getCustomer-detail` | รายชื่อลูกค้าของตัวเอง (`?business_type_id=` กรองประเภทธุรกิจ · `?level=0|1` ทั้งบริษัท เฉพาะผู้ดูแลระบบ) |
     | 🔒 | `POST` | `create-customer` | เพิ่มลูกค้า |
     | 🔒 | `GET` | `customer/edit/{id}` | ข้อมูลลูกค้าสำหรับฟอร์มแก้ไข |
     | 🔒 | `POST` | `customer/update/{id}` | แก้ไขลูกค้า |
@@ -596,14 +596,15 @@ docs:
 
     ### `GET getCustomer-detail`
     ลูกค้าของตัวเอง เรียงตาม `customer_code` — **แบ่งหน้า** (`page`, `per_page`)
+    `?level=0` หรือ `?level=1` = ลูกค้าทั้งบริษัท — เฉพาะบัญชี level 0/1 ไม่งั้น **403** · ไม่ส่ง = level 2 ของตัวเอง · ค่าอื่น **422**
 
     ```json
-    { "datas": [...], "user": 4,
+    { "datas": [...], "user": 4, "level": 2,
       "page": 1, "size": 20, "total_elements": 42, "total_pages": 3,
       "has_next": true, "has_prev": false }
     ```
 
-    แต่ละแถวมีฟิลด์คำนวณเพิ่ม: `customer_name_full` (เติมคำนำหน้าตามประเภทธุรกิจ), `customer_scope_label` (ชื่อไทย), `is_address_incomplete` (ที่อยู่ไม่ครบ)
+    แต่ละแถวมีฟิลด์คำนวณเพิ่ม: `customer_name_full` (เติมคำนำหน้าตามประเภทธุรกิจ), `customer_scope_label` (ชื่อไทย), `is_address_incomplete` (ที่อยู่ไม่ครบ), `owner_name` (ชื่อเซลส์เจ้าของลูกค้า)
 
     ### `POST create-customer` · `POST customer/update/{id}`
 
