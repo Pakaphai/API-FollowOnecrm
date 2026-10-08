@@ -248,7 +248,7 @@ docs:
     | 🔒 | `GET` | `user/dashboard` | แดชบอร์ดเซลส์ |
     | 🔒 | `GET` | `user/dashboard/admin` | แดชบอร์ดแอดมิน (level 2 โดน 403) |
     | 🔒 | `GET` | `user/dashboard/admin/sellers/{userId}/sales-breakdown` | ที่มาของยอดขาย + การติดต่อลูกค้าของเซลส์ 1 คน (เฉพาะ level 0/1) |
-    | 🔒 | `GET` | `sale-summary-user` | สรุปการขายของตัวเอง |
+    | 🔒 | `GET` | `sale-summary-user` | สรุปการขายของตัวเอง (`?level=0|1` ทั้งบริษัท เฉพาะผู้ดูแลระบบ) |
     | 🔒 | `GET` | `contact-rank` | อันดับการติดต่อรายเดือน |
     | 🔒 | `GET` | `sales-rank` | อันดับยอดขายรายเดือน |
 
@@ -527,8 +527,9 @@ docs:
     ยอดขาย = ใบ `completed` + `paid` ทั้งหมด (ไม่กรองเดือน) เป็น**บาท** · นับการติดต่อเฉพาะนัดหมายที่ทำเสร็จแล้วและเซลส์คนนี้เป็นผู้บันทึก
 
     ### `GET sale-summary-user` 🔒
+    query: `level` = `0` \| `1` → รวมทั้งบริษัท (เฉพาะบัญชี level 0/1 ไม่งั้น **403** · ค่าอื่น **422**) · ไม่ส่ง = ของตัวเอง
     ```
-    {status: true, message, data: {chartData, salesThisYear, salesThisMonth, receivedAmount,
+    {status: true, message, data: {level, chartData, salesThisYear, salesThisMonth, receivedAmount,
      outstandingAmount, totalCreditNoteThisMonth, successfulReturningCustomers,
      totalNewCustomersThisMonth, totalNewCustomers}}
     ```

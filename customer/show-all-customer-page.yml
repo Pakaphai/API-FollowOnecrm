@@ -5,14 +5,16 @@ info:
 
 http:
   method: GET
-  url: "{{sale_uat}}/api/v1/getCustomer-detail?page=1&per_page=20&q=&business_type_id="
+  url: "{{sale_uat}}/api/v1/getCustomer-detail?level=0&per_page=200"
   params:
+    - name: level
+      value: "0"
+      type: query
+    - name: per_page
+      value: "200"
+      type: query
     - name: customer_filter
       value: active
-      type: query
-      disabled: true
-    - name: level
-      value: "1"
       type: query
       disabled: true
   auth:
