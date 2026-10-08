@@ -6,6 +6,19 @@ info:
 http:
   method: GET
   url: "{{sale_uat}}/api/v1/user/dashboard"
+  params:
+    - name: level
+      value: "1"
+      type: query
+      disabled: true
+    - name: month
+      value: "10"
+      type: query
+      disabled: true
+    - name: year
+      value: "2026"
+      type: query
+      disabled: true
   auth:
     type: bearer
     token: "{{token}}"
@@ -16,16 +29,22 @@ settings:
   followRedirects: true
   maxRedirects: 5
 
-docs: |
+docs: |-
   ## 2. `GET /api/v1/user/dashboard`
 
   แดชบอร์ดหลักของเซลส์ — ตัวเลขครบทุกด้านในก้อนเดียว
+  (ผู้ดูแลระบบส่ง `level=0` หรือ `level=1` เพื่อดู**รวมทั้งบริษัท** ดูหัวข้อ "มุมมองแอดมิน" ด้านล่าง)
 
-  **query:** `date` (`YYYY-MM-DD`) — ไม่ส่ง = เดือนปัจจุบัน
+  | พารามิเตอร์ | ชนิด | ค่าเริ่มต้น |
+  |---|---|---|
+  | `month` + `year` | integer ต้องส่งคู่กัน | เดือนปัจจุบัน — มีผลกับ `contactList` · `salesRank[].total_sales` · `company.total_sales_month` เท่านั้น ตัวเลขลูกค้า/สถานะเอกสารเป็น "ตอนนี้" เสมอ |
+  | `level` | `0` \| `1` | — ไม่ส่ง = ถือเป็น level 2 (เซลส์) ของตัวเอง · `0`/`1` = รวมทั้งบริษัท (เฉพาะบัญชีผู้ดูแลระบบ) |
+
+  > ⚠️ เส้นนี้**ไม่รับ `date`** (เอกสารเดิมเขียนผิด) — ใช้ `month` + `year` แบบเดียวกับ `user/dashboard/admin`
 
   ```json
   { "status": true, "message": "Success", "data": {
-      "user_id": 4, "selected_month": 8, "selected_year": 2026,
+      "user_id": 4, "level": 2, "selected_month": 8, "selected_year": 2026,
       "available_months": [...],
 
       "customerCount": 42, "newCustomerCountThisMonth": 2,
@@ -41,11 +60,13 @@ docs: |
       "waitingForBilling": 1, "shippingInProgress": 4,
       "accountingDocuments": 0, "completedCount": 12, "cancelledCount": 1,
 
-      "contactList": [...], "salesRank": [...] }}
+      "contactList": [...], "salesRank": [...],
+      "company": null }}
   ```
 
   | กลุ่ม | ฟิลด์ | ความหมาย |
   |---|---|---|
+  | มุมมอง | `level` | 2 = ของตัวเอง · 0/1 = ทั้งบริษัท (ตามที่ส่งมา) |
   | ตัวกรอง | `selected_month` · `selected_year` · `available_months` | เดือนที่เลือกอยู่ + รายการเดือนที่มีข้อมูลให้เลือก |
   | ลูกค้า | `customerCount` · `newCustomerCountThisMonth` · `repeatCustomers` · `existingCustomer` | จำนวนลูกค้าแยกประเภท |
   | สินค้าขายดี | `top5Products*` · `top5ProductType*` | 5 อันดับ + ยอดรวม |
@@ -54,7 +75,61 @@ docs: |
 
   > ⛔ **`approvedCount` เลิกใช้แล้ว — คืน `0` เสมอ** ขั้น "ตรวจสอบสินค้า" (`approved`) ถูกตัดออกจากกระบวนการขาย เอกสารเดินจาก "ยืนยันใบเสนอราคา" ไป "เปิดบิล" ตรง ๆ และใบที่ค้างอยู่ถูกย้ายไปขั้นเปิดบิลหมดแล้ว คีย์นี้คงไว้ให้แอปรุ่นเดิมไม่พังเท่านั้น **แอปรุ่นใหม่ให้เอาการ์ดใบนี้ออก** (หน้าเว็บเอาออกไปแล้ว)
   | แถมมาให้ | `contactList` · `salesRank` | ข้อมูลชุดเดียวกับ `contact-rank` / `sales-rank` |
+  | แอดมิน | `company` | ภาพรวมบริษัท — มีค่าเฉพาะ `level=0/1` ไม่งั้น `null` |
 
   > `contactList` และ `salesRank` **ซ้ำกับเส้น `contact-rank` / `sales-rank`** — ถ้าเรียกเส้นนี้แล้วไม่ต้องเรียกอีกสองเส้นซ้ำ
+
+  ### มุมมองแอดมิน (`level=0` / `level=1`)
+
+  ค่าเริ่มต้นคือแดชบอร์ดของคนที่ login (level 2 = เซลส์) — ผู้ดูแลระบบส่ง `level=0` หรือ `level=1` ตามระดับบัญชีตัวเอง
+  เพื่อขอตัวเลข**รวมทุกเซลส์ในบริษัท** ในโครงสร้างเดิมทุกคีย์ และได้ก้อน `company` เพิ่มมาอีก 1 ก้อน
+
+  ```bash
+  curl -s "$BASE/user/dashboard?level=1" -H "$AUTH" -H "Accept: application/json"
+  ```
+
+  | กรณี | ผล |
+  |---|---|
+  | ไม่ส่ง / `level=` (ว่าง) | ของตัวเอง (พฤติกรรมเดิม เซลส์ไม่ต้องส่ง) · `data.level = 2` · `data.company = null` |
+  | `level=0` / `level=1` + บัญชี level 0/1 | รวมทั้งบริษัท · `data.level` ตามที่ส่งมา · มี `data.company` |
+  | `level=0` / `level=1` + บัญชีเซลส์ | **403** `{status:false, message:"เฉพาะผู้ดูแลระบบเท่านั้นที่ดูแดชบอร์ดทั้งบริษัทได้"}` |
+  | `level=2` / `level=9` (ค่าอื่น) | **422** "level รับได้เฉพาะ 0 หรือ 1 เท่านั้น" |
+
+  > พารามิเตอร์เป็นแค่ "คำขอ" — สิทธิ์ตรวจจาก `users.level` ของ token จริง (`User::isAdminLevel()`)
+  > กติกาเดียวกับ `getCustomer-detail` และ `sale-summary-user`
+
+  **สิ่งที่เปลี่ยนเมื่อ `level=0/1`**
+
+  | ส่วน | มุมมองเซลส์ (เดิม) | มุมมองแอดมิน |
+  |---|---|---|
+  | `customerCount` … `cancelledCount` · `billingAmount` · `paidAmount` | กรอง `customers.user_id = ตัวเอง` | ไม่กรอง = ทั้งบริษัท |
+  | `top5ProductsByUser` / `top5ProductTypeByUser` | อ่านจาก view `v_top5_*_by_user` (อันดับต่อเซลส์) | คิดสดจาก `order_lines` ทั้งบริษัท เกณฑ์เดียวกับ view (view ตัดเหลือ 5 ต่อคนก่อน รวมข้ามคนไม่ได้) |
+  | `contactList` / `salesRank` | คนอื่นเป็น "ไม่ระบุตัวตน" + รูป default | **เห็นชื่อจริงและรูปจริงทุกคน** |
+  | `company` | `null` | ก้อนภาพรวมบริษัท (ด้านล่าง) |
+
+  **`data.company`** (เฉพาะมุมมองแอดมิน)
+
+  ```json
+  "company": {
+    "sales_users_total": 7,
+    "products_total": 42,
+    "total_sales_all": "12061169.99",
+    "total_sales_month": "10746221.72",
+    "top_sellers": [
+      { "user_id": 2, "display_firstname": "ซัมเมอร์", "display_lastname": "โซฮอท",
+        "profile_img_url": "https://...", "total_sales_all": "11645106.91", "percentage": 96.55 }
+    ]
+  }
+  ```
+
+  | ฟิลด์ | ความหมาย |
+  |---|---|
+  | `sales_users_total` | จำนวนเซลส์ (level 2) ที่ยังไม่ถูกลบ |
+  | `products_total` | จำนวนสินค้าที่ยังไม่ถูกลบ |
+  | `total_sales_all` | ยอดขายสะสมทั้งบริษัท (completed + paid) **string ไม่มีคอมมา** |
+  | `total_sales_month` | ยอดขายทั้งบริษัทของเดือนที่เลือก (`month`/`year`) นับตาม `order_date` |
+  | `top_sellers` | 6 อันดับเซลส์ยอดสะสมสูงสุด + `percentage` ส่วนแบ่งจาก `total_sales_all` — ยึด**เจ้าของเอกสาร** ไม่ใช่ผู้ดูแลลูกค้าปัจจุบัน (เหมือน `user/dashboard/admin`) |
+
+  > `total_sales_all` ของ `company` อาจ**ไม่เท่ากับ**ผลรวม `salesRank[].total_sales_all` — `salesRank` นับตาม `customers.user_id` (ผู้ดูแลลูกค้าปัจจุบัน) ส่วน `top_sellers` นับตามเจ้าของเอกสาร ย้ายลูกค้าเมื่อไหร่สองตัวนี้จะต่างกัน
 
   ---

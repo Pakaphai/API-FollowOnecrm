@@ -245,7 +245,7 @@ docs:
     | 🔒 | `GET` | `profilelist/{id}` | โปรไฟล์ + rank + ข้อมูลบริษัท |
     | 🔒 | `DELETE` | `delete-user/{id}` | ปิดใช้งานบัญชีพนักงาน |
     | 🔒 | `POST` | `device-token` | บันทึก FCM token |
-    | 🔒 | `GET` | `user/dashboard` | แดชบอร์ดเซลส์ |
+    | 🔒 | `GET` | `user/dashboard` | แดชบอร์ดเซลส์ (`?level=0|1` ทั้งบริษัท + ก้อน `company` เฉพาะผู้ดูแลระบบ) |
     | 🔒 | `GET` | `user/dashboard/admin` | แดชบอร์ดแอดมิน (level 2 โดน 403) |
     | 🔒 | `GET` | `user/dashboard/admin/sellers/{userId}/sales-breakdown` | ที่มาของยอดขาย + การติดต่อลูกค้าของเซลส์ 1 คน (เฉพาะ level 0/1) |
     | 🔒 | `GET` | `sale-summary-user` | สรุปการขายของตัวเอง (`?level=0|1` ทั้งบริษัท เฉพาะผู้ดูแลระบบ) |
@@ -488,17 +488,18 @@ docs:
     ⚠️ มีตัวกันพลาด: ถ้าส่ง **JWT** มาแทน FCM token (ขึ้นต้น `eyJ` + 3 ส่วนคั่นจุด) จะได้ **422** `code: invalid_fcm_token`
 
     ### `GET user/dashboard` 🔒
-    query: `date` (`YYYY-MM-DD`, ดีฟอลต์เดือนปัจจุบัน)
+    query: `month` + `year` (ส่งคู่กัน ดีฟอลต์เดือนปัจจุบัน — **ไม่รับ `date`**) · `level` = `0` \| `1` → รวมทั้งบริษัท + `company` (เฉพาะบัญชี level 0/1 ไม่งั้น **403** · ค่าอื่น **422**)
 
     ```
     {status: true, message, data: {
-      user_id, selected_month, selected_year, available_months,
+      user_id, level, selected_month, selected_year, available_months,
       customerCount, newCustomerCountThisMonth, repeatCustomers, existingCustomer,
       top5ProductsByUser, top5ProductsByUserTotal, top5ProductTypeByUser, top5ProductTypeByUserTotal,
       billingAmount, billingAmountCount, paidAmount, paidAmountCount,
       openSalesOrder, confirmedSalesOrder, approvedCount (เลิกใช้ = 0), waitingForBilling,
       shippingInProgress, accountingDocuments, completedCount, cancelledCount,
-      contactList, salesRank }}
+      contactList, salesRank,
+      company: null | {sales_users_total, products_total, total_sales_all, total_sales_month, top_sellers[]} }}
     ```
 
     ### `GET user/dashboard/admin` 🔒
