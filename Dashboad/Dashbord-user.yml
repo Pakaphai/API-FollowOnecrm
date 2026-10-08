@@ -5,8 +5,11 @@ info:
 
 http:
   method: GET
-  url: "{{sale_uat}}/api/v1/user/dashboard"
+  url: "{{sale_uat}}/api/v1/user/dashboard?level=0"
   params:
+    - name: level
+      value: "0"
+      type: query
     - name: level
       value: "1"
       type: query
