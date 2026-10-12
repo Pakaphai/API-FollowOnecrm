@@ -10,8 +10,8 @@ http:
     type: json
     data: |-
       {
-        "username": "sunnypop",
-        "password": "sunnypop"
+        "username": "jiwonmeaosommm",
+        "password": "jiwonmeaosommm"
       }
   auth: inherit
 
@@ -85,10 +85,11 @@ docs: |
     -d '{"username":"saleofficer0002","password":"saleofficer0002"}'
   ```
 
-  | ฟิลด์ | บังคับ | ชนิด | หมายเหตุ |
-  |---|:---:|---|---|
-  | `username` | ✅ | string | **ไม่ case-sensitive** — ระบบ `strtolower()` ก่อนค้นเสมอ |
-  | `password` | ✅ | string | เทียบกับ bcrypt hash ในคอลัมน์ `password` |
+  ### ตัวแปร Request (Body)
+  | ฟิลด์ | ชนิด | บังคับ | คำอธิบาย |
+  |---|:---:|:---:|---|
+  | `username` | string | ✅ | ชื่อผู้ใช้งาน (**ไม่ case-sensitive** ระบบแปลงเป็นตัวพิมพ์เล็กอัตโนมัติก่อนค้นหา) |
+  | `password` | string | ✅ | รหัสผ่าน (เทียบกับ bcrypt hash ในระบบ) |
 
   > ต้องแนบ `Accept: application/json` ทุกครั้ง ไม่งั้น error 422/500 จะกลับมาเป็นหน้า HTML แทน JSON
 
@@ -110,12 +111,25 @@ docs: |
       "has_logged_in": true,
       "is_first_login": false
     },
+    "consent_required": false,
+    "policy": null,
     "first_login": {
       "is_first_login": false,
       "should_change_password": false,
       "should_complete_profile": false,
       "must_run_system_setup": false,
       "message": null
+    },
+    "seat_quota": {
+      "limit": 5,
+      "used": 3,
+      "suspended": 0,
+      "remaining": 2,
+      "unlimited": false,
+      "is_full": false,
+      "over_by": 0,
+      "is_over_limit": false,
+      "percent": 60
     },
     "token": {
       "access_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...",
@@ -125,57 +139,100 @@ docs: |
   }
   ```
 
-  ### `user_detail`
+  ### สรุปตัวแปร Response ระดับบน (Top-Level)
+  | ตัวแปร | ชนิด | ความหมายโดยย่อ |
+  |---|---|---|
+  | `message` | string | ข้อความแจ้งผลลัพธ์ (`"เข้าสู่ระบบสำเร็จ"`) |
+  | `user_detail` | object | ข้อมูลส่วนตัวของผู้ใช้งานที่ล็อกอิน |
+  | `consent_required` | bool | ต้องยินยอม PDPA / นโยบายก่อนใช้งานไหม (`true` = แสดง popup บังคับยอมรับ) |
+  | `policy` | object \| null | ข้อมูลนโยบายความเป็นส่วนตัวที่ต้องกดยอมรับ (`null` เมื่อ `consent_required = false`) |
+  | `first_login` | object | ธง Onboarding สำหรับการเข้าใช้งานระบบครั้งแรก |
+  | `seat_quota` | object | สรุปโควตาที่นั่งผู้ใช้ของบริษัท (`is_over_limit: true` = โควตาเกิน ต้องจัดการ) |
+  | `token` | object | ข้อมูล JWT Token สำหรับยืนยันตัวตนใน API อื่น ๆ |
 
+  ---
+
+  ### 3.1 `user_detail` — ข้อมูลผู้ใช้งาน
   | ฟิลด์ | ชนิด | ความหมาย |
   |---|---|---|
-  | `id` | int | PK ใน schema ของบริษัทนี้ — **ไม่ unique ข้ามบริษัท** |
-  | `sale_code` | string | รหัสพนักงานที่ระบบ generate |
-  | `username` | string | พิมพ์เล็กเสมอ |
-  | `firstname` / `lastname` | string | ชื่อ-นามสกุล |
-  | `level` | int | ระดับสิทธิ์ — ดูตารางด้านล่าง |
-  | `profile_img` | string\|null | **presigned URL อายุ 10 นาที** (`X-Amz-Expires=600`), `null` ถ้าไม่มีรูป |
-  | `has_logged_in` | bool | สถานะ **ก่อน** login ครั้งนี้ — `false` = ยังไม่เคยเข้าใช้บัญชีนี้ |
-  | `is_first_login` | bool | ตรงข้ามกับ `has_logged_in` เสมอ (ให้เลือกใช้ตัวที่อ่านง่ายกว่า) |
+  | `id` | int | User ID (PK ประจำบริษัท — **ไม่ unique ข้ามบริษัท**) |
+  | `sale_code` | string | รหัสพนักงาน (เช่น `SALE-202607-0003`) |
+  | `username` | string | ชื่อผู้ใช้งาน (ตัวพิมพ์เล็กเสมอ) |
+  | `firstname` / `lastname` | string | ชื่อ - นามสกุล |
+  | `level` | int | ระดับสิทธิ์ (0–4) — ดูตารางด้านล่าง |
+  | `profile_img` | string \| null | presigned URL รูปโปรไฟล์ (**อายุ 10 นาที**), `null` ถ้าไม่มีรูป |
+  | `has_logged_in` | bool | สถานะการใช้งาน **ก่อน login ครั้งนี้** (`false` = ยังไม่เคยเข้าสู่ระบบมาก่อน) |
+  | `is_first_login` | bool | ค่าตรงข้ามกับ `has_logged_in` (`true` = เข้าสู่ระบบครั้งนี้เป็นครั้งแรก) |
 
   **ระดับสิทธิ์ (`level`)**
-
-  | ค่า | บทบาท |
-  |:---:|---|
-  | `0` | เจ้าของบริษัท |
-  | `1` | ผู้ดูแลระบบ (แอดมิน) |
-  | `2` | เซลส์ |
-  | `3` | บัญชี |
-  | `4` | คลังสินค้า |
+  | ค่า | บทบาท | หน้าที่หลัก |
+  |:---:|---|---|
+  | `0` | เจ้าของบริษัท (Owner) | สิทธิ์สูงสุดในระบบบริษัท |
+  | `1` | ผู้ดูแลระบบ (Admin) | จัดการผู้ใช้ / ตั้งค่าระบบ |
+  | `2` | เซลส์ (Sale Officer) | จัดการลูกค้า / ใบเสนอราคา / ออเดอร์ |
+  | `3` | บัญชี (Accounting) | จัดการเอกสารการเงิน |
+  | `4` | คลังสินค้า (Warehouse) | จัดการสต็อกสินค้า |
 
   > ⚠️ `profile_img` หมดอายุใน 10 นาที **ห้าม cache ยาว** — ถ้ารูปโหลดไม่ขึ้นให้ดึงใหม่จาก `GET /api/v1/profileUser`
 
-  ### `first_login` — ธงสำหรับ onboarding
+  ---
 
-  มาจาก `ApiAuthController::firstLoginHints()` ถ้า **ไม่ใช่** การเข้าใช้ครั้งแรก จะคืน `false` ทั้งก้อนและ `message: null` (ไม่คำนวณอะไรเลย)
+  ### 3.2 `consent_required` & `policy` — นโยบายความเป็นส่วนตัว (PDPA)
+  - `consent_required`: หากเป็น `true` ให้ Mobile App / Web แสดง Modal นโยบายความเป็นส่วนตัวเพื่อให้ผู้ใช้กดยอมรับผ่าน `POST /api/v1/consent/accept` ก่อนเข้าสู่ระบบเต็มรูปแบบ
+  - `policy`: วัตถุข้อมูลนโยบายความเป็นส่วนตัวฉบับล่าสุด (จะเป็น `null` เมื่อ `consent_required: false`)
 
-  | ฟิลด์ | เป็น `true` เมื่อ | แอปควรทำอะไร |
+  | ฟิลด์ใน `policy` | ชนิด | ความหมาย |
   |---|---|---|
-  | `is_first_login` | `has_logged_in` เดิมเป็น false | แสดงหน้าต้อนรับ |
-  | `should_change_password` | `level ∈ {0,1,2}` | ระบบตั้ง password เริ่มต้น = username → ชวนตั้งรหัสใหม่ (**แนะนำ ไม่บังคับ**) ผ่าน `POST /api/v1/update-password` |
-  | `should_complete_profile` | `level ∈ {2,3,4}` | พาไปหน้ากรอกข้อมูลโปรไฟล์ให้ครบ |
-  | `must_run_system_setup` | แอดมินคนแรกของบริษัทที่ข้อมูลบริษัทยังไม่ครบ | พาไปหน้าตั้งค่าข้อมูลบริษัท |
+  | `id` | int | รหัสนโยบายในระบบ |
+  | `type` | string | ประเภทนโยบาย (เช่น `"privacy_policy"`) |
+  | `version` | string | เลขเวอร์ชันของนโยบาย (เช่น `"1.0"`) |
+  | `title` | string | ชื่อหัวข้อนโยบาย |
+  | `content` | string | เนื้อหาของนโยบาย |
+  | `content_format` | string | รูปแบบเนื้อหา เช่น `"html"`, `"text"` |
+  | `effective_date` | string | วันเวลาที่มีผลบังคับใช้ (ISO 8601) |
 
-  `must_run_system_setup` คำนวณจาก [`User::mustRunSystemSetup()`](../app/Models/User.php) — เป็น `true` ก็ต่อเมื่อครบทุกข้อ:
-  1. เป็น level 0 หรือ 1 และ `has_logged_in` ยังเป็น false
-  2. ไม่มีแอดมินคนอื่นที่ `has_logged_in = true` แล้ว
-  3. ข้อมูลบริษัทยังไม่ครบ (ต้องมี `tax_id`, `company_name`, `phone`, `email`, `address`, `province`, `district`, `subdistrict`)
+  ---
 
-  > ธงทั้ง 3 ตัวอิงพฤติกรรมเดียวกับฝั่งเว็บ (`Auth\AuthController::signin` + `HomeController::dashboard`)
-  > และ **จริงแค่ครั้งเดียวตลอดอายุบัญชี** — พอ login สำเร็จระบบตั้ง `has_logged_in = true` ทันที ครั้งถัดไปได้ `false` หมด
+  ### 3.3 `first_login` — ธง Onboarding สำหรับการเข้าใช้งานครั้งแรก
+  มาจาก `ApiAuthController::firstLoginHints()` หากไม่ใช่การเข้าใช้ครั้งแรก (`has_logged_in` เป็น true มาก่อน) จะคืน `false` ทั้งหมดและ `message: null`
 
-  ### `token`
+  | ฟิลด์ | ชนิด | เป็น `true` เมื่อ | สิ่งที่แอปควรทำ |
+  |---|:---:|---|---|
+  | `is_first_login` | bool | เข้าใช้งานครั้งแรก | แสดงหน้าต้อนรับ / Tutorial |
+  | `should_change_password` | bool | level 0, 1, 2 ที่เพิ่งเข้าใช้ครั้งแรก | แนะนำให้เปลี่ยนรหัสผ่านเริ่มต้น (**แนะนำ ไม่บังคับ**) ผ่าน `POST /api/v1/update-password` |
+  | `should_complete_profile` | bool | level 2, 3, 4 ที่เพิ่งเข้าใช้ครั้งแรก | พาไปหน้ากรอกข้อมูลโปรไฟล์ให้ครบถ้วน |
+  | `must_run_system_setup` | bool | แอดมินคนแรก และข้อมูลบริษัทยังไม่ครบ | **บังคับ** พาไปหน้าตั้งค่าข้อมูลบริษัท |
+  | `message` | string \| null | มีข้อความคำแนะนำ | ข้อความอธิบายเงื่อนไข หรือ `null` |
 
-  | ฟิลด์ | ค่า | หมายเหตุ |
-  |---|---|---|
-  | `access_token` | JWT (HS256) | payload มีแค่ `sub` = user id + claim มาตรฐาน (`iat`, `exp`, `jti`) — `getJWTCustomClaims()` คืน `[]` |
-  | `token_type` | `"bearer"` | |
-  | `expires_in` | `3600` | วินาที = `JWT_TTL` (60 นาที) × 60 |
+  > ⚠️ ธงเหล่านี้จะเป็นจริง **เฉพาะตอนล็อกอินครั้งแรกครั้งเดียว** เท่านั้น เพราะหลังล็อกอินระบบจะบันทึก `has_logged_in = true` ทันที
+
+  ---
+
+  ### 3.4 `seat_quota` — สรุปโควตาที่นั่งผู้ใช้งาน
+  มาจาก `SeatLimitService::summary()` ช่วยให้แอปทราบสถานะโควตาของบริษัทได้ทันทีตั้งแต่ล็อกอิน
+
+  | ฟิลด์ | ชนิด | ความหมาย |
+  |---|:---:|---|
+  | `limit` | int \| null | จำนวนที่นั่งที่รองรับตามแพ็กเกจ (`null` = ไม่จำกัด) |
+  | `used` | int | จำนวนผู้ใช้งานที่เปิดใช้อยู่ในปัจจุบัน (ไม่นับคนที่ถูกระงับ) |
+  | `remaining` | int \| null | จำนวนที่นั่งที่ยังเปิดเพิ่มได้ (`null` = ไม่จำกัด) |
+  | `suspended` | int | จำนวนบัญชีที่ถูกระงับสิทธิ์การใช้งาน |
+  | `unlimited` | bool | แพ็กเกจเป็นแบบไม่จำกัดจำนวนที่นั่งหรือไม่ (`true`/`false`) |
+  | `is_full` | bool | โควตาเต็มหรือยัง (`used >= limit`) |
+  | `over_by` | int | จำนวนบัญชีที่เกินโควตามา (0 = ไม่เกิน) |
+  | `is_over_limit` | bool | เกินโควตาแพ็กเกจหรือไม่ (`true` = บริษัทเกินโควตา ต้องระงับ/จัดสรรที่นั่ง) |
+  | `percent` | int | เปอร์เซ็นต์การใช้งานโควตา (0–100) สำหรับวาดแถบ Progress Bar |
+
+  > 💡 หาก `is_over_limit: true` และผู้ใช้เป็นแอดมิน แอปควรนำทางไปยังหน้าจัดการที่นั่ง (`/seats`) ทันที เนื่องจาก API เส้นอื่น ๆ จะถูกบล็อกด้วย `403 seat_quota_exceeded`
+
+  ---
+
+  ### 3.5 `token` — JWT Authentication Token
+  | ฟิลด์ | ชนิด | ตัวอย่างค่า | ความหมาย |
+  |---|:---:|---|---|
+  | `access_token` | string | `"eyJ0eXAi..."` | JWT Token สำหรับแนบใน Header `Authorization: Bearer <token>` |
+  | `token_type` | string | `"bearer"` | ชนิดของ Token (ใช้รูปแบบ Bearer Token) |
+  | `expires_in` | int | `3600` | อายุของ Token เป็น **วินาที** (3600 วินาที = 60 นาที) |
 
   ---
 

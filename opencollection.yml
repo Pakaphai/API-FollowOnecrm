@@ -410,7 +410,7 @@ docs:
     ไม่ต้อง auth · คืน `{success, message, data:{is_valid, url}}` · ไม่พบ = **404** · โหมด standalone คืน host ตัวเอง
 
     ### `POST login`
-    `{username, password}` → `{message, user_detail, first_login, seat_quota, token}` · ไม่พบ user = 404 · รหัสผิด = 401
+    `{username, password}` → `{message, user_detail, consent_required, policy, first_login, seat_quota, token}` · ไม่พบ user = 404 · รหัสผิด = 401
 
     `seat_quota` เป็นฟิลด์ใหม่ — ถ้า `seat_quota.is_over_limit = true` ให้พาไปหน้าจัดการโควตาทันที ไม่ต้องรอโดน 403 (ดู [api-seat-quota.md](api-seat-quota.md)) · บัญชีที่ถูกระงับ / บริษัทเกินโควตา = **403** พร้อม `code`
 
