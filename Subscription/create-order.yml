@@ -1,0 +1,75 @@
+info:
+  name: create-order (ซื้อ/ต่อแพ็กเกจ)
+  type: http
+  seq: 2
+
+http:
+  method: POST
+  url: "{{sale_uat}}/api/v1/subscription/orders"
+  auth:
+    type: bearer
+    token: "{{token}}"
+  body:
+    type: json
+    data: |-
+      {
+        "platform": "google_play",
+        "seats": 6,
+        "billing_cycle": "monthly"
+      }
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+
+docs: |
+  # POST /api/v1/subscription/orders — ซื้อ / ต่ออายุแพ็กเกจ Basic
+
+  สร้างออเดอร์ pending แล้วบอกแอปว่าต้องซื้อสินค้าอะไรกับร้าน (Google Play / App Store)
+  **เฉพาะแอดมิน (level 0/1)** · บริษัท standalone ได้ `404`
+  เส้นนี้ยกเว้นจากด่าน `seat_quota_exceeded` — บริษัทที่เกินโควตาก็ซื้อได้
+
+  ## Request
+
+  | ฟิลด์ | บังคับ | หมายเหตุ |
+  |---|:---:|---|
+  | `platform` | ✅ | `google_play` (Android) / `app_store` (iOS) |
+  | `seats` | ✅ | ผู้ใช้ทั้งหมดที่ต้องการ — ลงตัวทีละแพ็ก (3, 6, 9 …) |
+  | `billing_cycle` | ✅ | `monthly` / `semiannual` / `yearly` |
+
+  ## Response (200)
+
+  ```json
+  {
+    "success": true,
+    "order": { "id": 42, "kind": "subscription", "status": "pending", "is_final": false, "seats": 6,
+               "billing_cycle": "monthly", "amount": 398, "currency": "THB", "payment_method": "google_play" },
+    "purchase": {
+      "platform": "google_play",
+      "product_id": "basic_monthly_pack",
+      "quantity": 2,
+      "account_token": "0f9c2c7a-5b1e-4c7d-9b2a-1c2d3e4f5a6b",
+      "product_type": "consumable"
+    }
+  }
+  ```
+
+  ## แอปต้องทำ
+
+  1. ซื้อ `purchase.product_id` จำนวน `purchase.quantity` ชิ้น กับร้าน
+     - Android: `BillingFlowParams` + `setQuantity(quantity)` + `setObfuscatedAccountId(account_token)`
+     - iOS: `product.purchase(options: [.quantity(quantity), .appAccountToken(UUID(uuidString: account_token)!)])`
+  2. ได้ใบเสร็จแล้วส่งมาที่ `verify-order` — **ห้าม consume/finish เอง** ก่อนได้ 200
+
+  ## Error
+
+  | HTTP | `code` | |
+  |:---:|---|---|
+  | 422 | — | input ผิด (`message` + `errors`) |
+  | 422 | `product_unavailable` | ร้านไม่มีสินค้าที่ประกอบจำนวนนี้ได้ (เช่น iOS เกิน 10 ชิ้น) |
+  | 403 | `forbidden` | ไม่ใช่แอดมิน |
+  | 503 | `store_unavailable` | เซิร์ฟเวอร์ยังไม่ได้ตั้งค่าร้านนี้ |
+
+  📄 เอกสารเต็ม: `docs/api-subscription-purchase.md`

@@ -1,0 +1,34 @@
+info:
+  name: cancel-order (ยกเลิกออเดอร์ที่ยังไม่ซื้อ)
+  type: http
+  seq: 6
+
+http:
+  method: POST
+  url: "{{sale_uat}}/api/v1/subscription/orders/42/cancel"
+  auth:
+    type: bearer
+    token: "{{token}}"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+
+docs: |
+  # POST /api/v1/subscription/orders/{id}/cancel — ลูกค้าเปลี่ยนใจก่อนกดซื้อกับร้าน
+
+  ยกเลิกออเดอร์ที่ยัง `pending` ฝั่งเซิร์ฟเวอร์ (ยังไม่มีเงินเข้า) · **ส่งซ้ำได้** — ออเดอร์ที่จบไปแล้วตอบ 200 พร้อมสถานะปัจจุบัน
+
+  ```json
+  { "success": true, "message": "ยกเลิกรายการแล้ว ยังไม่มีการตัดเงินจากบัญชีของคุณ", "order": { "id": 42, "status": "canceled", "is_final": true } }
+  ```
+
+  | HTTP | `code` | |
+  |:---:|---|---|
+  | 409 | `not_cancelable` | ร้านรับเงินของออเดอร์นี้แล้ว (ใบเสร็จถูกผูกแล้ว) — ให้ส่ง `verify-order` ต่อ |
+
+  ถ้าลูกค้ากดซื้อกับร้านไปแล้ว ต้องขอคืนเงินผ่าน Google Play / App Store — ไม่ใช่ที่นี่
+
+  📄 เอกสารเต็ม: `docs/api-subscription-purchase.md`

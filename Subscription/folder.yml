@@ -1,0 +1,17 @@
+info:
+  name: Subscription
+  type: folder
+  seq: 17
+
+request:
+  auth: inherit
+
+docs: |
+  # Subscription — สถานะแพ็กเกจ + ซื้อแพ็กเกจ/ที่นั่งเพิ่มจากแอป
+
+  แอปซื้อผ่าน **ร้านค้าของแพลตฟอร์มเท่านั้น** — Android = Google Play Billing · iOS = Apple In-App Purchase (StoreKit 2)
+  ราคาที่เก็บจริงคือราคาสินค้าในร้าน · กติกาที่นั่ง/การเปิดใช้งานชุดเดียวกับหน้าเว็บ /pricing — ดู `docs/api-subscription-purchase.md`
+
+  ลำดับ: `products` (ดึงรหัสสินค้าไป query ราคาจากร้าน) → `create-order` (หรือ `add-seats`) ได้ `purchase{product_id, quantity, account_token}`
+  → ซื้อกับร้านโดยแนบ `account_token` → `verify-order` ส่งใบเสร็จมาให้ตรวจ → เซิร์ฟเวอร์เปิดใช้งาน (+ consume ฝั่ง Google)
+  → iOS เรียก `transaction.finish()` หลังได้ 200 · `order-status` ไว้ดูสถานะ

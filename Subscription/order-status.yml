@@ -1,0 +1,48 @@
+info:
+  name: order-status (สถานะออเดอร์)
+  type: http
+  seq: 5
+
+http:
+  method: GET
+  url: "{{sale_uat}}/api/v1/subscription/orders/42"
+  auth:
+    type: bearer
+    token: "{{token}}"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+
+docs: |
+  # GET /api/v1/subscription/orders/{id} — สถานะออเดอร์ (source of truth)
+
+  ```json
+  {
+    "success": true,
+    "order": {
+      "id": 42, "kind": "subscription",
+      "status": "paid", "status_label": "ชำระเงินสำเร็จ", "is_final": true, "is_paid": true,
+      "seats": 6, "extra_seats": null, "billing_cycle": "monthly",
+      "amount": 398, "amount_display": "398.00", "currency": "THB", "payment_method": "google_play",
+      "refund_state": null, "message": null,
+      "store_transaction_id": "GPA.3333-4444-5555-66666", "store_environment": "production",
+      "paid_at": "2026-10-14T18:35:10+07:00", "created_at": "2026-10-14T18:30:00+07:00"
+    },
+    "purchase": { "platform": "google_play", "product_id": "basic_monthly_pack", "quantity": 2, "account_token": "0f9c2c7a-…", "product_type": "consumable" }
+  }
+  ```
+
+  | `status` | `is_final` | แอปควรทำ |
+  |---|:---:|---|
+  | `pending` | ❌ | ยังไม่ส่งใบเสร็จ / ร้านยังไม่รับเงิน → ให้ซื้อ หรือส่ง `verify-order` ซ้ำถ้ามีใบเสร็จค้าง |
+  | `paid` | ✅ | เปิดใช้งานแล้ว → โหลด `subscription/status` + `seats` ใหม่ |
+  | `canceled` | ✅ | ลูกค้ายกเลิกเอง / ร้านยกเลิกก่อนเงินเข้า |
+  | `failed` / `expired` | ✅ | ปิดโดยเจ้าหน้าที่/ระบบ → สร้างออเดอร์ใหม่ |
+  | `reversed` | ✅ | คืนเงินแล้ว — แจ้งเจ้าหน้าที่ |
+
+  `404 not_found` = ไม่มีออเดอร์นี้ในบริษัท
+
+  📄 เอกสารเต็ม: `docs/api-subscription-purchase.md`

@@ -1,0 +1,40 @@
+info:
+  name: products (รหัสสินค้าในร้าน)
+  type: http
+  seq: 1
+
+http:
+  method: GET
+  url: "{{sale_uat}}/api/v1/subscription/products"
+  auth:
+    type: bearer
+    token: "{{token}}"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+
+docs: |
+  # GET /api/v1/subscription/products — รหัสสินค้าในร้าน (Google Play / App Store)
+
+  ให้แอปเอา `product_id` ไป `queryProductDetailsAsync` (Android) / `Product.products(for:)` (iOS) ตั้งแต่เปิดหน้าแพ็กเกจ
+  เพื่อโชว์**ราคาจริงของร้าน** — `reference_price` เป็นแค่ราคาตาม rate card ฝั่งเซิร์ฟเวอร์ไว้เทียบ
+
+  ```json
+  {
+    "success": true,
+    "pack_size": 3,
+    "stores": {
+      "google_play": { "max_quantity": 99, "products": [
+        { "product_id": "basic_monthly_pack", "billing_cycle": "monthly", "packs": 1, "seats": 3, "reference_price": 199 },
+        { "product_id": "basic_semiannual_pack", "billing_cycle": "semiannual", "packs": 1, "seats": 3, "reference_price": 995 },
+        { "product_id": "basic_yearly_pack", "billing_cycle": "yearly", "packs": 1, "seats": 3, "reference_price": 1990 }
+      ]},
+      "app_store": { "max_quantity": 10, "products": [ "…" ] }
+    }
+  }
+  ```
+
+  📄 เอกสารเต็ม: `docs/api-subscription-purchase.md`

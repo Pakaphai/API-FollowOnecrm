@@ -5,7 +5,7 @@ info:
 
 http:
   method: GET
-  url: "{{sale_uat}}/api/v1/productlist?page=1&per_page=20&q=ของใช้ส่วนตัว "
+  url: "{{sale_uat}}/api/v1/productlist?page=1&per_page=20"
   params:
     - name: page
       value: "1"
@@ -16,6 +16,7 @@ http:
     - name: q
       value: "ของใช้ส่วนตัว "
       type: query
+      disabled: true
     - name: low_stock
       value: "1"
       type: query

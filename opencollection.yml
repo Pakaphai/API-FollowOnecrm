@@ -44,6 +44,16 @@ docs:
     | [api-notification-delete.md](api-notification-delete.md) | ลบการแจ้งเตือน — ทีละรายการ / ล้างกล่อง |
     | [maintenance-line-options-price.md](maintenance-line-options-price.md) | ตรวจ/ซ่อมเอกสารที่ราคาไม่รวมตัวเลือกสินค้า |
     | [order-edit-status-impact.md](order-edit-status-impact.md) | เปิดปุ่มแก้ไขทุกสถานะ — ผลกระทบและแนวทางแก้ |
+    | [api-subscription-purchase.md](api-subscription-purchase.md) | **ซื้อแพ็กเกจ / ที่นั่งเพิ่มจากแอป — Google Play Billing (Android) · Apple In-App Purchase/StoreKit 2 (iOS)** |
+
+    ## อัปเดต 14/10/2569 — 🆕 ซื้อแพ็กเกจจากแอปผ่าน Google Play Billing / Apple In-App Purchase (โฟลเดอร์ `Subscription/`)
+
+    - แอปชำระเงินผ่าน **ร้านค้าของแพลตฟอร์มเท่านั้น** — Android = Google Play Billing (one-time product, multi-quantity) · iOS = Apple IAP ผ่าน StoreKit 2 (Consumable) · ไม่มีหน้าเว็บ checkout / Apple Pay / Google Pay / บัตร / PromptPay ในแอป
+    - เพิ่ม 6 เส้น **เฉพาะแอดมิน (level 0/1)**: `GET subscription/products` (รหัสสินค้าในร้าน) · `POST subscription/orders` (ซื้อ/ต่อแพ็กเกจ) · `POST subscription/orders/seats` (ซื้อที่นั่งเพิ่ม) · `POST subscription/orders/verify` (ส่งใบเสร็จมาตรวจ) · `GET subscription/orders/{id}` (สถานะ) · `POST subscription/orders/{id}/cancel` (ยกเลิกที่ยังไม่ซื้อ)
+    - ลำดับ: สร้างออเดอร์ → ได้ `purchase{product_id, quantity, account_token}` → ซื้อกับร้านโดย**แนบ `account_token`** (Android `setObfuscatedAccountId` · iOS `.appAccountToken(UUID)`) → ส่งใบเสร็จ (Google `purchase_token`+`product_id` · Apple `signed_transaction` JWS) มาที่ `/verify` → เซิร์ฟเวอร์ตรวจกับร้านแล้วเปิดใช้งาน
+    - **Android ห้าม consume เอง** (เซิร์ฟเวอร์ consume ให้) · **iOS เรียก `transaction.finish()` หลังได้ 200 จาก `/verify` เท่านั้น** · `/verify` ส่งซ้ำได้ — ตอนเปิดแอปให้ไล่ใบเสร็จค้างส่งซ้ำทุกใบ
+    - ราคาที่โชว์/เก็บจริงคือราคาสินค้าในร้าน (query จาก Play Billing / StoreKit) — `order.amount` เป็นแค่ราคาอ้างอิงตาม rate card
+    - ทุกเส้นยกเว้นจากด่าน `seat_quota_exceeded` (บริษัทที่เกินโควตาต้องซื้อที่นั่งเพิ่มได้) · สถานะออเดอร์มี `canceled` เพิ่ม (นอกจาก pending / paid / failed / expired / reversed)
 
     ## อัปเดต 29/09/2569 — เพิ่มชื่อพนักงานขายใน `quotation/list` · `order/list` · `billing/list`
 
@@ -264,11 +274,17 @@ docs:
     | 🔒 | `DELETE` | `notifications` | ลบตาม `ids` / `only=read` / `only=all` |
     | 🔒 | `POST` | `notifications/delete` | เหมือนเส้นบน (สำหรับ client ที่ส่ง body กับ DELETE ไม่ได้) |
 
-    ### 4. Subscription & Calendar — 3 เส้น
+    ### 4. Subscription & Calendar — 9 เส้น
 
     | | Method | Path | ใช้ทำอะไร |
     |:---:|---|---|---|
     | 🔒 | `GET` | `subscription/status` | สถานะแพ็กเกจ + วันใช้งาน + ธงปิดฟีเจอร์ |
+    | 🔒 | `GET` | `subscription/products` | รหัสสินค้าในร้าน (Google Play / App Store) ให้แอป query ราคา |
+    | 🔒 | `POST` | `subscription/orders` | ซื้อ/ต่อแพ็กเกจ → `purchase{product_id, quantity, account_token}` — **เฉพาะแอดมิน** |
+    | 🔒 | `POST` | `subscription/orders/seats` | ซื้อที่นั่งเพิ่มกลางรอบ → `purchase{…}` — **เฉพาะแอดมิน** |
+    | 🔒 | `POST` | `subscription/orders/verify` | ส่งใบเสร็จจากร้านมาตรวจ + เปิดใช้งาน |
+    | 🔒 | `GET` | `subscription/orders/{id}` | สถานะออเดอร์ (source of truth) |
+    | 🔒 | `POST` | `subscription/orders/{id}/cancel` | ยกเลิกออเดอร์ที่ยังไม่ได้ซื้อกับร้าน |
     | 🔒 | `GET` | `calendar` | ตารางนัดหมายเดือนปัจจุบันของตัวเอง |
     | 🔒 | `GET` | `calendar/all/customer` | นัดหมายทั้งบริษัท (ทุกเซลส์) |
 
@@ -563,6 +579,12 @@ docs:
 
     ### `GET subscription/status`
     ดู [api-subscription-status.md](api-subscription-status.md) — คืน `plan`, `usage`, `days_remaining`, `features`, `notice`
+
+    ### `GET subscription/products` · `POST subscription/orders` · `POST subscription/orders/seats` · `POST subscription/orders/verify` · `GET subscription/orders/{id}` · `POST subscription/orders/{id}/cancel`
+    ดู [api-subscription-purchase.md](api-subscription-purchase.md) — ซื้อแพ็กเกจจากแอปผ่านร้านค้าของแพลตฟอร์มเท่านั้น
+    (Android = Google Play Billing · iOS = Apple In-App Purchase/StoreKit 2) · สร้างออเดอร์ → ซื้อกับร้านพร้อม `account_token` →
+    ส่งใบเสร็จมาที่ `/verify` → เซิร์ฟเวอร์ตรวจกับร้านแล้วเปิดใช้งาน (consume ให้ฝั่ง Google · iOS แอป `finish()` หลังได้ 200) ·
+    เฉพาะ level 0/1 · ยกเว้นจากด่าน `seat_quota_exceeded`
 
     ### `GET calendar`
     นัดหมาย **เดือนปัจจุบัน** ของลูกค้าที่ตัวเองรับผิดชอบ (`c.user_id = me`)

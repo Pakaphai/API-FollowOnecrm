@@ -1,0 +1,43 @@
+info:
+  name: add-seats (ซื้อที่นั่งเพิ่ม)
+  type: http
+  seq: 3
+
+http:
+  method: POST
+  url: "{{sale_uat}}/api/v1/subscription/orders/seats"
+  auth:
+    type: bearer
+    token: "{{token}}"
+  body:
+    type: json
+    data: |-
+      {
+        "platform": "app_store",
+        "extra_seats": 3
+      }
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+
+docs: |
+  # POST /api/v1/subscription/orders/seats — ซื้อที่นั่งเพิ่มกลางรอบ
+
+  เฉพาะบริษัทที่ใช้ Basic อยู่ (`is_paid_plan: true`) — เก็บเงินแค่ค่าที่นั่งที่เพิ่ม **ไม่ต่อวันหมดอายุ**
+  รอบบิลของสินค้าที่ต้องซื้อ = รอบบิลที่บริษัทใช้อยู่ (เซิร์ฟเวอร์เลือกให้)
+
+  | ฟิลด์ | บังคับ | หมายเหตุ |
+  |---|:---:|---|
+  | `platform` | ✅ | `google_play` / `app_store` |
+  | `extra_seats` | ✅ | จำนวนที่จะ**เพิ่ม** (ลงตัวทีละแพ็ก) — ที่นั่งเดิม/รอบบิล เซิร์ฟเวอร์อ่านจากบริษัทเอง |
+
+  Response โครงเดียวกับ `create-order` · `order.kind = "seats_addon"` · `order.seats` = ยอดรวมหลังเพิ่ม · `order.extra_seats` = จำนวนที่เพิ่ม
+
+  | HTTP | `code` | |
+  |:---:|---|---|
+  | 422 | `no_paid_plan` | ยังไม่มีแพ็กเกจ Basic — ต้องซื้อแพ็กเกจก่อน |
+
+  📄 เอกสารเต็ม: `docs/api-subscription-purchase.md`

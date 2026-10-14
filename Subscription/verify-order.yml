@@ -1,0 +1,75 @@
+info:
+  name: verify-order (ส่งใบเสร็จจากร้านมาตรวจ)
+  type: http
+  seq: 4
+
+http:
+  method: POST
+  url: "{{sale_uat}}/api/v1/subscription/orders/verify"
+  auth:
+    type: bearer
+    token: "{{token}}"
+  body:
+    type: json
+    data: |-
+      {
+        "platform": "google_play",
+        "product_id": "basic_monthly_pack",
+        "purchase_token": "<Purchase.purchaseToken>",
+        "order_id": 42
+      }
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+
+docs: |
+  # POST /api/v1/subscription/orders/verify — ส่งใบเสร็จจากร้านมาตรวจและเปิดใช้งาน
+
+  เซิร์ฟเวอร์**ตรวจกับร้านเอง** (Google Play Developer API / ลายเซ็น JWS ของ Apple) แล้วเปิดใช้งานแพ็กเกจ
+  **ส่งซ้ำได้** — ตอนเปิดแอปให้ไล่ใบเสร็จที่ค้าง (Android `queryPurchasesAsync` · iOS `Transaction.unfinished`) แล้วส่งซ้ำทุกใบ
+
+  ## Request
+
+  Android:
+  ```json
+  { "platform": "google_play", "product_id": "basic_monthly_pack", "purchase_token": "<Purchase.purchaseToken>", "order_id": 42 }
+  ```
+  iOS:
+  ```json
+  { "platform": "app_store", "signed_transaction": "<Transaction.jwsRepresentation>", "order_id": 42 }
+  ```
+  `order_id` ไม่บังคับ — เซิร์ฟเวอร์หาออเดอร์จาก `account_token` ที่แนบไปตอนซื้อ
+
+  ## Response (200) — จ่ายสำเร็จ เปิดใช้งานแล้ว
+
+  ```json
+  {
+    "success": true,
+    "message": "ชำระเงินสำเร็จ เปิดใช้งานแพ็กเกจให้แล้ว",
+    "order": { "id": 42, "status": "paid", "is_final": true, "is_paid": true, "store_transaction_id": "GPA.3333-4444-5555-66666" },
+    "purchase": { "platform": "google_play", "transaction_id": "GPA.3333-4444-5555-66666", "finish_transaction": false, "consumed": true }
+  }
+  ```
+
+  - iOS: `finish_transaction = true` → เรียก `transaction.finish()` ได้แล้ว
+  - Android: เซิร์ฟเวอร์ consume ให้แล้ว (`consumed = true`) · ถ้า `false` ให้ส่ง verify ซ้ำภายหลัง (ไม่งั้น Google คืนเงินใน 3 วัน)
+
+  ## Response (202) — Google pending purchase (เงินยังไม่เข้า)
+
+  `code = purchase_pending` · ยังไม่ต้องทำอะไร รอ Google แจ้งเซิร์ฟเวอร์ / แอปเห็น Purchase ใหม่แล้วส่งซ้ำ
+
+  ## Error
+
+  | HTTP | `code` | | แอปควรทำ |
+  |:---:|---|---|---|
+  | 422 | `store_purchase_invalid` | ใบเสร็จปลอม/ไม่มีจริง/ของแอปอื่น | ติดต่อเจ้าหน้าที่พร้อมเลขคำสั่งซื้อของร้าน |
+  | 422 | `store_test_purchase_rejected` | ใบเสร็จ sandbox แต่เซิร์ฟเวอร์รับเฉพาะของจริง | ใช้เซิร์ฟเวอร์ UAT |
+  | 404 | `order_not_found` | หาออเดอร์ไม่เจอ | ส่งซ้ำพร้อม `order_id` |
+  | 409 | `purchase_mismatch` | สินค้า/จำนวนไม่ตรงออเดอร์ | **อย่า finish/consume** — ติดต่อเจ้าหน้าที่ |
+  | 409 | `purchase_already_used` / `order_already_paid` / `purchase_canceled` | ใบเสร็จ/ออเดอร์ถูกใช้หรือยกเลิกแล้ว | แสดงสถานะ |
+  | 503 / 502 | `store_unavailable` / `store_error` | ร้าน/เซิร์ฟเวอร์ไม่พร้อม | เก็บใบเสร็จไว้ส่งซ้ำ |
+
+  📄 เอกสารเต็ม: `docs/api-subscription-purchase.md`
