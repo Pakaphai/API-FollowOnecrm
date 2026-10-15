@@ -28,8 +28,19 @@ settings:
 docs: |
   # POST /api/v1/subscription/orders/verify — ส่งใบเสร็จจากร้านมาตรวจและเปิดใช้งาน
 
-  เซิร์ฟเวอร์**ตรวจกับร้านเอง** (Google Play Developer API / ลายเซ็น JWS ของ Apple) แล้วเปิดใช้งานแพ็กเกจ
-  **ส่งซ้ำได้** — ตอนเปิดแอปให้ไล่ใบเสร็จที่ค้าง (Android `queryPurchasesAsync` · iOS `Transaction.unfinished`) แล้วส่งซ้ำทุกใบ
+  เส้นที่สำคัญที่สุดของกลุ่ม เซิร์ฟเวอร์**ตรวจใบเสร็จกับร้านเอง** (ไม่เชื่อค่าที่แอปส่ง) แล้ว
+  จับคู่กับออเดอร์ → เปิดใช้งานแพ็กเกจ → ปิดงานกับร้าน (Google: consume ให้ · Apple: บอกให้แอป finish)
+
+  **ส่งซ้ำได้ไม่จำกัด (idempotent)** ใบเสร็จที่เปิดใช้งานไปแล้วตอบ `200` พร้อมสถานะปัจจุบันอีกครั้ง
+  **เฉพาะแอดมิน (level 0/1)** · standalone ได้ `404`
+
+  ```
+  POST /api/v1/subscription/orders/verify
+  Authorization: Bearer <token>
+  Content-Type: application/json
+  ```
+
+  ---
 
   ## Request
 
@@ -37,39 +48,131 @@ docs: |
   ```json
   { "platform": "google_play", "product_id": "basic_monthly_pack", "purchase_token": "<Purchase.purchaseToken>", "order_id": 42 }
   ```
+
   iOS:
   ```json
   { "platform": "app_store", "signed_transaction": "<Transaction.jwsRepresentation>", "order_id": 42 }
   ```
-  `order_id` ไม่บังคับ — เซิร์ฟเวอร์หาออเดอร์จาก `account_token` ที่แนบไปตอนซื้อ
 
-  ## Response (200) — จ่ายสำเร็จ เปิดใช้งานแล้ว
+  | ฟิลด์ | บังคับ | กติกา | เอามาจาก |
+  |---|:---:|---|---|
+  | `platform` | ✅ | `google_play` / `app_store` | |
+  | `product_id` | Android | string ≤ 120 | `Purchase.products[0]` |
+  | `purchase_token` | Android | string ≤ 4000 | `Purchase.purchaseToken` |
+  | `signed_transaction` | iOS | string ≤ 20000 | `Transaction.jwsRepresentation` ของ `VerificationResult.verified` |
+  | `order_id` | — | int | `order.id` จาก create-order · ไม่บังคับ แต่**แนะนำให้ส่งเสมอ** |
+
+  `order_id` ใช้เฉพาะเมื่อใบเสร็จไม่มี `account_token` (แอปลืมแนบตอนซื้อ) ถ้าใบเสร็จมี token เซิร์ฟเวอร์ยึด token ก่อน
+
+  ---
+
+  ## เซิร์ฟเวอร์ทำอะไรบ้าง (ลำดับจริง)
+
+  ### 1. ตรวจใบเสร็จกับร้าน
+
+  | ร้าน | วิธี | สิ่งที่ได้ |
+  |---|---|---|
+  | Google Play | เรียก Google Play Developer API `purchases.products.get` ด้วย service account | `purchaseState` (0 ซื้อแล้ว / 1 ยกเลิก / 2 รอจ่าย) · `quantity` · `orderId` · `obfuscatedExternalAccountId` · `purchaseType` (0 = license tester → sandbox) |
+  | App Store | ตรวจลายเซ็น JWS ออฟไลน์ด้วย certificate chain ที่จบที่ Apple Root CA G3 | `bundleId` ต้องตรงแอปเรา · `type` ต้องเป็น `Consumable` / `Non-Renewing Subscription` · `quantity` · `transactionId` · `appAccountToken` · `revocationDate` (มี = คืนเงินแล้ว) · `environment` (ไม่ใช่ Production → sandbox) |
+
+  ตรวจไม่ผ่าน → `422 store_purchase_invalid` · ร้านล่ม/สิทธิ์ไม่พอ → `503 store_unavailable` / `502 store_error`
+
+  ### 2. ใบเสร็จทดสอบ
+
+  ถ้า `environment = sandbox` และเซิร์ฟเวอร์ไม่เปิด `STORE_BILLING_ALLOW_TEST_PURCHASES` → `422 store_test_purchase_rejected`
+  (UAT เปิด · production ปิด)
+
+  ### 3. หาออเดอร์
+
+  1. เคยผูก `transactionId` นี้แล้ว → ใช้ออเดอร์เดิม (กรณีส่งซ้ำ) · ถ้าเป็นของบริษัทอื่น → `404 order_not_found`
+  2. ยังไม่เคย → หาจาก `account_token` ในใบเสร็จ → ไม่มีค่อยใช้ `order_id` ที่แอปส่ง → ต้องเป็นของบริษัทเดียวกัน ไม่งั้น `404 order_not_found`
+  3. ตรวจว่าใบเสร็จตรงออเดอร์: ร้านเดียวกัน · `product_id` เดียวกัน · `quantity` เท่ากัน → ไม่ตรง `409 purchase_mismatch`
+  4. ออเดอร์เคยจ่ายด้วยใบเสร็จอื่น → `409 order_already_paid` · ออเดอร์ถูกคืนเงินไปแล้ว → `409 order_reversed`
+
+  ### 4. เดินสถานะตามใบเสร็จ
+
+  | ใบเสร็จบอกว่า | เซิร์ฟเวอร์ทำ | ตอบ |
+  |---|---|---|
+  | ยกเลิก / คืนเงิน | ออเดอร์ที่ `paid` อยู่ → `reversed` (แพ็กเกจ**ไม่ถูกลด** ให้เจ้าหน้าที่ดู) · ที่ยังไม่จ่าย → `canceled` | `409 purchase_canceled` |
+  | รอจ่าย (Google pending purchase เช่น จ่ายเงินสดที่ร้านสะดวกซื้อ) | เก็บ `purchase_token` ไว้ให้การแจ้งเตือนรอบหน้าหาเจอ ยังไม่ผูก transaction id | `202 purchase_pending` |
+  | ซื้อสำเร็จ | ถ้าออเดอร์ถูกปิดไปแล้ว (`canceled` / `expired` / `failed`) **เปิดกลับ** → ผูกใบเสร็จ (unique ที่ DB) → เปิดใช้งานแพ็กเกจ → consume (Google) | `200` |
+
+  เปิดใช้งาน = ตรรกะเดียวกับเว็บ: `subscription` ต่ออายุ/เริ่มรอบใหม่ · `seats_addon` บวกที่นั่งอย่างเดียว (ดู create-order / add-seats)
+
+  ---
+
+  ## Response (200 OK) — จ่ายสำเร็จ เปิดใช้งานแล้ว
 
   ```json
   {
     "success": true,
     "message": "ชำระเงินสำเร็จ เปิดใช้งานแพ็กเกจให้แล้ว",
-    "order": { "id": 42, "status": "paid", "is_final": true, "is_paid": true, "store_transaction_id": "GPA.3333-4444-5555-66666" },
-    "purchase": { "platform": "google_play", "transaction_id": "GPA.3333-4444-5555-66666", "finish_transaction": false, "consumed": true }
+    "order": {
+      "id": 42, "kind": "subscription", "status": "paid", "status_label": "ชำระเงินสำเร็จ",
+      "is_final": true, "is_paid": true, "seats": 6, "billing_cycle": "monthly",
+      "store_transaction_id": "GPA.3333-4444-5555-66666", "store_environment": "production",
+      "paid_at": "2026-10-14T18:35:10+07:00", "…": "…"
+    },
+    "purchase": {
+      "platform": "google_play",
+      "transaction_id": "GPA.3333-4444-5555-66666",
+      "finish_transaction": false,
+      "consumed": true
+    }
   }
   ```
 
-  - iOS: `finish_transaction = true` → เรียก `transaction.finish()` ได้แล้ว
-  - Android: เซิร์ฟเวอร์ consume ให้แล้ว (`consumed = true`) · ถ้า `false` ให้ส่ง verify ซ้ำภายหลัง (ไม่งั้น Google คืนเงินใน 3 วัน)
+  | ฟิลด์ | แอปควรทำ |
+  |---|---|
+  | `purchase.finish_transaction` | iOS = `true` → เรียก `transaction.finish()` ได้แล้ว · Android = `false` เสมอ (ไม่ต้องทำอะไรกับ Play) |
+  | `purchase.consumed` | Android: `true` = เซิร์ฟเวอร์ consume กับ Google แล้ว · `false` = เปิดใช้งานแล้วแต่ consume ไม่สำเร็จ **ให้ส่ง verify ซ้ำภายหลัง** (ไม่งั้น Google คืนเงินอัตโนมัติใน 3 วัน) · iOS = `true` เสมอ |
+  | `purchase.transaction_id` | เลขธุรกรรมของร้าน เก็บไว้ให้ลูกค้าอ้างอิงตอนติดต่อเจ้าหน้าที่ |
 
-  ## Response (202) — Google pending purchase (เงินยังไม่เข้า)
+  จากนั้น**โหลด `subscription/status` และ `seats` ใหม่** เพราะแพ็กเกจ/โควตาเปลี่ยนแล้ว
 
-  `code = purchase_pending` · ยังไม่ต้องทำอะไร รอ Google แจ้งเซิร์ฟเวอร์ / แอปเห็น Purchase ใหม่แล้วส่งซ้ำ
+  ## Response (202 Accepted) — ร้านรับคำสั่งซื้อแล้ว เงินยังไม่เข้า
+
+  ```json
+  {
+    "success": true,
+    "code": "purchase_pending",
+    "message": "ร้านค้ารับคำสั่งซื้อแล้ว กำลังรอการชำระเงิน — ระบบจะเปิดใช้งานให้เมื่อได้รับเงิน",
+    "order": { "id": 42, "status": "pending", "is_final": false, "…": "…" },
+    "purchase": { "platform": "google_play", "finish_transaction": false, "consumed": false }
+  }
+  ```
+
+  เกิดเฉพาะ Google (`purchaseState = 2`) ยังไม่ต้องทำอะไร เมื่อเงินเข้า Google จะแจ้งเซิร์ฟเวอร์เองทาง RTDN
+  และแอปจะเห็น `Purchase` สถานะใหม่ใน `queryPurchasesAsync` → ส่ง verify ซ้ำ
+
+  ---
 
   ## Error
 
-  | HTTP | `code` | | แอปควรทำ |
+  | HTTP | `code` | เมื่อไหร่ | แอปควรทำ |
   |:---:|---|---|---|
-  | 422 | `store_purchase_invalid` | ใบเสร็จปลอม/ไม่มีจริง/ของแอปอื่น | ติดต่อเจ้าหน้าที่พร้อมเลขคำสั่งซื้อของร้าน |
-  | 422 | `store_test_purchase_rejected` | ใบเสร็จ sandbox แต่เซิร์ฟเวอร์รับเฉพาะของจริง | ใช้เซิร์ฟเวอร์ UAT |
-  | 404 | `order_not_found` | หาออเดอร์ไม่เจอ | ส่งซ้ำพร้อม `order_id` |
-  | 409 | `purchase_mismatch` | สินค้า/จำนวนไม่ตรงออเดอร์ | **อย่า finish/consume** — ติดต่อเจ้าหน้าที่ |
-  | 409 | `purchase_already_used` / `order_already_paid` / `purchase_canceled` | ใบเสร็จ/ออเดอร์ถูกใช้หรือยกเลิกแล้ว | แสดงสถานะ |
-  | 503 / 502 | `store_unavailable` / `store_error` | ร้าน/เซิร์ฟเวอร์ไม่พร้อม | เก็บใบเสร็จไว้ส่งซ้ำ |
+  | 422 | — (มี `errors`) | ฟิลด์ไม่ครบตาม platform | แก้ request |
+  | 422 | `store_purchase_invalid` | ใบเสร็จปลอม / ไม่มีในร้าน / bundleId ไม่ตรง / ชนิดสินค้าไม่รองรับ / JWS ไม่มี transactionId | โชว์ `message` · ถ้าซื้อจริงให้ติดต่อเจ้าหน้าที่พร้อมเลขคำสั่งซื้อของร้าน |
+  | 422 | `store_test_purchase_rejected` | ใบเสร็จ sandbox แต่เซิร์ฟเวอร์รับเฉพาะของจริง | เกิดเฉพาะตอนทดสอบ ใช้เซิร์ฟเวอร์ UAT |
+  | 404 | `order_not_found` | ไม่มี token ในใบเสร็จและไม่ได้ส่ง `order_id` / ออเดอร์ของบริษัทอื่น | ส่งซ้ำพร้อม `order_id` |
+  | 409 | `purchase_mismatch` | ร้าน / สินค้า / จำนวน ในใบเสร็จไม่ตรงออเดอร์ | **อย่า finish / consume** ติดต่อเจ้าหน้าที่ |
+  | 409 | `purchase_already_used` | ใบเสร็จนี้ถูกใช้เปิดใช้งาน**ออเดอร์อื่น**ไปแล้ว | finish ได้ ไม่มีอะไรต้องทำ |
+  | 409 | `order_already_paid` | **ออเดอร์นี้**จ่ายด้วยใบเสร็จอื่นไปแล้ว | ติดต่อเจ้าหน้าที่ (อาจซื้อซ้ำ) |
+  | 409 | `order_reversed` | ออเดอร์นี้ถูกคืนเงินไปแล้ว | สร้างออเดอร์ใหม่ |
+  | 409 | `purchase_canceled` | ร้านยกเลิก / คืนเงินใบเสร็จนี้แล้ว | แสดงสถานะ |
+  | 500 | `activation_failed` | ตรวจผ่านแต่เปิดใช้งานไม่สำเร็จ (เช่น หา tenant ไม่เจอ) | **อย่า finish / consume** ติดต่อเจ้าหน้าที่ |
+  | 503 | `store_unavailable` | เซิร์ฟเวอร์ยังไม่ได้ตั้งค่าร้าน / ร้านปฏิเสธสิทธิ์ (401/403 จาก Google) | เก็บใบเสร็จไว้ส่งซ้ำภายหลัง |
+  | 502 | `store_error` / `store_bad_response` | ร้านล่ม / ตอบรูปแบบแปลก | เก็บใบเสร็จไว้ส่งซ้ำภายหลัง |
 
-  📄 เอกสารเต็ม: `docs/api-subscription-purchase.md`
+  > หลักง่าย ๆ: ได้ `200` เท่านั้นถึง finish/consume ได้ · `409 purchase_already_used` finish ได้ · ที่เหลือเก็บใบเสร็จไว้ส่งซ้ำหรือให้คนดู
+
+  ---
+
+  ## กรณีที่แอปต้องรองรับ
+
+  - **แอปปิดก่อนส่งใบเสร็จ**: ตอนเปิดแอปไล่ `queryPurchasesAsync` (Android) / `Transaction.unfinished` (iOS) แล้วส่ง verify ทุกใบ ไม่ต้องรู้ `order_id` เพราะมี `account_token`
+  - **ร้านแจ้งผลมาถึงเซิร์ฟเวอร์ก่อนแอป** (RTDN / App Store Server Notification): เซิร์ฟเวอร์เปิดใช้งานไปแล้ว แอปส่ง verify มาจะได้ `200` ซ้ำ ปกติ
+  - **ลูกค้ากด cancel-order แล้วเพิ่งไปจ่ายกับร้าน**: ใบเสร็จมาถึง → ออเดอร์เปิดกลับและเปิดใช้งานให้ เพราะเงินออกจากกระเป๋าลูกค้าแล้ว
+  - **Google ตอบ `consumed: false`**: ตั้ง retry ส่ง verify ซ้ำ (เช่น ตอนเปิดแอปครั้งถัดไป) ภายใน 3 วัน
+
+  📄 เอกสารเต็ม: `docs/api-subscription-purchase.md` หัวข้อ 5 · โค้ด: `StoreBillingService::settle()`

@@ -26,18 +26,108 @@ settings:
 docs: |
   # POST /api/v1/subscription/orders/seats — ซื้อที่นั่งเพิ่มกลางรอบ
 
-  เฉพาะบริษัทที่ใช้ Basic อยู่ (`is_paid_plan: true`) — เก็บเงินแค่ค่าที่นั่งที่เพิ่ม **ไม่ต่อวันหมดอายุ**
-  รอบบิลของสินค้าที่ต้องซื้อ = รอบบิลที่บริษัทใช้อยู่ (เซิร์ฟเวอร์เลือกให้)
+  สำหรับบริษัทที่**ใช้ Basic อยู่แล้ว** และต้องการเพิ่มผู้ใช้โดยไม่ต่ออายุ
+  เก็บเงินแค่ค่าที่นั่งที่เพิ่ม · **วันหมดอายุไม่ขยับ** · รอบบิลใช้ตามที่บริษัทใช้อยู่ (เซิร์ฟเวอร์เลือกให้ แอปไม่ต้องส่ง)
 
-  | ฟิลด์ | บังคับ | หมายเหตุ |
-  |---|:---:|---|
-  | `platform` | ✅ | `google_play` / `app_store` |
-  | `extra_seats` | ✅ | จำนวนที่จะ**เพิ่ม** (ลงตัวทีละแพ็ก) — ที่นั่งเดิม/รอบบิล เซิร์ฟเวอร์อ่านจากบริษัทเอง |
+  เป็นทางออกหลักของบริษัทที่ติด `seat_quota_exceeded` จึงยกเว้นจากด่านนั้น
+  **เฉพาะแอดมิน (level 0/1)** · standalone ได้ `404`
 
-  Response โครงเดียวกับ `create-order` · `order.kind = "seats_addon"` · `order.seats` = ยอดรวมหลังเพิ่ม · `order.extra_seats` = จำนวนที่เพิ่ม
+  ```
+  POST /api/v1/subscription/orders/seats
+  Authorization: Bearer <token>
+  Content-Type: application/json
+  ```
 
-  | HTTP | `code` | |
-  |:---:|---|---|
-  | 422 | `no_paid_plan` | ยังไม่มีแพ็กเกจ Basic — ต้องซื้อแพ็กเกจก่อน |
+  ---
 
-  📄 เอกสารเต็ม: `docs/api-subscription-purchase.md`
+  ## Request
+
+  ```json
+  { "platform": "app_store", "extra_seats": 3 }
+  ```
+
+  | ฟิลด์ | ชนิด | บังคับ | กติกา |
+  |---|---|:---:|---|
+  | `platform` | string | ✅ | `google_play` / `app_store` |
+  | `extra_seats` | int | ✅ | จำนวนที่จะ**เพิ่ม** (ไม่ใช่ยอดรวม) · ลงตัวทีละแพ็ก (3, 6, 9 …) · ขั้นต่ำ 1 แพ็ก · สูงสุด 999 |
+
+  ที่นั่งเดิมและรอบบิล เซิร์ฟเวอร์อ่านจากบริษัทเอง (`tenant.seats`, `tenant.billing_cycle`)
+
+  ### ลำดับที่เซิร์ฟเวอร์ตรวจ
+
+  1. ด่านสิทธิ์ (401 / 404 standalone / 403 forbidden)
+  2. validation 2 ฟิลด์ → `422` + `errors`
+  3. ร้านนี้ตั้งค่าครบหรือยัง → `503 store_unavailable`
+  4. บริษัทมีแพ็กเกจรายที่นั่งอยู่จริงไหม: `is_paid_plan = true` **และ** `seats ≥ 1` **และ** มี `billing_cycle` → ไม่ผ่าน `422 no_paid_plan`
+  5. หาสินค้าในร้านสำหรับ **รอบบิลของบริษัท** + จำนวนแพ็กที่เพิ่ม → `422 product_unavailable`
+  6. คิดราคา → `422 quote_unavailable`
+  7. สร้างออเดอร์ `kind = seats_addon` + `account_token`
+
+  ---
+
+  ## Response (200 OK)
+
+  โครงเดียวกับ `create-order` ต่างที่ 3 ฟิลด์
+
+  ```json
+  {
+    "success": true,
+    "order": {
+      "id": 43,
+      "kind": "seats_addon",
+      "status": "pending",
+      "seats": 9,
+      "extra_seats": 3,
+      "billing_cycle": "monthly",
+      "amount": 199,
+      "payment_method": "app_store",
+      "…": "…"
+    },
+    "purchase": {
+      "platform": "app_store",
+      "product_id": "basic_monthly_pack",
+      "quantity": 1,
+      "account_token": "7b3e1d0a-…",
+      "product_type": "consumable"
+    }
+  }
+  ```
+
+  | ฟิลด์ | ความหมาย |
+  |---|---|
+  | `order.kind` | `seats_addon` |
+  | `order.seats` | ยอด**รวม**หลังเพิ่ม (เดิม 6 + เพิ่ม 3 = 9) |
+  | `order.extra_seats` | จำนวนที่เพิ่ม = ค่าที่ส่งมา |
+  | `order.billing_cycle` | รอบบิลที่บริษัทใช้อยู่ (เซิร์ฟเวอร์เติมให้) |
+  | `order.amount` | ราคาอ้างอิง = ราคาแพ็กของรอบบิลนั้น × จำนวนแพ็กที่เพิ่ม **คิดเต็มรอบ ไม่ได้ prorate ตามวันที่เหลือ** |
+
+  ขั้นตอนซื้อกับร้าน + verify เหมือน `create-order` ทุกอย่าง
+
+  ---
+
+  ## ผลหลังจ่ายสำเร็จ (ตอน verify ผ่าน)
+
+  - `tenant.seats` += `extra_seats` เท่านั้น
+  - `subscription_ends_at` / `subscription_started_at` **ไม่เปลี่ยน**
+  - บันทึกประวัติ event `seats_addon` ในหลังบ้าน
+  - ถ้าบริษัทติด `seat_quota_exceeded` อยู่ จะหลุดทันทีเมื่อที่นั่งใหม่พอ → แอปโหลด `seats` ใหม่
+
+  ---
+
+  ## Error
+
+  | HTTP | `code` | เมื่อไหร่ | แอปควรทำ |
+  |:---:|---|---|---|
+  | 422 | — (มี `errors`) | `platform` / `extra_seats` ผิด | โชว์ `message` |
+  | 422 | `no_paid_plan` | ยังไม่มีแพ็กเกจ Basic (ทดลองใช้ฟรี / หมดอายุ / ไม่มีรอบบิล) | พาไป `create-order` แทน |
+  | 422 | `product_unavailable` | ร้านไม่มีสินค้าของรอบบิลบริษัท หรือจำนวนชิ้นเกิน `max_quantity` | ให้เลือกจำนวนอื่น |
+  | 422 | `quote_unavailable` | คิดราคาไม่ได้ | ติดต่อเจ้าหน้าที่ |
+  | 403 | `forbidden` | ไม่ใช่ level 0/1 | ซ่อนปุ่ม |
+  | 404 | `not_found` | standalone | ซ่อนเมนู |
+  | 503 | `store_unavailable` | ร้านยังไม่ได้ตั้งค่าฝั่งเซิร์ฟเวอร์ | ลองใหม่ภายหลัง |
+
+  ตัวอย่าง `message` validation: `เพิ่มผู้ใช้ได้ขั้นต่ำ 3 ผู้ใช้` · `เพิ่มได้ครั้งละไม่เกิน 999 คน หากต้องการมากกว่านี้ กรุณาติดต่อเจ้าหน้าที่`
+
+  > เช็ก `is_paid_plan` จาก `subscription/status` ก่อนโชว์ปุ่ม "เพิ่มที่นั่ง" จะได้ไม่เจอ `no_paid_plan` ตอนกด
+
+  📄 เอกสารเต็ม: `docs/api-subscription-purchase.md` หัวข้อ 4

@@ -19,22 +19,102 @@ settings:
 docs: |
   # GET /api/v1/subscription/products — รหัสสินค้าในร้าน (Google Play / App Store)
 
-  ให้แอปเอา `product_id` ไป `queryProductDetailsAsync` (Android) / `Product.products(for:)` (iOS) ตั้งแต่เปิดหน้าแพ็กเกจ
-  เพื่อโชว์**ราคาจริงของร้าน** — `reference_price` เป็นแค่ราคาตาม rate card ฝั่งเซิร์ฟเวอร์ไว้เทียบ
+  คืนรายการ `product_id` ทุกตัวที่เซิร์ฟเวอร์รู้จัก ทั้งสองร้าน
+  ให้แอปเรียก**ตั้งแต่เปิดหน้าแพ็กเกจ** แล้วเอา `product_id` ไป query ราคาจริงจากร้าน
+
+  - Android: `BillingClient.queryProductDetailsAsync()` ด้วย `ProductType.INAPP`
+  - iOS: `Product.products(for: [product_id…])`
+
+  ไม่มี body / query param · ไม่ต้องเป็นแอดมิน (**ทุก level** ที่ล็อกอินเรียกได้ ต่างจากเส้นอื่นในกลุ่ม)
+  ไม่ตรวจโหมด standalone (บริษัท standalone ก็ได้รายการ แต่ไปสร้างออเดอร์ไม่ได้อยู่ดี)
+
+  ```
+  GET /api/v1/subscription/products
+  Authorization: Bearer <token>
+  Accept: application/json
+  ```
+
+  ---
+
+  ## Response (200 OK)
 
   ```json
   {
     "success": true,
     "pack_size": 3,
     "stores": {
-      "google_play": { "max_quantity": 99, "products": [
-        { "product_id": "basic_monthly_pack", "billing_cycle": "monthly", "packs": 1, "seats": 3, "reference_price": 199 },
-        { "product_id": "basic_semiannual_pack", "billing_cycle": "semiannual", "packs": 1, "seats": 3, "reference_price": 995 },
-        { "product_id": "basic_yearly_pack", "billing_cycle": "yearly", "packs": 1, "seats": 3, "reference_price": 1990 }
-      ]},
-      "app_store": { "max_quantity": 10, "products": [ "…" ] }
+      "google_play": {
+        "max_quantity": 99,
+        "products": [
+          { "product_id": "basic_monthly_pack",    "billing_cycle": "monthly",    "packs": 1, "seats": 3, "reference_price": 199 },
+          { "product_id": "basic_semiannual_pack", "billing_cycle": "semiannual", "packs": 1, "seats": 3, "reference_price": 995 },
+          { "product_id": "basic_yearly_pack",     "billing_cycle": "yearly",     "packs": 1, "seats": 3, "reference_price": 1990 }
+        ]
+      },
+      "app_store": {
+        "max_quantity": 10,
+        "products": [
+          { "product_id": "basic_monthly_pack",    "billing_cycle": "monthly",    "packs": 1, "seats": 3, "reference_price": 199 },
+          { "product_id": "basic_semiannual_pack", "billing_cycle": "semiannual", "packs": 1, "seats": 3, "reference_price": 995 },
+          { "product_id": "basic_yearly_pack",     "billing_cycle": "yearly",     "packs": 1, "seats": 3, "reference_price": 1990 }
+        ]
+      }
     }
   }
   ```
 
-  📄 เอกสารเต็ม: `docs/api-subscription-purchase.md`
+  ### ฟิลด์
+
+  | ฟิลด์ | ชนิด | ความหมาย |
+  |---|---|---|
+  | `pack_size` | int | ผู้ใช้ต่อ 1 แพ็ก (ตั้งที่หลังบ้าน `packages.seats_per_pack` ของ Basic · ค่าเริ่มต้น 3) ใช้เป็นขั้นของ stepper เลือกจำนวนผู้ใช้ |
+  | `stores.<platform>.max_quantity` | int | จำนวนชิ้นสูงสุดที่ร้านนั้นยอมให้ซื้อต่อครั้ง · Google 99 · Apple 10 (ข้อจำกัดของ Apple consumable) |
+  | `products[].product_id` | string | รหัสสินค้าที่ต้องสร้างให้ตรงกันใน Play Console / App Store Connect |
+  | `products[].billing_cycle` | string | รอบบิลที่สินค้านี้ให้ `monthly` / `semiannual` / `yearly` |
+  | `products[].packs` | int | 1 ชิ้นของสินค้านี้ = กี่แพ็ก (ตอนนี้ทุกตัว = 1) |
+  | `products[].seats` | int | `packs × pack_size` = 1 ชิ้นได้ผู้ใช้กี่คน |
+  | `products[].reference_price` | float \| null | ราคาตาม rate card ฝั่งเรา (บาท) ต่อ 1 ชิ้น = ราคาแพ็ก/เดือน × เดือนที่จ่ายจริง × `packs` · `null` = คิดไม่ได้ |
+
+  ### วิธีคิด `reference_price`
+
+  | รอบบิล | ใช้งานได้ | จ่ายจริง | reference_price (ราคาแพ็ก 199) |
+  |---|:---:|:---:|:---:|
+  | `monthly` | 1 เดือน | 1 เดือน | 199 |
+  | `semiannual` | 6 เดือน | 5 เดือน (ฟรี 1) | 995 |
+  | `yearly` | 12 เดือน | 10 เดือน (ฟรี 2) | 1,990 |
+
+  ราคาแพ็ก/เดือนอ่านจาก `packages.price` ของ Basic ที่หลังบ้าน (บน UAT ตั้งไว้ 10 บาท จึงเห็น 10 / 50 / 100)
+  **ราคาที่โชว์และเก็บจริงต้องเป็นของร้าน** ค่านี้มีไว้ให้ทีมเทียบว่าตั้งราคาในร้านตรงหรือยัง
+
+  ---
+
+  ## เซิร์ฟเวอร์เลือกสินค้าให้ตอนสร้างออเดอร์อย่างไร
+
+  แอปไม่ต้องเลือกสินค้าเอง แค่ส่ง `seats` + `billing_cycle` ไปที่ `create-order` แล้วเซิร์ฟเวอร์จะตอบกลับว่าต้องซื้อ `product_id` ไหน กี่ชิ้น
+
+  1. แปลง `seats` เป็นจำนวนแพ็ก (`seats ÷ pack_size`)
+  2. ในสินค้าที่รอบบิลตรงกัน หาตัวที่ `packs` หารจำนวนแพ็กลงตัว
+  3. เลือกตัวที่ต้องซื้อ**น้อยชิ้นที่สุด** และไม่เกิน `max_quantity` ของร้าน
+  4. ไม่มีตัวไหนเข้าเงื่อนไข → `422 product_unavailable`
+
+  ตัวอย่าง (ทุกสินค้าเป็น 1 แพ็ก): 6 ผู้ใช้ = 2 แพ็ก → `basic_monthly_pack × 2`
+  iOS ซื้อได้ไม่เกิน 10 ชิ้น = **30 ผู้ใช้ต่อออเดอร์** มากกว่านั้นได้ `product_unavailable` ต้องแยกซื้อหลายรอบหรือให้ทีมเพิ่มสินค้าแพ็กใหญ่ในร้าน + config
+
+  ---
+
+  ## Error
+
+  | HTTP | `code` | เมื่อไหร่ |
+  |:---:|---|---|
+  | 401 | `unauthorized` / `token_invalid` | ไม่ได้ล็อกอิน |
+  | 403 | `subscription_expired` | บริษัทถูกบล็อกเพราะหมดอายุ (จาก middleware) |
+
+  ---
+
+  ## แอปควรทำ
+
+  - cache ผลไว้ต่อ session แล้ว query ราคาจากร้านครั้งเดียวตอนเปิดหน้า
+  - ถ้าร้านคืน product ไม่ครบ (ยังไม่ได้สร้างใน console / ยัง review ไม่ผ่าน) ให้ซ่อนรอบบิลนั้น อย่าโชว์ `reference_price` แทน
+  - ใช้ `pack_size` และ `max_quantity × packs × pack_size` คุม stepper จำนวนผู้ใช้ จะได้ไม่เจอ `product_unavailable` ตอนกดซื้อ
+
+  📄 เอกสารเต็ม: `docs/api-subscription-purchase.md` หัวข้อ 2 · config สินค้า: `config/store_billing.php`

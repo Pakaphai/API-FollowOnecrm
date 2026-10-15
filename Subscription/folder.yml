@@ -7,11 +7,147 @@ request:
   auth: inherit
 
 docs: |
-  # Subscription — สถานะแพ็กเกจ + ซื้อแพ็กเกจ/ที่นั่งเพิ่มจากแอป
+  # Subscription — ซื้อแพ็กเกจ / ซื้อที่นั่งเพิ่ม จากแอปมือถือ
 
-  แอปซื้อผ่าน **ร้านค้าของแพลตฟอร์มเท่านั้น** — Android = Google Play Billing · iOS = Apple In-App Purchase (StoreKit 2)
-  ราคาที่เก็บจริงคือราคาสินค้าในร้าน · กติกาที่นั่ง/การเปิดใช้งานชุดเดียวกับหน้าเว็บ /pricing — ดู `docs/api-subscription-purchase.md`
+  แอปซื้อผ่าน **ร้านค้าของแพลตฟอร์มเท่านั้น** ไม่มีหน้าเว็บ checkout, บัตร, PromptPay, Apple Pay หรือ Google Pay ในแอป
 
-  ลำดับ: `products` (ดึงรหัสสินค้าไป query ราคาจากร้าน) → `create-order` (หรือ `add-seats`) ได้ `purchase{product_id, quantity, account_token}`
-  → ซื้อกับร้านโดยแนบ `account_token` → `verify-order` ส่งใบเสร็จมาให้ตรวจ → เซิร์ฟเวอร์เปิดใช้งาน (+ consume ฝั่ง Google)
-  → iOS เรียก `transaction.finish()` หลังได้ 200 · `order-status` ไว้ดูสถานะ
+  | แพลตฟอร์ม | ร้าน | ชนิดสินค้า | ใบเสร็จที่ต้องส่งให้เซิร์ฟเวอร์ |
+  |---|---|---|---|
+  | Android | Google Play Billing | In-app product (one-time) เปิด multi-quantity | `product_id` + `purchase_token` จาก `Purchase` |
+  | iOS | Apple In-App Purchase (StoreKit 2) | Consumable | `signed_transaction` = `Transaction.jwsRepresentation` |
+
+  **ราคาที่ลูกค้าจ่ายจริงคือราคาที่ตั้งในร้าน** (Play Console / App Store Connect) เซิร์ฟเวอร์ควบคุมไม่ได้
+  ค่า `amount` / `reference_price` ที่ API คืนมาเป็นแค่ราคาตาม rate card ฝั่งเราไว้เทียบ **ห้ามเอาไปโชว์เป็นราคาขาย**
+  ให้โชว์ `ProductDetails.oneTimePurchaseOfferDetails.formattedPrice` (Android) / `Product.displayPrice` (iOS) แทน
+
+  ---
+
+  ## เส้นทั้งหมดในกลุ่มนี้
+
+  | ลำดับ | เส้น | ทำอะไร | ใครเรียกได้ |
+  |:---:|---|---|---|
+  | 1 | `GET subscription/products` | รหัสสินค้าในร้านทุกตัว ให้แอปไป query ราคาจากร้านล่วงหน้า | ทุก level ที่ล็อกอิน |
+  | 2 | `POST subscription/orders` | ซื้อ / ต่ออายุแพ็กเกจ Basic → ได้ `purchase{product_id, quantity, account_token}` | แอดมิน (level 0/1) |
+  | 3 | `POST subscription/orders/seats` | ซื้อที่นั่งเพิ่มกลางรอบ (ไม่ต่อวันหมดอายุ) → ได้ `purchase{…}` | แอดมิน |
+  | 4 | `POST subscription/orders/verify` | ส่งใบเสร็จจากร้านมาตรวจ → เซิร์ฟเวอร์เปิดใช้งานแพ็กเกจ | แอดมิน |
+  | 5 | `GET subscription/orders/{id}` | สถานะออเดอร์ (source of truth) + คำสั่งซื้อที่ต้องทำกับร้าน | แอดมิน |
+  | 6 | `POST subscription/orders/{id}/cancel` | ยกเลิกออเดอร์ที่ยังไม่ได้ซื้อกับร้าน | แอดมิน |
+
+  `GET subscription/status` (สถานะแพ็กเกจ + คำเตือนต่ออายุ) อยู่ใน folder นี้ด้วยแต่เป็นคนละเรื่อง ดู `docs/api-subscription-status.md`
+
+  ---
+
+  ## ลำดับที่แอปต้องทำ (happy path)
+
+  ```
+  แอป                                      เซิร์ฟเวอร์เรา                        ร้าน (Google Play / App Store)
+   │  0. GET subscription/products             │                                     │
+   │ ───────────────────────────────────────▶  │                                     │
+   │  ◀── product_id ทุกตัว ────────────────── │                                     │
+   │  query ราคาจากร้านด้วย product_id ─────────────────────────────────────────────▶│
+   │  ◀────────────────────── ProductDetails / Product (ราคาจริง) ────────────────── │
+   │                                           │                                     │
+   │  1. POST subscription/orders (หรือ /seats) │                                     │
+   │ ───────────────────────────────────────▶  │  สร้างออเดอร์ pending + account_token │
+   │  ◀── order + purchase{product_id,         │                                     │
+   │        quantity, account_token} ───────── │                                     │
+   │                                           │                                     │
+   │  2. กดซื้อกับร้าน แนบ account_token ──────────────────────────────────────────▶│
+   │  ◀──────────────────── ใบเสร็จ (purchaseToken / JWS) ───────────────────────── │
+   │                                           │                                     │
+   │  3. POST subscription/orders/verify        │                                     │
+   │ ───────────────────────────────────────▶  │  ตรวจใบเสร็จกับร้าน ────────────────▶│
+   │                                           │  เปิดใช้งานแพ็กเกจ · consume (Google) │
+   │  ◀── 200 order.status = paid ──────────── │                                     │
+   │  4. iOS: transaction.finish()              │  ◀── แจ้งเตือนจากร้าน (คืนเงิน ฯลฯ) ── │
+   │  5. โหลด subscription/status + seats ใหม่  │                                     │
+  ```
+
+  ## กฎ 5 ข้อที่ห้ามพลาด
+
+  1. **สร้างออเดอร์ก่อนกดซื้อเสมอ แล้วแนบ `purchase.account_token` ไปกับการซื้อ**
+     - Android: `BillingFlowParams.Builder().setObfuscatedAccountId(account_token)`
+     - iOS: `product.purchase(options: [.appAccountToken(UUID(uuidString: account_token)!)])`
+     เซิร์ฟเวอร์ใช้ token นี้หาออเดอร์จากใบเสร็จ แม้แอปปิดไปก่อนส่งใบเสร็จ หรือร้านแจ้งผลมาเองทางหลังบ้าน ก็ยังเปิดใช้งานให้ถูกบริษัท
+  2. **ซื้อให้ตรง `purchase.product_id` × `purchase.quantity`** ใบเสร็จที่สินค้า/จำนวนไม่ตรงออเดอร์จะถูกปฏิเสธ (`purchase_mismatch`) และไม่ถูก consume ต้องให้เจ้าหน้าที่ตรวจ
+  3. **ส่งใบเสร็จให้เซิร์ฟเวอร์ก่อน finish / consume**
+     - Android: เซิร์ฟเวอร์ consume ให้เอง **ห้าม** แอปเรียก `consumeAsync` เอง
+     - iOS: เรียก `transaction.finish()` **หลัง** ได้ `200` จาก `/verify` เท่านั้น
+  4. **ส่งใบเสร็จซ้ำได้** (`/verify` idempotent) ตอนเปิดแอปให้ไล่ใบเสร็จที่ค้าง (Android `queryPurchasesAsync` ที่ยังไม่ consume · iOS `Transaction.unfinished`) แล้วส่ง `/verify` ซ้ำทุกใบ
+  5. **ราคาที่โชว์ต้องเป็นราคาจากร้าน** ไม่ใช่ `amount` / `reference_price`
+
+  ---
+
+  ## สิทธิ์และด่านที่ทุกเส้นต้องผ่าน
+
+  ทุกเส้นอยู่ใต้ middleware `auth_api` เหมือน API อื่น แล้ว controller ตรวจเพิ่มเอง (ยกเว้น `products` ที่ตรวจแค่ล็อกอิน)
+
+  | ลำดับตรวจ | ไม่ผ่านตอบ | `code` | เงื่อนไข |
+  |:---:|:---:|---|---|
+  | 1 | 401 | `token_invalid` / `token_blacklisted` | ไม่มี token / token ผิด / ออกจากระบบไปแล้ว (รูปแบบ `{status:"error"}` ของ middleware) |
+  | 2 | 403 | `subscription_expired` | บริษัทถูกบล็อกเพราะหมดอายุเกินช่วงผ่อนผัน (ดูหมายเหตุด้านล่าง) |
+  | 3 | 403 | `seat_suspended` | บัญชีคนนี้ถูกระงับเพราะโควตาไม่พอ |
+  | 4 | — | — | ด่าน `seat_quota_exceeded` **ยกเว้น** ให้กลุ่มนี้ทั้งหมด (บริษัทที่เกินโควตาต้องซื้อที่นั่งเพิ่มได้) |
+  | 5 | 404 | `not_found` | บริษัทโหมด standalone (ขายเป็นสัญญารายลูกค้า ไม่มีแพ็กเกจให้ซื้อ) |
+  | 6 | 403 | `forbidden` | ผู้ใช้ไม่ใช่ level 0/1 (เซลส์ซื้อแพ็กเกจแทนบริษัทไม่ได้) |
+
+  > ⚠️ **ข้อ 2 ยังไม่ได้ยกเว้นให้กลุ่มนี้** บริษัทที่ถูกบล็อกเพราะหมดอายุจะเรียกเส้นซื้อแพ็กเกจจากแอปไม่ได้
+  > ต้องไปต่ออายุผ่านเว็บ `/pricing` แทน ถ้าต้องการให้ต่ออายุจากแอปได้ต้องแก้ `ApiAuth` ให้ยกเว้นเส้นกลุ่มนี้จากด่าน `subscription_expired` ด้วย
+
+  ## รูปแบบ error
+
+  มี 3 รูปแบบ แอปควร parse ให้ครบ
+
+  ```json
+  { "success": false, "message": "ข้อความไทยพร้อมแสดง", "code": "store_unavailable" }          // error จาก controller / service
+  { "success": false, "message": "กรุณาระบุจำนวนผู้ใช้", "errors": { "seats": ["…"] } }        // 422 validation (ไม่มี code)
+  { "status": "error",  "message": "Token invalid", "code": "token_invalid" }                  // error จาก middleware auth_api
+  ```
+
+  `message` ทุกตัวเป็นภาษาไทยพร้อมแสดงผู้ใช้ได้เลย ส่วน `code` ไว้ให้แอปแยก flow
+
+  ---
+
+  ## โครง `order` ที่คืนทุกเส้น (create / seats / verify / show / cancel)
+
+  | ฟิลด์ | ชนิด | ความหมาย |
+  |---|---|---|
+  | `id` | int | เลขออเดอร์ฝั่งเรา ใช้กับ `/orders/{id}` และ `order_id` ใน `/verify` |
+  | `kind` | string | `subscription` = ซื้อ/ต่อแพ็กเกจ · `seats_addon` = ซื้อที่นั่งเพิ่ม |
+  | `status` | string | `pending` / `paid` / `failed` / `expired` / `reversed` / `canceled` |
+  | `status_label` | string | ป้ายไทยของ `status` พร้อมแสดง |
+  | `is_final` | bool | `true` = ไม่ใช่ `pending` แล้ว จบแล้วไม่ว่าทางไหน |
+  | `is_paid` | bool | `true` = `status == paid` เปิดใช้งานให้แล้ว |
+  | `seats` | int | ยอดผู้ใช้**รวม**หลังเปิดใช้งาน (seats_addon = ที่นั่งเดิม + ที่เพิ่ม) |
+  | `extra_seats` | int \| null | จำนวนที่เพิ่ม เฉพาะ `kind = seats_addon` ไม่งั้น `null` |
+  | `billing_cycle` | string | `monthly` / `semiannual` / `yearly` |
+  | `amount` | float | ราคาอ้างอิงตาม rate card (บาท) ไม่ใช่ยอดที่ร้านเก็บ |
+  | `amount_display` | string | `amount` ใส่ทศนิยม 2 ตำแหน่งแล้ว เช่น `"398.00"` |
+  | `currency` | string | `THB` เสมอ |
+  | `payment_method` | string | `google_play` / `app_store` ออเดอร์ใบนี้จ่ายได้เฉพาะร้านนี้ |
+  | `refund_state` | string \| null | `null` / `pending` / `failed` / `succeeded` |
+  | `message` | string \| null | ข้อความไทยเมื่อออเดอร์ไม่สำเร็จ/ถูกยกเลิก เช่น "รายการถูกยกเลิก" |
+  | `store_transaction_id` | string \| null | Google `orderId` (GPA.xxxx) / Apple `transactionId` หลังตรวจใบเสร็จผ่าน |
+  | `store_environment` | string \| null | `production` / `sandbox` (ซื้อทดสอบ) |
+  | `paid_at` | ISO 8601 \| null | เวลาเปิดใช้งาน |
+  | `created_at` | ISO 8601 | เวลาสร้างออเดอร์ |
+
+  ## โครง `purchase` (create / seats / show)
+
+  | ฟิลด์ | ความหมาย |
+  |---|---|
+  | `platform` | ร้านที่ต้องซื้อ |
+  | `product_id` | รหัสสินค้าในร้านที่ต้องซื้อ |
+  | `quantity` | จำนวนชิ้นที่ต้องซื้อ (Android `setQuantity` · iOS `.quantity(n)`) |
+  | `account_token` | UUID ที่ต้องแนบไปกับการซื้อ (กฎข้อ 1) |
+  | `product_type` | `consumable` เสมอ |
+
+  ---
+
+  ## สภาพแวดล้อมทดสอบ (UAT)
+
+  - UAT ตั้ง `STORE_BILLING_ALLOW_TEST_PURCHASES=true` จึงรับใบเสร็จจาก Apple Sandbox / Google license tester ได้ · production ปฏิเสธด้วย `store_test_purchase_rejected`
+  - ราคาแพ็กบน UAT ถูกตั้งไว้ 10 บาท/แพ็ก/เดือน (ตาราง `packages`) ค่า `amount` / `reference_price` จึงเป็น 10 / 50 / 100 ไม่ใช่ 199 / 995 / 1990
+  - ออเดอร์ที่ซื้อทดสอบจะมี `store_environment = sandbox` และขึ้นป้าย "ทดสอบ" ในหลังบ้าน Central
+
+  📄 เอกสารเต็มฝั่งเซิร์ฟเวอร์: `docs/api-subscription-purchase.md` · โค้ด: `ApiSubscriptionOrderController`, `Services/Payment/Store/StoreBillingService`

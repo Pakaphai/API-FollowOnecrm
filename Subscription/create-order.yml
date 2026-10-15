@@ -27,25 +27,74 @@ settings:
 docs: |
   # POST /api/v1/subscription/orders — ซื้อ / ต่ออายุแพ็กเกจ Basic
 
-  สร้างออเดอร์ pending แล้วบอกแอปว่าต้องซื้อสินค้าอะไรกับร้าน (Google Play / App Store)
-  **เฉพาะแอดมิน (level 0/1)** · บริษัท standalone ได้ `404`
-  เส้นนี้ยกเว้นจากด่าน `seat_quota_exceeded` — บริษัทที่เกินโควตาก็ซื้อได้
+  สร้างออเดอร์สถานะ `pending` ฝั่งเรา แล้วบอกแอปว่า**ต้องซื้อสินค้าอะไร กี่ชิ้น แนบ token อะไร** กับร้าน
+  ยังไม่มีเงินเข้าในขั้นนี้ เงินจะเข้าตอนแอปกดซื้อกับร้าน และแพ็กเกจจะเปิดใช้งานตอน `verify-order` ผ่าน
+
+  **เฉพาะแอดมิน (level 0/1)** · บริษัท standalone ได้ `404` · ยกเว้นจากด่าน `seat_quota_exceeded`
+
+  ```
+  POST /api/v1/subscription/orders
+  Authorization: Bearer <token>
+  Content-Type: application/json
+  ```
+
+  ---
 
   ## Request
 
-  | ฟิลด์ | บังคับ | หมายเหตุ |
-  |---|:---:|---|
-  | `platform` | ✅ | `google_play` (Android) / `app_store` (iOS) |
-  | `seats` | ✅ | ผู้ใช้ทั้งหมดที่ต้องการ — ลงตัวทีละแพ็ก (3, 6, 9 …) |
-  | `billing_cycle` | ✅ | `monthly` / `semiannual` / `yearly` |
+  ```json
+  { "platform": "google_play", "seats": 6, "billing_cycle": "monthly" }
+  ```
 
-  ## Response (200)
+  | ฟิลด์ | ชนิด | บังคับ | กติกา |
+  |---|---|:---:|---|
+  | `platform` | string | ✅ | `google_play` (Android) / `app_store` (iOS) ออเดอร์ใบนี้จ่ายได้เฉพาะร้านนี้ ส่งใบเสร็จจากอีกร้านมาจะโดน `purchase_mismatch` |
+  | `seats` | int | ✅ | จำนวนผู้ใช้**ทั้งหมด**ที่ต้องการหลังจ่าย (ไม่ใช่จำนวนที่เพิ่ม) · ต้องลงตัวทีละแพ็ก (3, 6, 9 …) · ขั้นต่ำ 1 แพ็ก · สูงสุด 999 |
+  | `billing_cycle` | string | ✅ | `monthly` / `semiannual` / `yearly` |
+
+  > `seats` ตีความเป็น "ยอดใหม่ทั้งก้อน" ถ้าบริษัทมี 6 ที่นั่งแล้วอยากได้ 9 ตอนต่ออายุ ให้ส่ง 9
+  > ถ้าแค่อยากเพิ่มที่นั่งกลางรอบโดยไม่ต่ออายุ ให้ใช้ `add-seats` แทน
+
+  ### ลำดับที่เซิร์ฟเวอร์ตรวจ (หยุดที่ข้อแรกที่ไม่ผ่าน)
+
+  1. ด่านสิทธิ์ (401 / 404 standalone / 403 forbidden)
+  2. validation ของ 3 ฟิลด์ → `422` + `errors`
+  3. ร้านนี้ตั้งค่าฝั่งเซิร์ฟเวอร์ครบหรือยัง (Google service account / Apple root CA + bundle id) → `503 store_unavailable`
+  4. หาสินค้าในร้านที่ประกอบจำนวนแพ็ก + รอบบิลนี้ได้ (ดูวิธีเลือกใน `products`) → `422 product_unavailable`
+  5. คิดราคาอ้างอิงตาม rate card → `422 quote_unavailable`
+  6. สร้างออเดอร์ + สุ่ม `account_token` (UUID) ผูกกับออเดอร์
+
+  ไม่มีการกันออเดอร์ `pending` ซ้ำ สร้างกี่ใบก็ได้ แต่ละใบมี `account_token` ของตัวเอง
+  ใบที่ลูกค้าไม่ได้ซื้อควร `cancel-order` ทิ้ง จะได้ไม่ค้างในหลังบ้าน
+
+  ---
+
+  ## Response (200 OK)
 
   ```json
   {
     "success": true,
-    "order": { "id": 42, "kind": "subscription", "status": "pending", "is_final": false, "seats": 6,
-               "billing_cycle": "monthly", "amount": 398, "currency": "THB", "payment_method": "google_play" },
+    "order": {
+      "id": 42,
+      "kind": "subscription",
+      "status": "pending",
+      "status_label": "รอชำระเงิน",
+      "is_final": false,
+      "is_paid": false,
+      "seats": 6,
+      "extra_seats": null,
+      "billing_cycle": "monthly",
+      "amount": 398,
+      "amount_display": "398.00",
+      "currency": "THB",
+      "payment_method": "google_play",
+      "refund_state": null,
+      "message": null,
+      "store_transaction_id": null,
+      "store_environment": null,
+      "paid_at": null,
+      "created_at": "2026-10-14T18:30:00+07:00"
+    },
     "purchase": {
       "platform": "google_play",
       "product_id": "basic_monthly_pack",
@@ -56,20 +105,73 @@ docs: |
   }
   ```
 
-  ## แอปต้องทำ
+  | ฟิลด์ | ใช้ทำอะไร |
+  |---|---|
+  | `order.id` | เก็บไว้ ใช้ส่ง `order_id` ตอน verify (เผื่อใบเสร็จไม่มี token) และดูสถานะ |
+  | `order.amount` | ราคาอ้างอิง rate card = ราคาแพ็ก × เดือนที่จ่ายจริง × จำนวนแพ็ก · **ไม่ใช่ยอดที่ร้านเก็บ** ห้ามโชว์เป็นราคาขาย |
+  | `purchase.product_id` × `purchase.quantity` | สิ่งที่ต้องซื้อกับร้าน ต้องตรงเป๊ะ |
+  | `purchase.account_token` | UUID ที่ต้องแนบตอนซื้อ |
 
-  1. ซื้อ `purchase.product_id` จำนวน `purchase.quantity` ชิ้น กับร้าน
-     - Android: `BillingFlowParams` + `setQuantity(quantity)` + `setObfuscatedAccountId(account_token)`
-     - iOS: `product.purchase(options: [.quantity(quantity), .appAccountToken(UUID(uuidString: account_token)!)])`
-  2. ได้ใบเสร็จแล้วส่งมาที่ `verify-order` — **ห้าม consume/finish เอง** ก่อนได้ 200
+  โครง `order` เต็มดูที่ doc ของ folder
+
+  ---
+
+  ## แอปต้องทำต่อ
+
+  ### Android (Play Billing)
+
+  ```kotlin
+  val params = BillingFlowParams.newBuilder()
+      .setProductDetailsParamsList(listOf(
+          ProductDetailsParams.newBuilder().setProductDetails(details /* ของ purchase.product_id */).build()
+      ))
+      .setObfuscatedAccountId(purchase.account_token)   // กฎข้อ 1
+      .setQuantity(purchase.quantity)                    // ต้องเปิด multi-quantity ที่สินค้าใน Play Console
+      .build()
+  billingClient.launchBillingFlow(activity, params)
+  ```
+
+  ได้ `Purchase` แล้ว → ส่ง `purchase.products[0]` + `purchase.purchaseToken` ไป `verify-order` · **ห้าม** `consumeAsync` เอง
+
+  ### iOS (StoreKit 2)
+
+  ```swift
+  let result = try await product.purchase(options: [
+      .quantity(purchase.quantity),
+      .appAccountToken(UUID(uuidString: purchase.account_token)!)   // กฎข้อ 1
+  ])
+  if case .success(let verification) = result, case .verified(let tx) = verification {
+      // ส่ง tx.jwsRepresentation ไป verify-order ก่อน แล้วค่อย tx.finish() หลังได้ 200
+  }
+  ```
+
+  ---
+
+  ## ผลหลังจ่ายสำเร็จ (ตอน verify ผ่าน)
+
+  | สถานะบริษัทตอนนี้ | ผล |
+  |---|---|
+  | ทดลองใช้ฟรี / หมดอายุแล้ว / แพ็กเกจอื่น | เริ่มรอบใหม่**นับจากวันนี้** · ที่นั่ง = `seats` · วันทดลองที่เหลือไม่นำมาต่อ |
+  | ใช้ Basic อยู่และยังไม่หมดอายุ | **ต่ออายุ** นับต่อจากวันหมดอายุเดิม (ไม่เสียวันที่เหลือ) · วันเริ่มต้นคงเดิม · ที่นั่ง = `seats` (ทับยอดเดิม) |
+
+  `price_snapshot` ของบริษัทจะถูกบันทึกเป็น `amount` ของออเดอร์ (ไม่คิดใหม่จาก rate card ณ ตอนจ่าย)
+
+  ---
 
   ## Error
 
-  | HTTP | `code` | |
-  |:---:|---|---|
-  | 422 | — | input ผิด (`message` + `errors`) |
-  | 422 | `product_unavailable` | ร้านไม่มีสินค้าที่ประกอบจำนวนนี้ได้ (เช่น iOS เกิน 10 ชิ้น) |
-  | 403 | `forbidden` | ไม่ใช่แอดมิน |
-  | 503 | `store_unavailable` | เซิร์ฟเวอร์ยังไม่ได้ตั้งค่าร้านนี้ |
+  | HTTP | `code` | เมื่อไหร่ | แอปควรทำ |
+  |:---:|---|---|---|
+  | 422 | — (มี `errors`) | `platform` / `seats` / `billing_cycle` ผิด `message` เป็นไทยพร้อมแสดง | โชว์ `message` |
+  | 422 | `product_unavailable` | ร้านไม่มีสินค้าที่ประกอบจำนวนนี้ได้ เช่น iOS เกิน 10 ชิ้น (30 ผู้ใช้) | ให้เลือกจำนวนอื่น |
+  | 422 | `quote_unavailable` | คิดราคาไม่ได้ (ตั้งค่าแพ็กเกจผิดฝั่งเรา) | ติดต่อเจ้าหน้าที่ |
+  | 403 | `forbidden` | ไม่ใช่ level 0/1 | ซ่อนปุ่มซื้อสำหรับเซลส์ |
+  | 404 | `not_found` | บริษัท standalone | ซ่อนเมนูแพ็กเกจ |
+  | 503 | `store_unavailable` | เซิร์ฟเวอร์ยังไม่ได้ตั้งค่าร้านนี้ | แจ้งว่ายังไม่เปิดให้ซื้อ ลองใหม่ภายหลัง |
 
-  📄 เอกสารเต็ม: `docs/api-subscription-purchase.md`
+  ตัวอย่าง `message` จาก validation:
+  - `ขายเป็นแพ็กละ 3 ผู้ใช้ — จำนวนผู้ใช้ต้องเป็น 3, 6, 9 …`
+  - `ซื้อแพ็กเกจได้ขั้นต่ำ 3 ผู้ใช้`
+  - `ซื้อได้ครั้งละไม่เกิน 999 ผู้ใช้ หากต้องการมากกว่านี้ กรุณาติดต่อเจ้าหน้าที่`
+
+  📄 เอกสารเต็ม: `docs/api-subscription-purchase.md` หัวข้อ 3

@@ -19,30 +19,96 @@ settings:
 docs: |
   # GET /api/v1/subscription/orders/{id} — สถานะออเดอร์ (source of truth)
 
+  อ่านอย่างเดียว ไม่เปลี่ยนอะไร ใช้เมื่อ
+  - แอปเปิดใหม่แล้วอยากรู้ว่าออเดอร์ที่ค้างไว้ไปถึงไหน
+  - ต้องการ `purchase{product_id, quantity, account_token}` กลับมา**ซื้อต่อ** (ออเดอร์ `pending` ที่ลูกค้ายังไม่ได้กดซื้อ)
+  - โชว์หน้าประวัติ/ใบเสร็จในแอป
+
+  `{id}` ต้องเป็นตัวเลข · หาเฉพาะในบริษัทของผู้เรียก · **เฉพาะแอดมิน (level 0/1)** · standalone ได้ `404`
+
+  ```
+  GET /api/v1/subscription/orders/42
+  Authorization: Bearer <token>
+  Accept: application/json
+  ```
+
+  ---
+
+  ## Response (200 OK)
+
   ```json
   {
     "success": true,
     "order": {
-      "id": 42, "kind": "subscription",
-      "status": "paid", "status_label": "ชำระเงินสำเร็จ", "is_final": true, "is_paid": true,
-      "seats": 6, "extra_seats": null, "billing_cycle": "monthly",
-      "amount": 398, "amount_display": "398.00", "currency": "THB", "payment_method": "google_play",
-      "refund_state": null, "message": null,
-      "store_transaction_id": "GPA.3333-4444-5555-66666", "store_environment": "production",
-      "paid_at": "2026-10-14T18:35:10+07:00", "created_at": "2026-10-14T18:30:00+07:00"
+      "id": 42,
+      "kind": "subscription",
+      "status": "paid",
+      "status_label": "ชำระเงินสำเร็จ",
+      "is_final": true,
+      "is_paid": true,
+      "seats": 6,
+      "extra_seats": null,
+      "billing_cycle": "monthly",
+      "amount": 398,
+      "amount_display": "398.00",
+      "currency": "THB",
+      "payment_method": "google_play",
+      "refund_state": null,
+      "message": null,
+      "store_transaction_id": "GPA.3333-4444-5555-66666",
+      "store_environment": "production",
+      "paid_at": "2026-10-14T18:35:10+07:00",
+      "created_at": "2026-10-14T18:30:00+07:00"
     },
-    "purchase": { "platform": "google_play", "product_id": "basic_monthly_pack", "quantity": 2, "account_token": "0f9c2c7a-…", "product_type": "consumable" }
+    "purchase": {
+      "platform": "google_play",
+      "product_id": "basic_monthly_pack",
+      "quantity": 2,
+      "account_token": "0f9c2c7a-5b1e-4c7d-9b2a-1c2d3e4f5a6b",
+      "product_type": "consumable"
+    }
   }
   ```
 
-  | `status` | `is_final` | แอปควรทำ |
-  |---|:---:|---|
-  | `pending` | ❌ | ยังไม่ส่งใบเสร็จ / ร้านยังไม่รับเงิน → ให้ซื้อ หรือส่ง `verify-order` ซ้ำถ้ามีใบเสร็จค้าง |
-  | `paid` | ✅ | เปิดใช้งานแล้ว → โหลด `subscription/status` + `seats` ใหม่ |
-  | `canceled` | ✅ | ลูกค้ายกเลิกเอง / ร้านยกเลิกก่อนเงินเข้า |
-  | `failed` / `expired` | ✅ | ปิดโดยเจ้าหน้าที่/ระบบ → สร้างออเดอร์ใหม่ |
-  | `reversed` | ✅ | คืนเงินแล้ว — แจ้งเจ้าหน้าที่ |
+  โครง `order` และ `purchase` ชุดเดียวกับ `create-order` (ดูตารางฟิลด์เต็มที่ doc ของ folder)
+  `purchase` ส่งกลับมาทุกสถานะ แต่มีประโยชน์เฉพาะตอน `pending` ที่ยังไม่ได้ซื้อ
 
-  `404 not_found` = ไม่มีออเดอร์นี้ในบริษัท
+  ---
 
-  📄 เอกสารเต็ม: `docs/api-subscription-purchase.md`
+  ## ความหมายของ `order.status` และสิ่งที่แอปควรทำ
+
+  | `status` | `status_label` | `is_final` | เกิดจาก | แอปควรทำ |
+  |---|---|:---:|---|---|
+  | `pending` | รอชำระเงิน | ❌ | สร้างแล้วยังไม่ส่งใบเสร็จ / Google รับคำสั่งซื้อแล้วแต่เงินยังไม่เข้า (202) | ถ้ายังไม่ซื้อ → ซื้อด้วย `purchase` · ถ้ามีใบเสร็จค้าง → ส่ง `verify-order` ซ้ำ |
+  | `paid` | ชำระเงินสำเร็จ | ✅ | verify ผ่าน หรือร้านแจ้งมาเอง เปิดใช้งานแล้ว | โหลด `subscription/status` + `seats` ใหม่ |
+  | `canceled` | ยกเลิกรายการ | ✅ | ลูกค้ากด `cancel-order` / ร้านยกเลิกก่อนเงินเข้า | กลับหน้าแพ็กเกจ สร้างออเดอร์ใหม่ได้ |
+  | `failed` | ชำระเงินไม่สำเร็จ | ✅ | เปิดใช้งานไม่สำเร็จ / เจ้าหน้าที่ปิด | สร้างออเดอร์ใหม่ หรือติดต่อเจ้าหน้าที่ (ดู `message`) |
+  | `expired` | หมดเวลาชำระเงิน | ✅ | ระบบ/เจ้าหน้าที่ปิดออเดอร์ที่ค้างนาน | สร้างออเดอร์ใหม่ |
+  | `reversed` | คืนเงินแล้ว | ✅ | ร้านแจ้งคืนเงิน/เพิกถอน (`refund_state = succeeded`) | แจ้งเจ้าหน้าที่ แพ็กเกจ**ยังไม่ถูกลดอัตโนมัติ** |
+
+  ### ฟิลด์ที่ช่วยตัดสินใจ
+
+  | ฟิลด์ | ใช้ |
+  |---|---|
+  | `is_final` | `false` = ยังมีโอกาสเดินต่อ (ซื้อ / verify) · `true` = จบแล้ว ปิดปุ่มทั้งหมด |
+  | `is_paid` | เปิดใช้งานแล้ว ใช้โชว์ติ๊กถูก |
+  | `message` | เหตุผลภาษาไทยเมื่อ `failed` / `canceled` / `reversed` เช่น "รายการถูกยกเลิก", "ร้านค้ายกเลิก/คืนเงินรายการนี้" |
+  | `store_transaction_id` | `null` = ร้านยังไม่รับเงิน (ยกเลิกได้) · มีค่า = ร้านรับเงินแล้ว (ยกเลิกไม่ได้) |
+  | `store_environment` | `sandbox` = ซื้อทดสอบ ควรขึ้นป้ายในแอปด้วย |
+
+  ### ข้อควรรู้
+
+  - ออเดอร์ที่ถูกปิด (`canceled` / `expired` / `failed`) ถ้าใบเสร็จของมันมาถึงทีหลัง เซิร์ฟเวอร์จะ**เปิดกลับและเปิดใช้งานให้** สถานะจะกลายเป็น `paid` เอง
+  - ไม่มีเส้น list ออเดอร์ทั้งหมด แอปต้องเก็บ `order.id` เองหรือดูในหลังบ้าน Central
+  - สถานะอัปเดตได้จากฝั่งเซิร์ฟเวอร์โดยแอปไม่รู้ (ร้านแจ้งมา) ถ้าจะ poll ให้ poll เส้นนี้ ไม่ต้องส่ง verify ซ้ำโดยไม่มีใบเสร็จ
+
+  ---
+
+  ## Error
+
+  | HTTP | `code` | เมื่อไหร่ |
+  |:---:|---|---|
+  | 404 | `not_found` | ไม่มีออเดอร์เลขนี้ในบริษัท (รวมถึงออเดอร์ของบริษัทอื่น) หรือบริษัท standalone |
+  | 403 | `forbidden` | ไม่ใช่ level 0/1 |
+
+  📄 เอกสารเต็ม: `docs/api-subscription-purchase.md` หัวข้อ 6
