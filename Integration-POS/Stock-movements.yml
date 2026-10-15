@@ -12,11 +12,15 @@ http:
       {
         "reference": "pos:biz-7f3a:B0001:sale",
         "lines": [
-          { "product_code": "P-001", "direction": "out", "qty": 2 },
-          { "product_code": "P-002", "direction": "out", "qty": 1 }
+          { "product_code": "LG-TV55-002", "direction": "out", "qty": 2 },
+          { "product_code": "IT-MOU-001", "direction": "out", "qty": 1 }
         ]
       }
-  auth: inherit
+  auth:
+    type: apikey
+    key: X-POS-Api-Key
+    value: c06a89cda89c8c655c05c8ac74f1cbbd4f043bcbd0fcd93fd4efcaac64329588
+    placement: header
 
 settings:
   encodeUrl: true
