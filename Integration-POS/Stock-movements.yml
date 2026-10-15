@@ -1,0 +1,87 @@
+info:
+  name: Stock-movements
+  type: http
+  seq: 1
+
+http:
+  method: POST
+  url: "{{sale_uat}}/api/v1/stock/movements"
+  body:
+    type: json
+    data: |
+      {
+        "reference": "pos:biz-7f3a:B0001:sale",
+        "lines": [
+          { "product_code": "P-001", "direction": "out", "qty": 2 },
+          { "product_code": "P-002", "direction": "out", "qty": 1 }
+        ]
+      }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+
+docs: |
+  # API Specification: POST /api/v1/stock/movements
+
+  ระบบ POS แจ้งการเคลื่อนไหวสต๊อกตามบิลหน้าร้าน (ขาย / ยกเลิกบิล / รับคืน) ให้ Sale ตัดหรือคืนยอดคงเหลือ
+
+  ```
+  POST https://<code>.followonecrm.com/api/v1/stock/movements
+  X-POS-Api-Key: <POS_API_KEY>
+  Content-Type: application/json
+  ```
+
+  ## Request body
+
+  | ฟิลด์ | ชนิด | บังคับ | รายละเอียด |
+  |---|---|---|---|
+  | `reference` | string ≤191 | ✓ | `pos:<business_id>:<เลขบิล>:<sale\|void\|refund>` แต่ละส่วนห้ามมี `:` |
+  | `lines` | array 1–500 | ✓ | รายการสินค้า |
+  | `lines[].product_code` | string ≤50 | ✓ | ตรงกับ `products.code` ของ Sale (ตรงตัวอักษร) |
+  | `lines[].direction` | `out` \| `in` | ✓ | `out` = ของออกจากคลัง (ขาย) · `in` = ของกลับเข้าคลัง (void / refund) |
+  | `lines[].qty` | integer ≥1 | ✓ | จำนวนเต็มเท่านั้น (คลังเก็บทศนิยมไม่ได้ จึงไม่ปัดให้) |
+
+  ## กติกา
+
+  - **ส่งซ้ำได้ผลเดิม** — หนึ่ง `reference` ตัดได้ครั้งเดียว ส่งซ้ำ (แม้ `lines` ต่างไป) จะได้ผลลัพธ์ของครั้งแรกคืนพร้อม `duplicate: true` และไม่แตะสต๊อก
+  - **ยอมติดลบ** — สต๊อกไม่พอก็ตัด แล้วคืนข้อความใน `warnings` (หน้าร้านหยิบของออกไปแล้ว ปฏิเสธไม่ได้)
+  - **รหัสสินค้าไม่รู้จัก → ปฏิเสธทั้งใบ** (422) และ *ไม่* จำ `reference` — POS แก้รหัสแล้วส่ง `reference` เดิมมาใหม่ได้
+  - ฝั่ง Sale บันทึกทุก request ลง `pos_stock_movement_requests` และ `stock_movements.reference_type = 'pos_order'`
+    โดย `reference_id` ชี้ไป id ของ request นั้น (id บิล POS เป็น Guid เก็บลง bigint ไม่ได้ จึงเก็บเลขบิลไว้ที่ตารางนี้แทน)
+
+  ## Response 200 — ตัดสำเร็จ
+
+  ```json
+  {
+    "success": true,
+    "duplicate": false,
+    "reference": "pos:biz-7f3a:B0001:sale",
+    "request_id": 12,
+    "lines": [
+      { "product_code": "P-001", "product_id": 1, "direction": "out", "qty": 2, "stock_before": 10, "stock_after": 8 },
+      { "product_code": "P-002", "product_id": 2, "direction": "out", "qty": 1, "stock_before": 0, "stock_after": -1 }
+    ],
+    "warnings": [
+      "สินค้า \"สินค้า B\" (P-002) สต๊อกติดลบ 1 หน่วย (ตัดไป 1 จากคงเหลือ 0)"
+    ]
+  }
+  ```
+
+  ส่งซ้ำ: ก้อนเดียวกันทุกฟิลด์ แต่ `"duplicate": true`
+
+  ## Error
+
+  | HTTP | `code` | เมื่อไร |
+  |---|---|---|
+  | 401 | `invalid_api_key` | ไม่ส่ง / ส่ง `X-POS-Api-Key` ผิด |
+  | 403 | `subscription_expired` | บริษัทถูกระงับเพราะหมดอายุเกินกำหนด (เหมือนเว็บและแอป) |
+  | 404 | – | ยิงเข้า central domain แทน subdomain ของบริษัท |
+  | 422 | `unknown_product_code` | มี `product_code` ที่ไม่พบ/ถูกลบ → `unknown_product_codes: [...]` ไม่มีอะไรถูกเขียน |
+  | 422 | – | body ผิดรูป (Laravel validation: `message` + `errors`) |
+  | 503 | `pos_not_configured` | Sale ยังไม่ได้ตั้ง `POS_API_KEY` |
+
+  POS ควร retry เฉพาะเมื่อไม่ได้คำตอบหรือได้ 5xx — 4xx ส่งซ้ำแบบเดิมก็ได้ผลเดิม
