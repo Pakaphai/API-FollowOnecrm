@@ -10,10 +10,10 @@ http:
     type: json
     data: |-
       {
-        "platform": "app_store",
+        "platform": "google_play",
         "product_id": "basic_monthly_pack",
-        "purchase_token": "<Purchase.purchaseToken>",
-        "order_id": 14
+        "purchase_token": "fake-token",
+        "order_id": 16
       }
   auth:
     type: bearer
@@ -73,7 +73,7 @@ docs: |
   | ร้าน | วิธี | สิ่งที่ได้ |
   |---|---|---|
   | Google Play | เรียก Google Play Developer API `purchases.products.get` ด้วย service account | `purchaseState` (0 ซื้อแล้ว / 1 ยกเลิก / 2 รอจ่าย) · `quantity` · `orderId` · `obfuscatedExternalAccountId` · `purchaseType` (0 = license tester → sandbox) |
-  | App Store | ตรวจลายเซ็น JWS ออฟไลน์ด้วย certificate chain ที่จบที่ Apple Root CA G3 | `bundleId` ต้องตรงแอปเรา · `type` ต้องเป็น `Consumable` / `Non-Renewing Subscription` · `quantity` · `transactionId` · `appAccountToken` · `revocationDate` (มี = คืนเงินแล้ว) · `environment` (ไม่ใช่ Production → sandbox) |
+  | App Store | ตรวจลายเซ็น JWS ออฟไลน์ด้วย certificate chain ที่จบที่ Apple Root CA G3 | `bundleId` ต้องตรงแอปเรา · `type` ต้องเป็น `Non-Renewing Subscription` (รับ `Consumable` ด้วยเผื่อสินค้าเก่า) · `quantity` · `transactionId` · `appAccountToken` · `revocationDate` (มี = คืนเงินแล้ว) · `environment` (ไม่ใช่ Production → sandbox) |
 
   ตรวจไม่ผ่าน → `422 store_purchase_invalid` · ร้านล่ม/สิทธิ์ไม่พอ → `503 store_unavailable` / `502 store_error`
 
@@ -86,8 +86,9 @@ docs: |
 
   1. เคยผูก `transactionId` นี้แล้ว → ใช้ออเดอร์เดิม (กรณีส่งซ้ำ) · ถ้าเป็นของบริษัทอื่น → `404 order_not_found`
   2. ยังไม่เคย → หาจาก `account_token` ในใบเสร็จ → ไม่มีค่อยใช้ `order_id` ที่แอปส่ง → ต้องเป็นของบริษัทเดียวกัน ไม่งั้น `404 order_not_found`
-  3. ตรวจว่าใบเสร็จตรงออเดอร์: ร้านเดียวกัน · `product_id` เดียวกัน · `quantity` เท่ากัน → ไม่ตรง `409 purchase_mismatch`
+  3. ตรวจว่าใบเสร็จตรงออเดอร์: ร้านเดียวกัน · `product_id` เดียวกัน → ไม่ตรง `409 purchase_mismatch` (**จำนวนไม่ตรวจ** ดูข้อ 5)
   4. ออเดอร์เคยจ่ายด้วยใบเสร็จอื่น → `409 order_already_paid` · ออเดอร์ถูกคืนเงินไปแล้ว → `409 order_reversed`
+  5. **จำนวนในใบเสร็จไม่เท่าที่สั่ง** (Android ผู้ใช้เลือกจำนวนเองในหน้า Google) → ปรับ `seats` / `extra_seats` / `amount` ของออเดอร์ตามที่จ่ายจริง เก็บที่สั่งไว้ใน `store_quantity_ordered` แล้วเปิดใช้งานตามนั้น — ลูกค้าจ่ายเท่าไรได้เท่านั้น ไม่ปฏิเสธ (จ่ายมากกว่าก็ได้มากกว่า) · คิดราคาไม่ได้ → `409 purchase_mismatch`
 
   ### 4. เดินสถานะตามใบเสร็จ
 
@@ -111,14 +112,17 @@ docs: |
       "id": 42, "kind": "subscription", "status": "paid", "status_label": "ชำระเงินสำเร็จ",
       "is_final": true, "is_paid": true, "seats": 6, "billing_cycle": "monthly",
       "store_transaction_id": "GPA.3333-4444-5555-66666", "store_environment": "production",
-      "paid_at": "2026-10-14T18:35:10+07:00", "…": "…"
+      "store_quantity": 1, "store_quantity_ordered": 1, "quantity_adjusted": false,
+      "paid_at": "2026-10-16T18:35:10+07:00", "…": "…"
     },
     "purchase": {
       "platform": "google_play",
       "transaction_id": "GPA.3333-4444-5555-66666",
       "finish_transaction": false,
       "consumed": true
-    }
+    },
+    "quantity_adjusted": false,
+    "quantity": { "ordered": 1, "paid": 1, "ordered_seats": 6, "paid_seats": 6 }
   }
   ```
 
@@ -127,8 +131,29 @@ docs: |
   | `purchase.finish_transaction` | iOS = `true` → เรียก `transaction.finish()` ได้แล้ว · Android = `false` เสมอ (ไม่ต้องทำอะไรกับ Play) |
   | `purchase.consumed` | Android: `true` = เซิร์ฟเวอร์ consume กับ Google แล้ว · `false` = เปิดใช้งานแล้วแต่ consume ไม่สำเร็จ **ให้ส่ง verify ซ้ำภายหลัง** (ไม่งั้น Google คืนเงินอัตโนมัติใน 3 วัน) · iOS = `true` เสมอ |
   | `purchase.transaction_id` | เลขธุรกรรมของร้าน เก็บไว้ให้ลูกค้าอ้างอิงตอนติดต่อเจ้าหน้าที่ |
+  | `quantity_adjusted` | `true` = จำนวนที่จ่ายกับร้านไม่เท่าที่สั่ง **เปิดใช้งานตามที่จ่ายจริงแล้ว** และ `message` บอกว่าได้เท่าไร → **แสดง `message` แทนข้อความสำเร็จปกติ** |
+  | `quantity` | `ordered` / `paid` = ชิ้นที่สั่ง / จ่ายจริง · `ordered_seats` / `paid_seats` = คิดเป็นผู้ใช้แล้ว |
 
   จากนั้น**โหลด `subscription/status` และ `seats` ใหม่** เพราะแพ็กเกจ/โควตาเปลี่ยนแล้ว
+
+  ### กรณี `quantity_adjusted = true` — จ่ายไม่เท่าที่สั่ง (Android เท่านั้น)
+
+  Play Billing ไม่มี `setQuantity()` ผู้ใช้ต้องแก้จำนวนเองในหน้าจ่ายเงินของ Google ซึ่งขึ้นมา 1 ชิ้น ออเดอร์ที่ต้องซื้อ 2 ชิ้นจึงมีใบเสร็จ 1 ชิ้นมาได้
+  เซิร์ฟเวอร์**ไม่ปฏิเสธ** — ลูกค้าจ่ายเท่าไรได้เท่านั้น ปรับที่นั่ง/ยอดเงินตามใบเสร็จ เปิดใช้งาน consume ตามปกติ แล้วตอบ
+
+  ```json
+  {
+    "success": true,
+    "message": "ชำระเงินสำเร็จ ได้รับ 1 แพ็ก (3 ผู้ใช้) จากที่เลือกไว้ 2 แพ็ก (6 ผู้ใช้) เพราะจำนวนที่ชำระกับร้านต่างจากที่เลือก ซื้อเพิ่มได้จากหน้าจัดการที่นั่ง",
+    "order": { "id": 42, "status": "paid", "seats": 3, "store_quantity": 1, "store_quantity_ordered": 2, "quantity_adjusted": true, "…": "…" },
+    "purchase": { "platform": "google_play", "finish_transaction": false, "consumed": true },
+    "quantity_adjusted": true,
+    "quantity": { "ordered": 2, "paid": 1, "ordered_seats": 6, "paid_seats": 3 }
+  }
+  ```
+
+  แอป: แสดง `message` ให้ชัด แล้วพาไป `add-seats` ถ้าต้องการที่เหลือ · จ่ายมากกว่าที่สั่ง (เช่น 3 ชิ้น) ก็ได้ 3 แพ็กเช่นกัน
+  iOS ไม่เกิด (ซื้อได้ 1 ชิ้นเสมอ) จะได้ `quantity_adjusted = false` ตลอด
 
   ## Response (202 Accepted) — ร้านรับคำสั่งซื้อแล้ว เงินยังไม่เข้า
 
@@ -155,7 +180,7 @@ docs: |
   | 422 | `store_purchase_invalid` | ใบเสร็จปลอม / ไม่มีในร้าน / bundleId ไม่ตรง / ชนิดสินค้าไม่รองรับ / JWS ไม่มี transactionId | โชว์ `message` · ถ้าซื้อจริงให้ติดต่อเจ้าหน้าที่พร้อมเลขคำสั่งซื้อของร้าน |
   | 422 | `store_test_purchase_rejected` | ใบเสร็จ sandbox แต่เซิร์ฟเวอร์รับเฉพาะของจริง | เกิดเฉพาะตอนทดสอบ ใช้เซิร์ฟเวอร์ UAT |
   | 404 | `order_not_found` | ไม่มี token ในใบเสร็จและไม่ได้ส่ง `order_id` / ออเดอร์ของบริษัทอื่น | ส่งซ้ำพร้อม `order_id` |
-  | 409 | `purchase_mismatch` | ร้าน / สินค้า / จำนวน ในใบเสร็จไม่ตรงออเดอร์ | **อย่า finish / consume** ติดต่อเจ้าหน้าที่ |
+  | 409 | `purchase_mismatch` | ร้าน / *สินค้า* ในใบเสร็จไม่ตรงออเดอร์ (แอปส่ง product id ผิดตัว) — จำนวนไม่ตรง**ไม่**เข้าข้อนี้แล้ว (ดู `quantity_adjusted`) | **อย่า finish / consume** ติดต่อเจ้าหน้าที่ |
   | 409 | `purchase_already_used` | ใบเสร็จนี้ถูกใช้เปิดใช้งาน**ออเดอร์อื่น**ไปแล้ว | finish ได้ ไม่มีอะไรต้องทำ |
   | 409 | `order_already_paid` | **ออเดอร์นี้**จ่ายด้วยใบเสร็จอื่นไปแล้ว | ติดต่อเจ้าหน้าที่ (อาจซื้อซ้ำ) |
   | 409 | `order_reversed` | ออเดอร์นี้ถูกคืนเงินไปแล้ว | สร้างออเดอร์ใหม่ |

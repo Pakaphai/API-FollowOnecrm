@@ -44,20 +44,23 @@ docs: |
     "pack_size": 3,
     "stores": {
       "google_play": {
+        "product_type": "consumable",
         "max_quantity": 99,
         "products": [
-          { "product_id": "basic_monthly_pack",    "billing_cycle": "monthly",    "packs": 1, "seats": 3, "reference_price": 199 },
+          { "product_id": "basic_monthly_pack",   "billing_cycle": "monthly", "packs": 1,  "seats": 3,  "reference_price": 199 },
+          { "product_id": "basic_monthly_pack2",  "billing_cycle": "monthly", "packs": 2,  "seats": 6,  "reference_price": 398 },
+          { "product_id": "basic_monthly_pack3",  "billing_cycle": "monthly", "packs": 3,  "seats": 9,  "reference_price": 597 },
+          { "product_id": "basic_monthly_pack10", "billing_cycle": "monthly", "packs": 10, "seats": 30, "reference_price": 1990 },
+          { "product_id": "basic_monthly_pack15", "billing_cycle": "monthly", "packs": 15, "seats": 45, "reference_price": 2985 },
           { "product_id": "basic_semiannual_pack", "billing_cycle": "semiannual", "packs": 1, "seats": 3, "reference_price": 995 },
-          { "product_id": "basic_yearly_pack",     "billing_cycle": "yearly",     "packs": 1, "seats": 3, "reference_price": 1990 }
+          { "product_id": "basic_yearly_pack",     "billing_cycle": "yearly",     "packs": 1, "seats": 3, "reference_price": 1990 },
+          "… รวม 39 รายการ (13 ขนาด × 3 รอบบิล)"
         ]
       },
       "app_store": {
-        "max_quantity": 10,
-        "products": [
-          { "product_id": "basic_monthly_pack",    "billing_cycle": "monthly",    "packs": 1, "seats": 3, "reference_price": 199 },
-          { "product_id": "basic_semiannual_pack", "billing_cycle": "semiannual", "packs": 1, "seats": 3, "reference_price": 995 },
-          { "product_id": "basic_yearly_pack",     "billing_cycle": "yearly",     "packs": 1, "seats": 3, "reference_price": 1990 }
-        ]
+        "product_type": "non_renewing_subscription",
+        "max_quantity": 1,
+        "products": [ "… รหัสชุดเดียวกับ google_play ทั้ง 39 รายการ …" ]
       }
     }
   }
@@ -68,10 +71,11 @@ docs: |
   | ฟิลด์ | ชนิด | ความหมาย |
   |---|---|---|
   | `pack_size` | int | ผู้ใช้ต่อ 1 แพ็ก (ตั้งที่หลังบ้าน `packages.seats_per_pack` ของ Basic · ค่าเริ่มต้น 3) ใช้เป็นขั้นของ stepper เลือกจำนวนผู้ใช้ |
-  | `stores.<platform>.max_quantity` | int | จำนวนชิ้นสูงสุดที่ร้านนั้นยอมให้ซื้อต่อครั้ง · Google 99 · Apple 10 (ข้อจำกัดของ Apple consumable) |
-  | `products[].product_id` | string | รหัสสินค้าที่ต้องสร้างให้ตรงกันใน Play Console / App Store Connect |
+  | `stores.<platform>.product_type` | string | `consumable` (Google: one-time product ผู้ใช้เลือกจำนวนในหน้าจ่ายเงิน) · `non_renewing_subscription` (Apple: ซื้อได้ครั้งละ 1 ชิ้น ห้ามส่ง `.quantity`) |
+  | `stores.<platform>.max_quantity` | int | จำนวนชิ้นสูงสุดที่ร้านนั้นยอมให้ซื้อต่อครั้ง · Google 99 · **Apple 1** |
+  | `products[].product_id` | string | รหัสสินค้าที่ต้องสร้างให้ตรงกันใน Play Console / App Store Connect · รหัส = `basic_<รอบบิล>_pack<N>` (N = จำนวนแพ็ก · 1 แพ็กไม่มีเลขต่อท้าย) |
   | `products[].billing_cycle` | string | รอบบิลที่สินค้านี้ให้ `monthly` / `semiannual` / `yearly` |
-  | `products[].packs` | int | 1 ชิ้นของสินค้านี้ = กี่แพ็ก (ตอนนี้ทุกตัว = 1) |
+  | `products[].packs` | int | 1 ชิ้นของสินค้านี้ = กี่แพ็ก · มี 13 ขนาด: 1–10, 15, 20, 30 |
   | `products[].seats` | int | `packs × pack_size` = 1 ชิ้นได้ผู้ใช้กี่คน |
   | `products[].reference_price` | float \| null | ราคาตาม rate card ฝั่งเรา (บาท) ต่อ 1 ชิ้น = ราคาแพ็ก/เดือน × เดือนที่จ่ายจริง × `packs` · `null` = คิดไม่ได้ |
 
@@ -93,12 +97,15 @@ docs: |
   แอปไม่ต้องเลือกสินค้าเอง แค่ส่ง `seats` + `billing_cycle` ไปที่ `create-order` แล้วเซิร์ฟเวอร์จะตอบกลับว่าต้องซื้อ `product_id` ไหน กี่ชิ้น
 
   1. แปลง `seats` เป็นจำนวนแพ็ก (`seats ÷ pack_size`)
-  2. ในสินค้าที่รอบบิลตรงกัน หาตัวที่ `packs` หารจำนวนแพ็กลงตัว
-  3. เลือกตัวที่ต้องซื้อ**น้อยชิ้นที่สุด** และไม่เกิน `max_quantity` ของร้าน
-  4. ไม่มีตัวไหนเข้าเงื่อนไข → `422 product_unavailable`
+  2. ในสินค้าที่รอบบิลตรงกัน คิดว่าแต่ละตัวต้องซื้อกี่ชิ้นถึงได้**อย่างน้อย**เท่าที่ขอ (ปัดขึ้น) ตัดตัวที่เกิน `max_quantity`
+  3. เลือกตัวที่ได้แพ็ก**เกินน้อยที่สุด** (พอดี = 0) ถ้าเท่ากันเอาตัวที่**ชิ้นน้อยที่สุด** → สินค้าขนาดพอดี `quantity = 1` ชนะเสมอ
+  4. ได้มากกว่าที่ขอ → `seats_rounded_up = true` ใน create-order · ไม่มีตัวไหนเข้าเงื่อนไขเลย → `422 product_unavailable`
 
-  ตัวอย่าง (ทุกสินค้าเป็น 1 แพ็ก): 6 ผู้ใช้ = 2 แพ็ก → `basic_monthly_pack × 2`
-  iOS ซื้อได้ไม่เกิน 10 ชิ้น = **30 ผู้ใช้ต่อออเดอร์** มากกว่านั้นได้ `product_unavailable` ต้องแยกซื้อหลายรอบหรือให้ทีมเพิ่มสินค้าแพ็กใหญ่ในร้าน + config
+  ตัวอย่าง (13 ขนาด):
+  - 6 ผู้ใช้ = 2 แพ็ก → `basic_monthly_pack2 × 1` (ทั้งสองร้าน)
+  - 45 ผู้ใช้ = 15 แพ็ก → `basic_monthly_pack15 × 1`
+  - 33 ผู้ใช้ = 11 แพ็ก → iOS ไม่มี 11 → **ปัดขึ้น** `basic_monthly_pack15 × 1` (45 ผู้ใช้) · Android ได้พอดี `basic_monthly_pack × 11` (ผู้ใช้ต้องเปลี่ยนจำนวนในหน้า Google)
+  - iOS ซื้อได้สูงสุด 30 แพ็ก = **90 ผู้ใช้ต่อออเดอร์** มากกว่านั้นได้ `product_unavailable` ติดต่อเจ้าหน้าที่
 
   ---
 
@@ -107,14 +114,16 @@ docs: |
   | HTTP | `code` | เมื่อไหร่ |
   |:---:|---|---|
   | 401 | `unauthorized` / `token_invalid` | ไม่ได้ล็อกอิน |
-  | 403 | `subscription_expired` | บริษัทถูกบล็อกเพราะหมดอายุ (จาก middleware) |
+
+  เส้นนี้**ยกเว้นจาก** `403 subscription_expired` และ `seat_quota_exceeded` — บริษัทที่หมดอายุ/เกินโควตายังดึงรายการมาซื้อได้
 
   ---
 
   ## แอปควรทำ
 
-  - cache ผลไว้ต่อ session แล้ว query ราคาจากร้านครั้งเดียวตอนเปิดหน้า
-  - ถ้าร้านคืน product ไม่ครบ (ยังไม่ได้สร้างใน console / ยัง review ไม่ผ่าน) ให้ซ่อนรอบบิลนั้น อย่าโชว์ `reference_price` แทน
-  - ใช้ `pack_size` และ `max_quantity × packs × pack_size` คุม stepper จำนวนผู้ใช้ จะได้ไม่เจอ `product_unavailable` ตอนกดซื้อ
+  - cache ผลไว้ต่อ session แล้ว query ราคาจากร้านครั้งเดียวตอนเปิดหน้า (39 รหัสต่อร้าน query ได้ในครั้งเดียว)
+  - ถ้าร้านคืน product ไม่ครบ (ยังไม่ได้สร้างใน console / ยัง review ไม่ผ่าน) ให้ซ่อนขนาดนั้น อย่าโชว์ `reference_price` แทน
+  - stepper จำนวนผู้ใช้เพิ่มทีละ `pack_size` · ขนาดที่ไม่มีสินค้าเซิร์ฟเวอร์ปัดขึ้นให้ แต่ควรแสดงราคาจากร้านของสินค้าที่ได้จริงก่อนกดซื้อ (ดู `seats_rounded_up`)
+  - **ห้าม hardcode รหัสสินค้า** ขนาดเพิ่ม/ลดได้จาก config ฝั่งเซิร์ฟเวอร์โดยไม่แก้แอป
 
   📄 เอกสารเต็ม: `docs/api-subscription-purchase.md` หัวข้อ 2 · config สินค้า: `config/store_billing.php`

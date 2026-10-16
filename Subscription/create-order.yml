@@ -10,8 +10,8 @@ http:
     type: json
     data: |-
       {
-        "platform": "app_store",
-        "seats": 9,
+        "platform": "google_play ",
+        "seats": 12,
         "billing_cycle": "monthly"
       }
   auth:
@@ -60,9 +60,9 @@ docs: |
   1. ด่านสิทธิ์ (401 / 404 standalone / 403 forbidden)
   2. validation ของ 3 ฟิลด์ → `422` + `errors`
   3. ร้านนี้ตั้งค่าฝั่งเซิร์ฟเวอร์ครบหรือยัง (Google service account / Apple root CA + bundle id) → `503 store_unavailable`
-  4. หาสินค้าในร้านที่ประกอบจำนวนแพ็ก + รอบบิลนี้ได้ (ดูวิธีเลือกใน `products`) → `422 product_unavailable`
-  5. คิดราคาอ้างอิงตาม rate card → `422 quote_unavailable`
-  6. สร้างออเดอร์ + สุ่ม `account_token` (UUID) ผูกกับออเดอร์
+  4. หาสินค้าในร้านที่ประกอบจำนวนแพ็ก + รอบบิลนี้ได้ (ดูวิธีเลือกใน `products`) — ไม่มีขนาดพอดีจะ**ปัดขึ้น**เป็นขนาดใกล้ที่สุดที่ซื้อได้ · ปัดแล้วยังไม่มี → `422 product_unavailable`
+  5. คิดราคาอ้างอิงตาม rate card จากจำนวนที่จะซื้อจริง → `422 quote_unavailable`
+  6. สร้างออเดอร์ (`seats` = จำนวนที่ซื้อได้จริง อาจมากกว่าที่ขอ) + สุ่ม `account_token` (UUID) ผูกกับออเดอร์
 
   ไม่มีการกันออเดอร์ `pending` ซ้ำ สร้างกี่ใบก็ได้ แต่ละใบมี `account_token` ของตัวเอง
   ใบที่ลูกค้าไม่ได้ซื้อควร `cancel-order` ทิ้ง จะได้ไม่ค้างในหลังบ้าน
@@ -92,27 +92,52 @@ docs: |
       "message": null,
       "store_transaction_id": null,
       "store_environment": null,
+      "store_quantity": 1,
+      "store_quantity_ordered": 1,
+      "quantity_adjusted": false,
       "paid_at": null,
-      "created_at": "2026-10-14T18:30:00+07:00"
+      "created_at": "2026-10-16T18:30:00+07:00"
     },
     "purchase": {
       "platform": "google_play",
-      "product_id": "basic_monthly_pack",
-      "quantity": 2,
+      "product_id": "basic_monthly_pack2",
+      "quantity": 1,
       "account_token": "0f9c2c7a-5b1e-4c7d-9b2a-1c2d3e4f5a6b",
       "product_type": "consumable"
-    }
+    },
+    "seats_requested": 6,
+    "seats_rounded_up": false,
+    "message": null
   }
   ```
 
   | ฟิลด์ | ใช้ทำอะไร |
   |---|---|
   | `order.id` | เก็บไว้ ใช้ส่ง `order_id` ตอน verify (เผื่อใบเสร็จไม่มี token) และดูสถานะ |
-  | `order.amount` | ราคาอ้างอิง rate card = ราคาแพ็ก × เดือนที่จ่ายจริง × จำนวนแพ็ก · **ไม่ใช่ยอดที่ร้านเก็บ** ห้ามโชว์เป็นราคาขาย |
-  | `purchase.product_id` × `purchase.quantity` | สิ่งที่ต้องซื้อกับร้าน ต้องตรงเป๊ะ |
+  | `order.seats` / `order.amount` | **จำนวนและราคาอ้างอิงที่จะซื้อจริง** (อาจมากกว่า `seats` ที่ส่งมา ดู `seats_rounded_up`) · `amount` ไม่ใช่ยอดที่ร้านเก็บ ห้ามโชว์เป็นราคาขาย |
+  | `purchase.product_id` × `purchase.quantity` | สิ่งที่ต้องซื้อกับร้าน · เซิร์ฟเวอร์เลือกสินค้าขนาดพอดี (`quantity = 1`) ก่อนเสมอ · iOS = 1 เสมอ |
+  | `purchase.product_type` | `consumable` (Android) / `non_renewing_subscription` (iOS) |
   | `purchase.account_token` | UUID ที่ต้องแนบตอนซื้อ |
+  | `seats_rounded_up` | `true` = ร้านไม่มีขนาดพอดี ปัดขึ้นให้แล้ว → **แสดง `message` + ราคาจากร้าน ให้ลูกค้ายืนยันก่อนเปิดหน้าจ่ายเงิน** หรือ `cancel-order` |
 
   โครง `order` เต็มดูที่ doc ของ folder
+
+  ### กรณี `seats_rounded_up = true` (เจอบน iPhone เป็นหลัก)
+
+  iPhone ซื้อได้ครั้งละ 1 ชิ้น จึงซื้อได้เฉพาะขนาดที่มีสินค้า (1–10, 15, 20, 30 แพ็ก) บริษัท 33 ผู้ใช้ (11 แพ็ก) ต่ออายุ → ไม่มี 11 แพ็ก → ได้ 15 แพ็ก
+
+  ```json
+  {
+    "success": true,
+    "order": { "id": 43, "seats": 45, "amount": 2985, "payment_method": "app_store", "…": "…" },
+    "purchase": { "platform": "app_store", "product_id": "basic_monthly_pack15", "quantity": 1, "product_type": "non_renewing_subscription", "account_token": "…" },
+    "seats_requested": 33,
+    "seats_rounded_up": true,
+    "message": "ร้านค้าไม่มีแพ็กเกจขนาด 33 ผู้ใช้พอดี ระบบเลือกขนาดใกล้ที่สุดให้คือ 45 ผู้ใช้ กรุณาตรวจสอบจำนวนและราคาก่อนชำระเงิน"
+  }
+  ```
+
+  ลูกค้าจ่ายและได้ 45 ที่นั่งจริง (ไม่ใช่จ่าย 45 ได้ 33) · Android แทบไม่เจอเพราะซื้อได้ถึง 99 ชิ้น
 
   ---
 
@@ -121,23 +146,26 @@ docs: |
   ### Android (Play Billing)
 
   ```kotlin
+  // Play Billing ไม่มี setQuantity() — ถ้า purchase.quantity > 1 ต้องบอกผู้ใช้ให้เปลี่ยนจำนวนเองในหน้าจ่ายเงินของ Google
+  if (purchase.quantity > 1) showHint("ในหน้าชำระเงินของ Google กรุณาเปลี่ยนจำนวนเป็น ${purchase.quantity} ชิ้น")
+
   val params = BillingFlowParams.newBuilder()
       .setProductDetailsParamsList(listOf(
           ProductDetailsParams.newBuilder().setProductDetails(details /* ของ purchase.product_id */).build()
       ))
       .setObfuscatedAccountId(purchase.account_token)   // กฎข้อ 1
-      .setQuantity(purchase.quantity)                    // ต้องเปิด multi-quantity ที่สินค้าใน Play Console
       .build()
   billingClient.launchBillingFlow(activity, params)
   ```
 
   ได้ `Purchase` แล้ว → ส่ง `purchase.products[0]` + `purchase.purchaseToken` ไป `verify-order` · **ห้าม** `consumeAsync` เอง
+  ผู้ใช้จ่ายไม่เท่าที่สั่ง (ลืมแก้จำนวน) เซิร์ฟเวอร์เปิดให้ตามที่จ่ายจริงและตอบ `quantity_adjusted` — ดู verify-order
 
   ### iOS (StoreKit 2)
 
   ```swift
+  // Non-Renewing Subscription ซื้อได้ 1 ชิ้น — ห้ามใส่ .quantity(n) ขนาดแพ็กอยู่ที่ตัวสินค้าแล้ว
   let result = try await product.purchase(options: [
-      .quantity(purchase.quantity),
       .appAccountToken(UUID(uuidString: purchase.account_token)!)   // กฎข้อ 1
   ])
   if case .success(let verification) = result, case .verified(let tx) = verification {
@@ -163,7 +191,7 @@ docs: |
   | HTTP | `code` | เมื่อไหร่ | แอปควรทำ |
   |:---:|---|---|---|
   | 422 | — (มี `errors`) | `platform` / `seats` / `billing_cycle` ผิด `message` เป็นไทยพร้อมแสดง | โชว์ `message` |
-  | 422 | `product_unavailable` | ร้านไม่มีสินค้าที่ประกอบจำนวนนี้ได้ เช่น iOS เกิน 10 ชิ้น (30 ผู้ใช้) | ให้เลือกจำนวนอื่น |
+  | 422 | `product_unavailable` | ร้านไม่มีสินค้าที่ประกอบจำนวนนี้ได้แม้ปัดขึ้นแล้ว เช่น iOS เกินขนาดใหญ่สุด (30 แพ็ก = 90 ผู้ใช้) | ให้เลือกจำนวนอื่น / ติดต่อเจ้าหน้าที่ |
   | 422 | `quote_unavailable` | คิดราคาไม่ได้ (ตั้งค่าแพ็กเกจผิดฝั่งเรา) | ติดต่อเจ้าหน้าที่ |
   | 403 | `forbidden` | ไม่ใช่ level 0/1 | ซ่อนปุ่มซื้อสำหรับเซลส์ |
   | 404 | `not_found` | บริษัท standalone | ซ่อนเมนูแพ็กเกจ |

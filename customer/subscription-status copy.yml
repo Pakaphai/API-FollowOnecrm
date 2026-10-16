@@ -22,6 +22,9 @@ docs: |
   ให้แอปมือถือแสดงตัวนับ "วันใช้งาน" แบบเดียวกับแถบบน navbar ของเว็บ
   และเช็คว่าหมดช่วงทดลองใช้แล้วหรือยัง เพื่อปิดปุ่มสร้างใบเสนอราคา / นัดหมาย
 
+  **อัปเดต 16/10/2569:** เส้นนี้**ยกเว้นจากด่าน `403 subscription_expired`** แล้ว (เช่นเดียวกับ `subscription/products` และ `subscription/orders*`)
+  บริษัทที่หมดอายุเกิน 3 วันจึงเรียกได้ → เมื่อ `is_blocked: true` ให้แสดงหน้าต่ออายุด้วยข้อมูลจาก response นี้ แล้วพาแอดมินไปซื้อที่ `POST subscription/orders` (ดู folder `Subscription`)
+
   ```
   GET /api/v1/subscription/status
   Authorization: Bearer <token>

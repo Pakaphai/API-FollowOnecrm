@@ -46,9 +46,19 @@ docs:
     | [order-edit-status-impact.md](order-edit-status-impact.md) | เปิดปุ่มแก้ไขทุกสถานะ — ผลกระทบและแนวทางแก้ |
     | [api-subscription-purchase.md](api-subscription-purchase.md) | **ซื้อแพ็กเกจ / ที่นั่งเพิ่มจากแอป — Google Play Billing (Android) · Apple In-App Purchase/StoreKit 2 (iOS)** |
 
+    ## อัปเดต 16/10/2569 — ปรับกติกาซื้อแพ็กเกจจากแอป (โฟลเดอร์ `Subscription/` — ดูตารางสรุปใน doc ของ folder)
+
+    - **iOS เปลี่ยนชนิดสินค้าเป็น Non-Renewing Subscription** (ซื้อได้ครั้งละ 1 ชิ้น **ห้ามส่ง `.quantity(n)`**) · `purchase.product_type` = `non_renewing_subscription` (iOS) / `consumable` (Android)
+    - **สินค้าในร้านเป็น 39 ตัวต่อร้าน** (13 ขนาด 1–10, 15, 20, 30 แพ็ก × 3 รอบบิล รหัส `basic_<cycle>_pack<N>`) รหัสชุดเดียวกันทั้งสองร้าน · `GET subscription/products` เพิ่ม `product_type` · **ยังไม่ได้สร้างในร้าน** รอรายการจากเซิร์ฟเวอร์ ห้าม hardcode
+    - **ปัดขึ้นเมื่อไม่มีขนาดพอดี**: `POST subscription/orders` / `orders/seats` ตอบ `seats_requested`, `seats_rounded_up`, `message` → ถ้า `true` แสดง `message` + ราคาจากร้านให้ลูกค้ายืนยันก่อนซื้อ (iPhone 33 ผู้ใช้ → 45)
+    - **จำนวนในใบเสร็จไม่ตรงไม่ถูกปฏิเสธแล้ว** (Android ผู้ใช้เลือกจำนวนในหน้า Google เอง): `/verify` เปิดใช้งานตามที่จ่ายจริง ตอบ `quantity_adjusted` + `quantity{ordered, paid, ordered_seats, paid_seats}` + `message` → แสดง `message` แทนข้อความสำเร็จ · `purchase_mismatch` เหลือเฉพาะสินค้าคนละตัว
+    - Android: Play Billing ไม่มี `setQuantity()` → ถ้า `purchase.quantity > 1` แสดงข้อความก่อนเปิดหน้าจ่ายเงินให้ผู้ใช้เปลี่ยนจำนวนเอง
+    - **บริษัทหมดอายุเกิน 3 วันต่ออายุจากแอปได้**: `subscription/status`, `subscription/products`, `subscription/orders*` ยกเว้นจาก `403 subscription_expired` (เส้นงานอื่นยังโดน) · `is_blocked: true` → หน้าต่ออายุ → ซื้อ → ใช้ได้ทันทีไม่ต้องล็อกอินใหม่
+    - `order` ทุกเส้นเพิ่ม `store_quantity`, `store_quantity_ordered`, `quantity_adjusted`
+
     ## อัปเดต 14/10/2569 — 🆕 ซื้อแพ็กเกจจากแอปผ่าน Google Play Billing / Apple In-App Purchase (โฟลเดอร์ `Subscription/`)
 
-    - แอปชำระเงินผ่าน **ร้านค้าของแพลตฟอร์มเท่านั้น** — Android = Google Play Billing (one-time product, multi-quantity) · iOS = Apple IAP ผ่าน StoreKit 2 (Consumable) · ไม่มีหน้าเว็บ checkout / Apple Pay / Google Pay / บัตร / PromptPay ในแอป
+    - แอปชำระเงินผ่าน **ร้านค้าของแพลตฟอร์มเท่านั้น** — Android = Google Play Billing (one-time product, multi-quantity) · iOS = Apple IAP ผ่าน StoreKit 2 (~~Consumable~~ → **Non-Renewing Subscription** ตั้งแต่ 16/10) · ไม่มีหน้าเว็บ checkout / Apple Pay / Google Pay / บัตร / PromptPay ในแอป
     - เพิ่ม 6 เส้น **เฉพาะแอดมิน (level 0/1)**: `GET subscription/products` (รหัสสินค้าในร้าน) · `POST subscription/orders` (ซื้อ/ต่อแพ็กเกจ) · `POST subscription/orders/seats` (ซื้อที่นั่งเพิ่ม) · `POST subscription/orders/verify` (ส่งใบเสร็จมาตรวจ) · `GET subscription/orders/{id}` (สถานะ) · `POST subscription/orders/{id}/cancel` (ยกเลิกที่ยังไม่ซื้อ)
     - ลำดับ: สร้างออเดอร์ → ได้ `purchase{product_id, quantity, account_token}` → ซื้อกับร้านโดย**แนบ `account_token`** (Android `setObfuscatedAccountId` · iOS `.appAccountToken(UUID)`) → ส่งใบเสร็จ (Google `purchase_token`+`product_id` · Apple `signed_transaction` JWS) มาที่ `/verify` → เซิร์ฟเวอร์ตรวจกับร้านแล้วเปิดใช้งาน
     - **Android ห้าม consume เอง** (เซิร์ฟเวอร์ consume ให้) · **iOS เรียก `transaction.finish()` หลังได้ 200 จาก `/verify` เท่านั้น** · `/verify` ส่งซ้ำได้ — ตอนเปิดแอปให้ไล่ใบเสร็จค้างส่งซ้ำทุกใบ
@@ -113,6 +123,7 @@ docs:
     ### รหัส error ของ token — [`ApiAuth`](../app/Http/Middleware/ApiAuth.php)
 
     `token_absent` · `token_expired` (→ เรียก `/refresh`) · `token_blacklisted` · `token_invalid` · `user_not_found` ทั้งหมดคืน **401** ส่วน `subscription_expired` คืน **403**
+    (ยกเว้น `subscription/status`, `subscription/products`, `subscription/orders*`, `logout`, `consent/*`, `privacy-policy*` ที่เรียกได้แม้หมดอายุ — เพื่อให้ต่ออายุจากแอปได้)
 
     ### รหัส error ของโควตาที่นั่ง — [`ApiAuth`](../app/Http/Middleware/ApiAuth.php)
 

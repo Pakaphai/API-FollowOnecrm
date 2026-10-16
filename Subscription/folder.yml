@@ -13,8 +13,21 @@ docs: |
 
   | แพลตฟอร์ม | ร้าน | ชนิดสินค้า | ใบเสร็จที่ต้องส่งให้เซิร์ฟเวอร์ |
   |---|---|---|---|
-  | Android | Google Play Billing | In-app product (one-time) เปิด multi-quantity | `product_id` + `purchase_token` จาก `Purchase` |
-  | iOS | Apple In-App Purchase (StoreKit 2) | Consumable | `signed_transaction` = `Transaction.jwsRepresentation` |
+  | Android | Google Play Billing | In-app product (one-time) เปิด multi-quantity · `product_type = consumable` | `product_id` + `purchase_token` จาก `Purchase` |
+  | iOS | Apple In-App Purchase (StoreKit 2) | **Non-Renewing Subscription** · `product_type = non_renewing_subscription` · ซื้อได้ครั้งละ 1 ชิ้น **ห้ามส่ง `.quantity(n)`** | `signed_transaction` = `Transaction.jwsRepresentation` |
+
+  ## อัปเดต 16/10/2569 — สิ่งที่เปลี่ยนจากรอบ 14/10
+
+  | เรื่อง | เดิม | ใหม่ |
+  |---|---|---|
+  | ชนิดสินค้า iOS | Consumable (ซื้อได้ ≤ 10 ชิ้น) | **Non-Renewing Subscription** ซื้อได้ 1 ชิ้น/ครั้ง → มีสินค้าแยกตามขนาด (ดู `products`) |
+  | สินค้าในร้าน | 3 ตัว (1 แพ็ก × 3 รอบบิล) | **39 ตัวต่อร้าน** = 13 ขนาด (1–10, 15, 20, 30 แพ็ก) × 3 รอบบิล รหัสชุดเดียวกันทั้งสองร้าน |
+  | จำนวนในใบเสร็จไม่ตรงออเดอร์ | `409 purchase_mismatch` ไม่ consume | **ยึดใบเสร็จ** ปรับออเดอร์ตามที่จ่ายจริงแล้วเปิดใช้งาน · verify ตอบ `quantity_adjusted` + `message` |
+  | ขนาดที่ร้านไม่มีพอดี | `422 product_unavailable` | **ปัดขึ้น**เป็นขนาดใกล้ที่สุด · create/seats ตอบ `seats_rounded_up` + `message` |
+  | บริษัทหมดอายุเกิน 3 วัน | ทุกเส้นโดน `403 subscription_expired` | **ยกเว้น** `subscription/status`, `products`, `orders*` → ต่ออายุจากแอปได้ |
+  | `purchase.product_type` | `consumable` เสมอ | `consumable` (Android) / `non_renewing_subscription` (iOS) |
+
+  ยังไม่ได้สร้างสินค้าในร้าน — รอรายการจากฝั่งเซิร์ฟเวอร์ · **ห้าม hardcode product_id ในแอป** ดึงจาก `GET subscription/products` เสมอ
 
   **ราคาที่ลูกค้าจ่ายจริงคือราคาที่ตั้งในร้าน** (Play Console / App Store Connect) เซิร์ฟเวอร์ควบคุมไม่ได้
   ค่า `amount` / `reference_price` ที่ API คืนมาเป็นแค่ราคาตาม rate card ฝั่งเราไว้เทียบ **ห้ามเอาไปโชว์เป็นราคาขาย**
@@ -69,7 +82,10 @@ docs: |
      - Android: `BillingFlowParams.Builder().setObfuscatedAccountId(account_token)`
      - iOS: `product.purchase(options: [.appAccountToken(UUID(uuidString: account_token)!)])`
      เซิร์ฟเวอร์ใช้ token นี้หาออเดอร์จากใบเสร็จ แม้แอปปิดไปก่อนส่งใบเสร็จ หรือร้านแจ้งผลมาเองทางหลังบ้าน ก็ยังเปิดใช้งานให้ถูกบริษัท
-  2. **ซื้อให้ตรง `purchase.product_id` × `purchase.quantity`** ใบเสร็จที่สินค้า/จำนวนไม่ตรงออเดอร์จะถูกปฏิเสธ (`purchase_mismatch`) และไม่ถูก consume ต้องให้เจ้าหน้าที่ตรวจ
+  2. **ซื้อสินค้าตาม `purchase.product_id` เท่านั้น** ใบเสร็จที่*สินค้า*ไม่ตรงออเดอร์ (เช่น สั่งรายเดือนแต่ซื้อรายปี) จะถูกปฏิเสธ (`purchase_mismatch`) และไม่ถูก consume
+     ส่วน*จำนวน* เซิร์ฟเวอร์ยึดตามใบเสร็จของร้าน ไม่ปฏิเสธ (ดู `quantity_adjusted` ใน verify-order)
+     - Android: Play Billing **ไม่มี `setQuantity()`** ผู้ใช้ต้องเปลี่ยนจำนวนเองในหน้าจ่ายเงินของ Google (ขึ้นมาเป็น 1 ชิ้นเสมอ) → ถ้า `purchase.quantity > 1` **แสดงข้อความก่อนเปิดหน้าจ่ายเงิน** เช่น "ในหน้าชำระเงินของ Google กรุณาเปลี่ยนจำนวนเป็น 2 ชิ้น" (เซิร์ฟเวอร์เลือกสินค้าขนาดพอดีให้ก่อนเสมอ กรณีนี้จึงเกิดน้อย)
+     - iOS: `purchase.quantity` เป็น `1` เสมอ **ห้ามส่ง `.quantity(n)`**
   3. **ส่งใบเสร็จให้เซิร์ฟเวอร์ก่อน finish / consume**
      - Android: เซิร์ฟเวอร์ consume ให้เอง **ห้าม** แอปเรียก `consumeAsync` เอง
      - iOS: เรียก `transaction.finish()` **หลัง** ได้ `200` จาก `/verify` เท่านั้น
@@ -85,14 +101,17 @@ docs: |
   | ลำดับตรวจ | ไม่ผ่านตอบ | `code` | เงื่อนไข |
   |:---:|:---:|---|---|
   | 1 | 401 | `token_invalid` / `token_blacklisted` | ไม่มี token / token ผิด / ออกจากระบบไปแล้ว (รูปแบบ `{status:"error"}` ของ middleware) |
-  | 2 | 403 | `subscription_expired` | บริษัทถูกบล็อกเพราะหมดอายุเกินช่วงผ่อนผัน (ดูหมายเหตุด้านล่าง) |
+  | 2 | — | — | ด่าน `subscription_expired` **ยกเว้น** ให้กลุ่มนี้ทั้งหมด + `subscription/status` (บริษัทที่หมดอายุเกิน 3 วันต้องต่ออายุจากแอปได้) |
   | 3 | 403 | `seat_suspended` | บัญชีคนนี้ถูกระงับเพราะโควตาไม่พอ |
   | 4 | — | — | ด่าน `seat_quota_exceeded` **ยกเว้น** ให้กลุ่มนี้ทั้งหมด (บริษัทที่เกินโควตาต้องซื้อที่นั่งเพิ่มได้) |
   | 5 | 404 | `not_found` | บริษัทโหมด standalone (ขายเป็นสัญญารายลูกค้า ไม่มีแพ็กเกจให้ซื้อ) |
   | 6 | 403 | `forbidden` | ผู้ใช้ไม่ใช่ level 0/1 (เซลส์ซื้อแพ็กเกจแทนบริษัทไม่ได้) |
 
-  > ⚠️ **ข้อ 2 ยังไม่ได้ยกเว้นให้กลุ่มนี้** บริษัทที่ถูกบล็อกเพราะหมดอายุจะเรียกเส้นซื้อแพ็กเกจจากแอปไม่ได้
-  > ต้องไปต่ออายุผ่านเว็บ `/pricing` แทน ถ้าต้องการให้ต่ออายุจากแอปได้ต้องแก้ `ApiAuth` ให้ยกเว้นเส้นกลุ่มนี้จากด่าน `subscription_expired` ด้วย
+  ### บริษัทที่หมดอายุแล้ว (ต่ออายุจากแอป)
+
+  เลยกำหนดเกิน 3 วัน → เส้นงานทั่วไปโดน `403 subscription_expired` แต่กลุ่มนี้ + `subscription/status` ยังเรียกได้
+  flow: `subscription/status` (`is_blocked: true`) → แสดงหน้าต่ออายุ → แอดมินซื้อผ่าน `create-order` ตามปกติ → verify ผ่าน = ทุกเส้นกลับมาใช้ได้ทันที ไม่ต้องล็อกอินใหม่
+  แพ็กเกจเริ่มนับจากวันที่จ่าย (ไม่ต่อท้ายวันหมดอายุเดิมที่เลยไปแล้ว) · ผู้ใช้ที่ไม่ใช่แอดมินยังโดน `403` ทุกเส้น → แสดง "กรุณาติดต่อผู้ดูแลระบบของบริษัทเพื่อต่ออายุ"
 
   ## รูปแบบ error
 
@@ -129,6 +148,9 @@ docs: |
   | `message` | string \| null | ข้อความไทยเมื่อออเดอร์ไม่สำเร็จ/ถูกยกเลิก เช่น "รายการถูกยกเลิก" |
   | `store_transaction_id` | string \| null | Google `orderId` (GPA.xxxx) / Apple `transactionId` หลังตรวจใบเสร็จผ่าน |
   | `store_environment` | string \| null | `production` / `sandbox` (ซื้อทดสอบ) |
+  | `store_quantity` | int \| null | จำนวนชิ้นที่**จ่ายจริง**กับร้าน (ก่อน verify = ที่สั่ง) |
+  | `store_quantity_ordered` | int \| null | จำนวนชิ้นที่สั่งตอนสร้างออเดอร์ |
+  | `quantity_adjusted` | bool | `true` = จ่ายไม่เท่าที่สั่ง เปิดใช้งานตามที่จ่ายจริงแล้ว (Android เท่านั้น) |
   | `paid_at` | ISO 8601 \| null | เวลาเปิดใช้งาน |
   | `created_at` | ISO 8601 | เวลาสร้างออเดอร์ |
 
@@ -137,10 +159,18 @@ docs: |
   | ฟิลด์ | ความหมาย |
   |---|---|
   | `platform` | ร้านที่ต้องซื้อ |
-  | `product_id` | รหัสสินค้าในร้านที่ต้องซื้อ |
-  | `quantity` | จำนวนชิ้นที่ต้องซื้อ (Android `setQuantity` · iOS `.quantity(n)`) |
+  | `product_id` | รหัสสินค้าในร้านที่ต้องซื้อ (เซิร์ฟเวอร์เลือกขนาดพอดีให้ก่อนเสมอ) |
+  | `quantity` | จำนวนชิ้นที่ต้องซื้อ · iOS = `1` เสมอ · Android ปกติ `1` ถ้า `> 1` ต้องบอกผู้ใช้ไปเปลี่ยนในหน้าจ่ายเงินของ Google (ไม่มี `setQuantity`) |
   | `account_token` | UUID ที่ต้องแนบไปกับการซื้อ (กฎข้อ 1) |
-  | `product_type` | `consumable` เสมอ |
+  | `product_type` | `consumable` (Android) / `non_renewing_subscription` (iOS) — เรียก API ซื้อให้ตรงชนิด |
+
+  ## ฟิลด์เพิ่มใน response ของ create / seats
+
+  | ฟิลด์ | ความหมาย |
+  |---|---|
+  | `seats_requested` | จำนวนที่แอปส่งมา (`seats` หรือ `extra_seats`) |
+  | `seats_rounded_up` | `true` = ร้านไม่มีขนาดพอดี เซิร์ฟเวอร์ปัดขึ้น → `order.seats` / `order.extra_seats` มากกว่าที่ขอ **ต้องแสดง `message` + ราคาจากร้านให้ลูกค้ายืนยันก่อนซื้อ** |
+  | `message` | ข้อความไทยพร้อมแสดงเมื่อปัดขึ้น · `null` เมื่อพอดี |
 
   ---
 

@@ -59,9 +59,9 @@ docs: |
   2. validation 2 ฟิลด์ → `422` + `errors`
   3. ร้านนี้ตั้งค่าครบหรือยัง → `503 store_unavailable`
   4. บริษัทมีแพ็กเกจรายที่นั่งอยู่จริงไหม: `is_paid_plan = true` **และ** `seats ≥ 1` **และ** มี `billing_cycle` → ไม่ผ่าน `422 no_paid_plan`
-  5. หาสินค้าในร้านสำหรับ **รอบบิลของบริษัท** + จำนวนแพ็กที่เพิ่ม → `422 product_unavailable`
-  6. คิดราคา → `422 quote_unavailable`
-  7. สร้างออเดอร์ `kind = seats_addon` + `account_token`
+  5. หาสินค้าในร้านสำหรับ **รอบบิลของบริษัท** + จำนวนแพ็กที่เพิ่ม — ไม่มีขนาดพอดีจะ**ปัดขึ้น** (ดู create-order) · ปัดแล้วยังไม่มี → `422 product_unavailable`
+  6. คิดราคาจากจำนวนที่จะซื้อจริง → `422 quote_unavailable`
+  7. สร้างออเดอร์ `kind = seats_addon` (`extra_seats` = จำนวนที่ซื้อได้จริง) + `account_token`
 
   ---
 
@@ -88,8 +88,11 @@ docs: |
       "product_id": "basic_monthly_pack",
       "quantity": 1,
       "account_token": "7b3e1d0a-…",
-      "product_type": "consumable"
-    }
+      "product_type": "non_renewing_subscription"
+    },
+    "seats_requested": 3,
+    "seats_rounded_up": false,
+    "message": null
   }
   ```
 
@@ -97,7 +100,9 @@ docs: |
   |---|---|
   | `order.kind` | `seats_addon` |
   | `order.seats` | ยอด**รวม**หลังเพิ่ม (เดิม 6 + เพิ่ม 3 = 9) |
-  | `order.extra_seats` | จำนวนที่เพิ่ม = ค่าที่ส่งมา |
+  | `order.extra_seats` | จำนวนที่เพิ่ม**จริง** — เท่าค่าที่ส่งมา ยกเว้น `seats_rounded_up = true` (ร้านไม่มีขนาดพอดี เช่น ขอเพิ่ม 33 บน iPhone ได้ 45) |
+  | `seats_requested` / `seats_rounded_up` / `message` | เหมือน create-order · ปัดขึ้นต้องแสดง `message` ให้ลูกค้ายืนยันก่อนซื้อ |
+  | `purchase.product_type` | `consumable` (Android) / `non_renewing_subscription` (iOS) |
   | `order.billing_cycle` | รอบบิลที่บริษัทใช้อยู่ (เซิร์ฟเวอร์เติมให้) |
   | `order.amount` | ราคาอ้างอิง = ราคาแพ็กของรอบบิลนั้น × จำนวนแพ็กที่เพิ่ม **คิดเต็มรอบ ไม่ได้ prorate ตามวันที่เหลือ** |
 
@@ -120,7 +125,7 @@ docs: |
   |:---:|---|---|---|
   | 422 | — (มี `errors`) | `platform` / `extra_seats` ผิด | โชว์ `message` |
   | 422 | `no_paid_plan` | ยังไม่มีแพ็กเกจ Basic (ทดลองใช้ฟรี / หมดอายุ / ไม่มีรอบบิล) | พาไป `create-order` แทน |
-  | 422 | `product_unavailable` | ร้านไม่มีสินค้าของรอบบิลบริษัท หรือจำนวนชิ้นเกิน `max_quantity` | ให้เลือกจำนวนอื่น |
+  | 422 | `product_unavailable` | ร้านไม่มีสินค้าของรอบบิลบริษัท หรือเกินขนาดใหญ่สุดแม้ปัดขึ้นแล้ว (iOS 30 แพ็ก = 90 ผู้ใช้) | ให้เลือกจำนวนอื่น |
   | 422 | `quote_unavailable` | คิดราคาไม่ได้ | ติดต่อเจ้าหน้าที่ |
   | 403 | `forbidden` | ไม่ใช่ level 0/1 | ซ่อนปุ่ม |
   | 404 | `not_found` | standalone | ซ่อนเมนู |
