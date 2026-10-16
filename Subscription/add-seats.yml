@@ -6,16 +6,16 @@ info:
 http:
   method: POST
   url: "{{sale_uat}}/api/v1/subscription/orders/seats"
-  auth:
-    type: bearer
-    token: "{{token}}"
   body:
     type: json
     data: |-
       {
         "platform": "app_store",
-        "extra_seats": 3
+        "extra_seats": 9
       }
+  auth:
+    type: bearer
+    token: "{{token}}"
 
 settings:
   encodeUrl: true

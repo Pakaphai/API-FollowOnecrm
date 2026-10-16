@@ -6,17 +6,17 @@ info:
 http:
   method: POST
   url: "{{sale_uat}}/api/v1/subscription/orders"
-  auth:
-    type: bearer
-    token: "{{token}}"
   body:
     type: json
     data: |-
       {
-        "platform": "google_play",
-        "seats": 6,
+        "platform": "app_store",
+        "seats": 9,
         "billing_cycle": "monthly"
       }
+  auth:
+    type: bearer
+    token: "{{token}}"
 
 settings:
   encodeUrl: true

@@ -6,18 +6,18 @@ info:
 http:
   method: POST
   url: "{{sale_uat}}/api/v1/subscription/orders/verify"
-  auth:
-    type: bearer
-    token: "{{token}}"
   body:
     type: json
     data: |-
       {
-        "platform": "google_play",
+        "platform": "app_store",
         "product_id": "basic_monthly_pack",
         "purchase_token": "<Purchase.purchaseToken>",
-        "order_id": 42
+        "order_id": 14
       }
+  auth:
+    type: bearer
+    token: "{{token}}"
 
 settings:
   encodeUrl: true

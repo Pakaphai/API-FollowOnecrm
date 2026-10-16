@@ -1476,7 +1476,6 @@ docs:
     ---
 
     *อัปเดตล่าสุด: 2026-09-22 · อ้างอิงจาก [`routes/api/api_v1.php`](../routes/api/api_v1.php)*
-
   type: text/markdown
 bundled: false
 extensions:
