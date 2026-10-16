@@ -1,0 +1,107 @@
+info:
+  name: Stock-movements-history
+  type: http
+  seq: 2
+
+http:
+  method: GET
+  url: "{{sale_uat}}/api/v1/stock/movements?from=2026-10-15&to=2026-10-15&page=1&per_page=50"
+  params:
+    - name: from
+      value: "2026-10-15"
+      type: query
+    - name: to
+      value: "2026-10-15"
+      type: query
+    - name: page
+      value: "1"
+      type: query
+    - name: per_page
+      value: "50"
+      type: query
+  auth:
+    type: apikey
+    key: X-POS-Api-Key
+    value: "{{pos_api_key}}"
+    placement: header
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+
+docs: |
+  # API Specification: GET /api/v1/stock/movements
+
+  ประวัติการเคลื่อนไหวสต๊อกตามช่วงเวลา **ทุกต้นทาง** (บิล POS, ส่งของตามใบสั่งขายของ Sale, ปรับยอดบนเว็บ, สต๊อกตั้งต้น)
+  ให้ POS แสดงประวัติและกระทบยอดรายคืน — อ่านอย่างเดียว ไม่แตะข้อมูล
+
+  ```
+  GET https://<code>.followonecrm.com/api/v1/stock/movements?from=2026-10-15&to=2026-10-15
+  X-POS-Api-Key: <POS_API_KEY>
+  ```
+
+  ## พารามิเตอร์ (query string)
+
+  | พารามิเตอร์ | ชนิด | บังคับ | รายละเอียด |
+  |---|---|---|---|
+  | `from` | date / ISO 8601 | ✓ | วันที่ล้วน (`2026-10-15`) = **ต้นวันตามเวลาไทย** · ใส่เวลาได้ เช่น `2026-10-15T08:00:00+07:00` |
+  | `to` | date / ISO 8601 | ✓ | วันที่ล้วน = **สิ้นวันตามเวลาไทย** · ต้องไม่ก่อน `from` · ห่างกันได้ไม่เกิน **31 วัน** |
+  | `codes[]` | array of string ≤200 | – | กรองเฉพาะรหัสสินค้า (`products.code`) |
+  | `sources[]` | array | – | กรองต้นทาง: `pos_order` · `sale_order` · `sale_order_reserve` · `manual_adjustment` · `opening_balance` |
+  | `include_reservations` | `1` `0` `true` `false` | – | รวมแถวจองสต๊อกของใบสั่งขายด้วย (ปริยาย **ไม่รวม**) |
+  | `page` / `per_page` | integer | – | ปริยาย 1 / 20 · `per_page` สูงสุด 200 |
+
+  เรียงตามเวลา แล้วตาม `id` เสมอ — ลำดับคงที่ทุกหน้า
+
+  ## Response — `200 OK`
+
+  ```json
+  {
+    "success": true,
+    "movements": [
+      {
+        "id": 2051,
+        "created_at": "2026-10-15T10:12:00+07:00",
+        "product": { "id": 13417, "code": "LG-TV55-001", "name": "โทรทัศน์ LG 55 นิ้ว 4K" },
+        "direction": "out",
+        "qty": 2,
+        "stock_before": 12,
+        "stock_after": 10,
+        "affects_on_hand": true,
+        "unit_cost": null,
+        "source": {
+          "type": "pos_order",
+          "label": "บิล/เอกสาร POS",
+          "document_id": 3,
+          "document_no": "B0001",
+          "pos": { "reference": "pos:biz-7f3a:B0001:sale", "business_id": "biz-7f3a", "kind": "sale" }
+        },
+        "created_by": null,
+        "note": "ตัดสต๊อก ขายหน้าร้าน (POS) เลขที่ B0001 · pos:biz-7f3a:B0001:sale"
+      }
+    ],
+    "page": 1, "size": 50, "total_elements": 1, "total_pages": 1, "has_next": false, "has_prev": false
+  }
+  ```
+
+  | ฟิลด์ | ความหมาย |
+  |---|---|
+  | `created_at` | เวลาทำรายการ (ISO 8601 เวลาไทย) |
+  | `direction` | `in` / `out` |
+  | `stock_before` / `stock_after` | ยอดคงเหลือก่อน/หลังรายการ — **ยกเว้น** แถวจอง (`affects_on_hand: false`) ที่เป็นยอดจอง |
+  | `affects_on_hand` | `false` = แถวจองสต๊อก ไม่ได้เปลี่ยนของบนชั้น **อย่านำไปบวกลบยอดคงเหลือ** |
+  | `unit_cost` | ต้นทุนต่อหน่วย (บาท) ที่ POS แนบมาตอนรับของ · `null` = ไม่มี |
+  | `source.type` | ต้นทาง (ดู `sources[]` ด้านบน) |
+  | `source.document_no` | เลขบิล POS หรือเลขที่ใบสั่งขาย · `null` = ไม่มีเอกสาร (ปรับยอด/ตั้งต้น) |
+  | `source.pos` | มีเฉพาะ `pos_order` — reference เต็มที่ POS ส่งมา |
+  | `created_by` | ผู้ทำรายการ `{id, name}` · `null` = ไม่มีผู้ใช้ (รายการที่ POS ยิงมาด้วย key) |
+
+  ## Error
+
+  | HTTP | `code` | เมื่อไร |
+  |---|---|---|
+  | 401 | `invalid_api_key` | ไม่ส่ง / ส่ง key ผิด |
+  | 422 | – | ไม่ส่ง `from`/`to` · `to` ก่อน `from` · ช่วงเกิน 31 วัน · `sources[]` ไม่รู้จัก |
+  | 503 | `pos_not_configured` | Sale ยังไม่ได้ตั้ง `POS_API_KEY` |

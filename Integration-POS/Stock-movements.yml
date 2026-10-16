@@ -43,11 +43,12 @@ docs: |
 
   | ฟิลด์ | ชนิด | บังคับ | รายละเอียด |
   |---|---|---|---|
-  | `reference` | string ≤191 | ✓ | `pos:<business_id>:<เลขบิล>:<sale\|void\|refund>` แต่ละส่วนห้ามมี `:` |
+  | `reference` | string ≤191 | ✓ | `pos:<business_id>:<เลขที่เอกสาร>:<ชนิด>` แต่ละส่วนห้ามมี `:` · ชนิด: `sale` `void` `refund` (บิลหน้าร้าน) · `purchase` (รับของเข้า) · `adjust` (ปรับยอด) · `count` (ตรวจนับ — ส่ง**ส่วนต่าง**เป็น `direction`+`qty` ไม่ใช่ยอดนับดิบ) · ระบบไม่ผูก `direction` กับชนิด |
   | `lines` | array 1–500 | ✓ | รายการสินค้า |
   | `lines[].product_code` | string ≤50 | ✓ | ตรงกับ `products.code` ของ Sale (ตรงตัวอักษร) |
   | `lines[].direction` | `out` \| `in` | ✓ | `out` = ของออกจากคลัง (ขาย) · `in` = ของกลับเข้าคลัง (void / refund) |
   | `lines[].qty` | integer ≥1 | ✓ | จำนวนเต็มเท่านั้น (คลังเก็บทศนิยมไม่ได้ จึงไม่ปัดให้) |
+  | `lines[].unit_cost` | number ≥0 ทศนิยม ≤2 | – | ต้นทุนต่อหน่วยเป็น **บาท** (ใช้กับ `purchase` เป็นหลัก) · บันทึกไว้ที่ประวัติรายการ (`stock_movements.unit_cost`) **อย่างเดียว ไม่เปลี่ยนต้นทุนสินค้าฝั่ง Sale** · คืนใน `lines[].unit_cost` ของผลลัพธ์ |
 
   ## กติกา
 
