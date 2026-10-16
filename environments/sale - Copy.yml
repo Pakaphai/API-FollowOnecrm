@@ -2,9 +2,18 @@ name: sale - Copy
 variables:
   - name: sale_uat
     value: http://jiwonnnn.localhost:8000
+    description: ""
   - name: sale_uat_loc
     value: http://jiwonnnn.localhost:8000
-  - secret: true
-    name: token
+    description: ""
   - name: sale
     value: https://jiwonmeaosomzaa.followonecrm.com
+    description: ""
+  - name: token
+    value:
+      type: object
+      data: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwOi8vaml3b25ubm4ubG9jYWxob3N0OjgwMDAvYXBpL3YxL2xvZ2luIiwiaWF0IjoxNzkyMTM1ODc4LCJleHAiOjE3OTIxMzk0NzgsIm5iZiI6MTc5MjEzNTg3OCwianRpIjoiUzRtblVDUGdoOEJPd1c1SSIsInN1YiI6IjEiLCJwcnYiOiIyM2JkNWM4OTQ5ZjYwMGFkYjM5ZTcwMWM0MDA4NzJkYjdhNTk3NmY3In0.a5H1vhg_3I5QOGJ6EFozJLUe-3YVBf17Fu5bZUmYP7k
+    description: ""
+  - secret: true
+    name: token
+    description: ""
