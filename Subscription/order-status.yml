@@ -57,16 +57,16 @@ docs: |
       "message": null,
       "store_transaction_id": "GPA.3333-4444-5555-66666",
       "store_environment": "production",
-      "store_quantity": 1,
-      "store_quantity_ordered": 1,
+      "store_quantity": 2,
+      "store_quantity_ordered": 2,
       "quantity_adjusted": false,
       "paid_at": "2026-10-16T18:35:10+07:00",
       "created_at": "2026-10-16T18:30:00+07:00"
     },
     "purchase": {
       "platform": "google_play",
-      "product_id": "basic_monthly_pack2",
-      "quantity": 1,
+      "product_id": "basic_monthly_pack",
+      "quantity": 2,
       "account_token": "0f9c2c7a-5b1e-4c7d-9b2a-1c2d3e4f5a6b",
       "product_type": "consumable"
     }

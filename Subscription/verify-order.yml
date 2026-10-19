@@ -73,7 +73,7 @@ docs: |
   | ร้าน | วิธี | สิ่งที่ได้ |
   |---|---|---|
   | Google Play | เรียก Google Play Developer API `purchases.products.get` ด้วย service account | `purchaseState` (0 ซื้อแล้ว / 1 ยกเลิก / 2 รอจ่าย) · `quantity` · `orderId` · `obfuscatedExternalAccountId` · `purchaseType` (0 = license tester → sandbox) |
-  | App Store | ตรวจลายเซ็น JWS ออฟไลน์ด้วย certificate chain ที่จบที่ Apple Root CA G3 | `bundleId` ต้องตรงแอปเรา · `type` ต้องเป็น `Non-Renewing Subscription` (รับ `Consumable` ด้วยเผื่อสินค้าเก่า) · `quantity` · `transactionId` · `appAccountToken` · `revocationDate` (มี = คืนเงินแล้ว) · `environment` (ไม่ใช่ Production → sandbox) |
+  | App Store | ตรวจลายเซ็น JWS ออฟไลน์ด้วย certificate chain ที่จบที่ Apple Root CA G3 | `bundleId` ต้องตรงแอปเรา · `type` ต้องเป็น `Consumable` / `Non-Renewing Subscription` · `quantity` · `transactionId` · `appAccountToken` · `revocationDate` (มี = คืนเงินแล้ว) · `environment` (ไม่ใช่ Production → sandbox) |
 
   ตรวจไม่ผ่าน → `422 store_purchase_invalid` · ร้านล่ม/สิทธิ์ไม่พอ → `503 store_unavailable` / `502 store_error`
 
@@ -112,7 +112,7 @@ docs: |
       "id": 42, "kind": "subscription", "status": "paid", "status_label": "ชำระเงินสำเร็จ",
       "is_final": true, "is_paid": true, "seats": 6, "billing_cycle": "monthly",
       "store_transaction_id": "GPA.3333-4444-5555-66666", "store_environment": "production",
-      "store_quantity": 1, "store_quantity_ordered": 1, "quantity_adjusted": false,
+      "store_quantity": 2, "store_quantity_ordered": 2, "quantity_adjusted": false,
       "paid_at": "2026-10-16T18:35:10+07:00", "…": "…"
     },
     "purchase": {
@@ -122,7 +122,7 @@ docs: |
       "consumed": true
     },
     "quantity_adjusted": false,
-    "quantity": { "ordered": 1, "paid": 1, "ordered_seats": 6, "paid_seats": 6 }
+    "quantity": { "ordered": 2, "paid": 2, "ordered_seats": 6, "paid_seats": 6 }
   }
   ```
 
@@ -153,7 +153,7 @@ docs: |
   ```
 
   แอป: แสดง `message` ให้ชัด แล้วพาไป `add-seats` ถ้าต้องการที่เหลือ · จ่ายมากกว่าที่สั่ง (เช่น 3 ชิ้น) ก็ได้ 3 แพ็กเช่นกัน
-  iOS ไม่เกิด (ซื้อได้ 1 ชิ้นเสมอ) จะได้ `quantity_adjusted = false` ตลอด
+  iOS ไม่เกิด (`.quantity(n)` กำหนดจำนวนได้) จะได้ `quantity_adjusted = false` ตลอด
 
   ## Response (202 Accepted) — ร้านรับคำสั่งซื้อแล้ว เงินยังไม่เข้า
 
