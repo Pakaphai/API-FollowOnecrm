@@ -29,7 +29,7 @@ docs: |
   |---|---|
   | ชนิดสินค้า iOS | **Consumable** (ยกเลิก Non-Renewing Subscription 45 ตัว) · ต้องสร้างสินค้า Consumable ใหม่ใน App Store Connect 3 ตัว (1 แพ็กต่อรอบบิล) |
   | จำนวนชิ้น iOS | `max_quantity` = 10 → ส่ง `.quantity(purchase.quantity)` ตอนซื้อ · สูงสุด 10 แพ็ก = 30 ผู้ใช้ต่อครั้ง |
-  | `GET subscription/products` | เพิ่ม `product_type`, `price_markup_percent`, `rate_card_price` · `reference_price` = rate card (ไม่บวก 37%) · `product_id` ตัด `_pack` ท้าย |
+  | `GET subscription/products` | เพิ่ม `product_type`, `price_markup_percent`, `rate_card_price` · `reference_price` = rate card (ไม่บวก 37%) · `product_id` เปลี่ยนเป็น `basic_monthly` / `basic_semiannual` / `basic_yearly` ทุกเส้น (ตรงชื่อในร้าน) |
 
   **ห้าม hardcode product_id ในแอป** — ตอนซื้อใช้ `purchase.product_id` จาก `create-order` / `add-seats` เสมอ
 

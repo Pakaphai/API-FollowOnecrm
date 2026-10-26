@@ -50,7 +50,7 @@ docs:
 
     - **iOS เปลี่ยนเป็นสินค้า Consumable** (ยกเลิก Non-Renewing Subscription 45 ตัว) — `app_store.max_quantity` = 10 · แอปส่ง `.quantity(purchase.quantity)` ตอนซื้อ · สูงสุด 10 แพ็ก = 30 ผู้ใช้ต่อครั้ง เกินได้ `422 product_unavailable`
     - ทีมแอปต้องสร้างสินค้า **Consumable** ใน App Store Connect 3 ตัว (รายเดือน / 6 เดือน / รายปี ตัวละ 1 แพ็ก = 3 ผู้ใช้) — Apple ห้ามใช้ product id ซ้ำกับสินค้าเดิม แจ้งรหัสใหม่ให้หลังบ้านตั้ง config
-    - `GET subscription/products` ทั้งสองร้าน: ส่งเฉพาะสินค้า 1 แพ็ก 3 ตัว · เพิ่ม `product_type`, `price_markup_percent`, `rate_card_price` · `reference_price` = rate card (ไม่บวก 37%) · `product_id` ตัด `_pack` ท้าย (`basic_monthly`) — **ตอนซื้อใช้ `purchase.product_id` จาก create-order เสมอ**
+    - `GET subscription/products` ทั้งสองร้าน: ส่งเฉพาะสินค้า 1 แพ็ก 3 ตัว · เพิ่ม `product_type`, `price_markup_percent`, `rate_card_price` · `reference_price` = rate card (ไม่บวก 37%) · `product_id` เปลี่ยนเป็น `basic_monthly` / `basic_semiannual` / `basic_yearly` **ทุกเส้น** (products, create-order, add-seats, verify) และในร้านทั้งสองร้าน
 
     ## อัปเดต 16/10/2569 — ปรับกติกาซื้อแพ็กเกจจากแอป (โฟลเดอร์ `Subscription/` — ดูตารางสรุปใน doc ของ folder)
 

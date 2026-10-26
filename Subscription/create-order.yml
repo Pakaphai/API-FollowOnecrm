@@ -100,7 +100,7 @@ docs: |
     },
     "purchase": {
       "platform": "google_play",
-      "product_id": "basic_monthly_pack",
+      "product_id": "basic_monthly",
       "quantity": 2,
       "account_token": "0f9c2c7a-5b1e-4c7d-9b2a-1c2d3e4f5a6b",
       "product_type": "consumable"

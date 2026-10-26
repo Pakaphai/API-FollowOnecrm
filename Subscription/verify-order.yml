@@ -11,7 +11,7 @@ http:
     data: |-
       {
         "platform": "google_play",
-        "product_id": "basic_monthly_pack",
+        "product_id": "basic_monthly",
         "purchase_token": "fake-token",
         "order_id": 16
       }
@@ -46,7 +46,7 @@ docs: |
 
   Android:
   ```json
-  { "platform": "google_play", "product_id": "basic_monthly_pack", "purchase_token": "<Purchase.purchaseToken>", "order_id": 42 }
+  { "platform": "google_play", "product_id": "basic_monthly", "purchase_token": "<Purchase.purchaseToken>", "order_id": 42 }
   ```
 
   iOS:

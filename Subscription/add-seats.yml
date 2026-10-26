@@ -85,7 +85,7 @@ docs: |
     },
     "purchase": {
       "platform": "app_store",
-      "product_id": "basic_monthly_pack",
+      "product_id": "basic_monthly",
       "quantity": 1,
       "account_token": "7b3e1d0a-…",
       "product_type": "consumable"
