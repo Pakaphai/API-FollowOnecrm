@@ -46,13 +46,19 @@ docs:
     | [order-edit-status-impact.md](order-edit-status-impact.md) | เปิดปุ่มแก้ไขทุกสถานะ — ผลกระทบและแนวทางแก้ |
     | [api-subscription-purchase.md](api-subscription-purchase.md) | **ซื้อแพ็กเกจ / ที่นั่งเพิ่มจากแอป — Google Play Billing (Android) · Apple In-App Purchase/StoreKit 2 (iOS)** |
 
+    ## อัปเดต 26/10/2569 — iOS ซื้อหลายชิ้นได้ (สินค้า Consumable) · ปรับ `subscription/products`
+
+    - **iOS เปลี่ยนเป็นสินค้า Consumable** (ยกเลิก Non-Renewing Subscription 45 ตัว) — `app_store.max_quantity` = 10 · แอปส่ง `.quantity(purchase.quantity)` ตอนซื้อ · สูงสุด 10 แพ็ก = 30 ผู้ใช้ต่อครั้ง เกินได้ `422 product_unavailable`
+    - ทีมแอปต้องสร้างสินค้า **Consumable** ใน App Store Connect 3 ตัว (รายเดือน / 6 เดือน / รายปี ตัวละ 1 แพ็ก = 3 ผู้ใช้) — Apple ห้ามใช้ product id ซ้ำกับสินค้าเดิม แจ้งรหัสใหม่ให้หลังบ้านตั้ง config
+    - `GET subscription/products` ทั้งสองร้าน: ส่งเฉพาะสินค้า 1 แพ็ก 3 ตัว · เพิ่ม `product_type`, `price_markup_percent`, `rate_card_price` · `reference_price` = rate card (ไม่บวก 37%) · `product_id` ตัด `_pack` ท้าย (`basic_monthly`) — **ตอนซื้อใช้ `purchase.product_id` จาก create-order เสมอ**
+
     ## อัปเดต 16/10/2569 — ปรับกติกาซื้อแพ็กเกจจากแอป (โฟลเดอร์ `Subscription/` — ดูตารางสรุปใน doc ของ folder)
 
     - **จำนวนในใบเสร็จไม่ตรงไม่ถูกปฏิเสธแล้ว** (Android ผู้ใช้เลือกจำนวนในหน้า Google เอง): `/verify` เปิดใช้งานตามที่จ่ายจริง ตอบ `quantity_adjusted` + `quantity{ordered, paid, ordered_seats, paid_seats}` + `message` → แสดง `message` แทนข้อความสำเร็จ · `purchase_mismatch` เหลือเฉพาะสินค้าคนละตัว
     - Android: Play Billing ไม่มี `setQuantity()` → ถ้า `purchase.quantity > 1` แสดงข้อความก่อนเปิดหน้าจ่ายเงินให้ผู้ใช้เปลี่ยนจำนวนเอง
     - **บริษัทหมดอายุเกิน 3 วันต่ออายุจากแอปได้**: `subscription/status`, `subscription/products`, `subscription/orders*` ยกเว้นจาก `403 subscription_expired` (เส้นงานอื่นยังโดน) · `is_blocked: true` → หน้าต่ออายุ → ซื้อ → ใช้ได้ทันทีไม่ต้องล็อกอินใหม่
     - `order` ทุกเส้นเพิ่ม `store_quantity`, `store_quantity_ordered`, `quantity_adjusted`
-    - ชนิดสินค้า iOS (Consumable / Non-Renewing Subscription) และสินค้าแพ็กใหญ่ **ยังไม่ตัดสินใจ** — ยังไม่ต้องสร้างสินค้าในร้าน ห้าม hardcode product_id
+    - ชนิดสินค้า iOS — ตัดสินใจแล้ว 26/10/2569 เป็น **Consumable** (ดูหัวข้อด้านบน) · ห้าม hardcode product_id
 
     ## อัปเดต 14/10/2569 — 🆕 ซื้อแพ็กเกจจากแอปผ่าน Google Play Billing / Apple In-App Purchase (โฟลเดอร์ `Subscription/`)
 

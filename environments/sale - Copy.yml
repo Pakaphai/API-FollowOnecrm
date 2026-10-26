@@ -6,10 +6,5 @@ variables:
     value: http://jiwonnnn.localhost:8000
   - name: sale
     value: https://jiwonmeaosomzaa.followonecrm.com
-  - name: token
-    value:
-      type: object
-      data: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwOi8vaml3b25ubm4ubG9jYWxob3N0OjgwMDAvYXBpL3YxL2xvZ2luIiwiaWF0IjoxNzkyMTM2MTQyLCJleHAiOjE3OTIxMzk3NDIsIm5iZiI6MTc5MjEzNjE0MiwianRpIjoiazJyRTdFMnoyeGU1dFE1WiIsInN1YiI6IjEiLCJwcnYiOiIyM2JkNWM4OTQ5ZjYwMGFkYjM5ZTcwMWM0MDA4NzJkYjdhNTk3NmY3In0.gu8mLLwNIsYduXeYrptxe6nx1zctUuvavPFQUuafn2YeyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwOi8vaml3b25ubm4ubG9jYWxob3N0OjgwMDAvYXBpL3YxL2xvZ2luIiwiaWF0IjoxNzkyMTM2MTQyLCJleHAiOjE3OTIxMzk3NDIsIm5iZiI6MTc5MjEzNjE0MiwianRpIjoiazJyRTdFMnoyeGU1dFE1WiIsInN1YiI6IjEiLCJwcnYiOiIyM2JkNWM4OTQ5ZjYwMGFkYjM5ZTcwMWM0MDA4NzJkYjdhNTk3NmY3In0.gu8mLLwNIsYduXeYrptxe6nx1zctUuvavPFQUuafn2Y
   - secret: true
     name: token
-    description: ""

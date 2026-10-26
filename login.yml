@@ -10,8 +10,8 @@ http:
     type: json
     data: |-
       {
-        "username": "jiwonnnn",
-        "password": "jiwonnnn"
+        "username": "jiwonmeaosommm",
+        "password": "jiwonmeaosommm"
       }
   auth: inherit
 
@@ -20,7 +20,6 @@ settings:
   timeout: 0
   followRedirects: true
   maxRedirects: 5
-  forwardAuthorizationHeader: true
 
 docs: |
   # API — เข้าสู่ระบบ (Login) และวงจรอายุ Token

@@ -44,19 +44,23 @@ docs: |
     "pack_size": 3,
     "stores": {
       "google_play": {
+        "price_markup_percent": 0,
+        "product_type": "consumable",
         "max_quantity": 99,
         "products": [
-          { "product_id": "basic_monthly_pack",    "billing_cycle": "monthly",    "packs": 1, "seats": 3, "reference_price": 199 },
-          { "product_id": "basic_semiannual_pack", "billing_cycle": "semiannual", "packs": 1, "seats": 3, "reference_price": 995 },
-          { "product_id": "basic_yearly_pack",     "billing_cycle": "yearly",     "packs": 1, "seats": 3, "reference_price": 1990 }
+          { "product_id": "basic_monthly",    "billing_cycle": "monthly",    "packs": 1, "seats": 3, "rate_card_price": 199,  "reference_price": 199 },
+          { "product_id": "basic_semiannual", "billing_cycle": "semiannual", "packs": 1, "seats": 3, "rate_card_price": 995,  "reference_price": 995 },
+          { "product_id": "basic_yearly",     "billing_cycle": "yearly",     "packs": 1, "seats": 3, "rate_card_price": 1990, "reference_price": 1990 }
         ]
       },
       "app_store": {
+        "price_markup_percent": 0,
+        "product_type": "consumable",
         "max_quantity": 10,
         "products": [
-          { "product_id": "basic_monthly_pack",    "billing_cycle": "monthly",    "packs": 1, "seats": 3, "reference_price": 199 },
-          { "product_id": "basic_semiannual_pack", "billing_cycle": "semiannual", "packs": 1, "seats": 3, "reference_price": 995 },
-          { "product_id": "basic_yearly_pack",     "billing_cycle": "yearly",     "packs": 1, "seats": 3, "reference_price": 1990 }
+          { "product_id": "basic_monthly",    "billing_cycle": "monthly",    "packs": 1, "seats": 3, "rate_card_price": 199,  "reference_price": 199 },
+          { "product_id": "basic_semiannual", "billing_cycle": "semiannual", "packs": 1, "seats": 3, "rate_card_price": 995,  "reference_price": 995 },
+          { "product_id": "basic_yearly",     "billing_cycle": "yearly",     "packs": 1, "seats": 3, "rate_card_price": 1990, "reference_price": 1990 }
         ]
       }
     }
@@ -68,12 +72,19 @@ docs: |
   | ฟิลด์ | ชนิด | ความหมาย |
   |---|---|---|
   | `pack_size` | int | ผู้ใช้ต่อ 1 แพ็ก (ตั้งที่หลังบ้าน `packages.seats_per_pack` ของ Basic · ค่าเริ่มต้น 3) ใช้เป็นขั้นของ stepper เลือกจำนวนผู้ใช้ |
+  | `stores.<platform>.price_markup_percent` | float | % ที่บวกจาก rate card ใน `reference_price` · ตอนนี้ `0` ทั้งสองร้าน |
+  | `stores.<platform>.product_type` | string | ชนิดสินค้าในร้าน · `consumable` ทั้งสองร้าน (App Store ตั้งแต่ 26/10/2569) = ส่งจำนวนชิ้นไปกับคำสั่งซื้อได้ |
   | `stores.<platform>.max_quantity` | int | จำนวนชิ้นสูงสุดที่ร้านนั้นยอมให้ซื้อต่อครั้ง · Google 99 · Apple 10 (ข้อจำกัดของ Apple consumable) |
-  | `products[].product_id` | string | รหัสสินค้าที่ต้องสร้างให้ตรงกันใน Play Console / App Store Connect |
+  | `products[].product_id` | string | รหัสสินค้า (ตัด `_pack` ท้ายออกแล้ว เช่น `basic_monthly`) — ดูหมายเหตุด้านล่าง |
   | `products[].billing_cycle` | string | รอบบิลที่สินค้านี้ให้ `monthly` / `semiannual` / `yearly` |
   | `products[].packs` | int | 1 ชิ้นของสินค้านี้ = กี่แพ็ก (ตอนนี้ทุกตัว = 1) |
   | `products[].seats` | int | `packs × pack_size` = 1 ชิ้นได้ผู้ใช้กี่คน |
-  | `products[].reference_price` | float \| null | ราคาตาม rate card ฝั่งเรา (บาท) ต่อ 1 ชิ้น = ราคาแพ็ก/เดือน × เดือนที่จ่ายจริง × `packs` · `null` = คิดไม่ได้ |
+  | `products[].rate_card_price` | float \| null | ราคาตาม rate card ฝั่งเรา (บาท) ต่อ 1 ชิ้น = ราคาแพ็ก/เดือน × เดือนที่จ่ายจริง × `packs` · `null` = คิดไม่ได้ |
+  | `products[].reference_price` | float \| null | เท่ากับ `rate_card_price` ทั้งสองร้าน (ไม่บวก markup) |
+
+  > **หมายเหตุ `product_id`:** เส้นนี้ส่งรหัสแบบตัด `_pack` (`basic_monthly`) แต่ `purchase.product_id` จาก `create-order` / `add-seats`
+  > และการตรวจใบเสร็จใน `verify-order` ใช้รหัสเต็มตาม config เซิร์ฟเวอร์ (ปัจจุบัน `basic_monthly_pack`)
+  > **ตอนซื้อให้ใช้ `purchase.product_id` เสมอ** — ถ้าจะใช้รหัสจากเส้นนี้ query ราคาจากร้าน สินค้าในร้านต้องชื่อตรงกัน แจ้งทีมหลังบ้านให้ตั้ง config ให้ตรงด้วย
 
   ### วิธีคิด `reference_price`
 
@@ -98,7 +109,7 @@ docs: |
   4. ไม่มีตัวไหนเข้าเงื่อนไข → `422 product_unavailable`
 
   ตัวอย่าง (ทุกสินค้าเป็น 1 แพ็ก): 6 ผู้ใช้ = 2 แพ็ก → `basic_monthly_pack × 2`
-  iOS ซื้อได้ไม่เกิน 10 ชิ้น = **30 ผู้ใช้ต่อออเดอร์** มากกว่านั้นได้ `product_unavailable` ต้องแยกซื้อหลายรอบหรือให้ทีมเพิ่มสินค้าแพ็กใหญ่ในร้าน + config (ยังไม่ตัดสินใจ)
+  iOS (Consumable) ซื้อได้ไม่เกิน 10 ชิ้น = **30 ผู้ใช้ต่อออเดอร์** มากกว่านั้นได้ `product_unavailable` ต้องแยกซื้อหลายรอบ
 
   ---
 

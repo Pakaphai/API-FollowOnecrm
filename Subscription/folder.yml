@@ -23,7 +23,15 @@ docs: |
   | จำนวนในใบเสร็จไม่ตรงออเดอร์ | `409 purchase_mismatch` ไม่ consume | **ยึดใบเสร็จ** ปรับออเดอร์ตามที่จ่ายจริงแล้วเปิดใช้งาน · verify ตอบ `quantity_adjusted` + `message` |
   | บริษัทหมดอายุเกิน 3 วัน | ทุกเส้นโดน `403 subscription_expired` | **ยกเว้น** `subscription/status`, `products`, `orders*` → ต่ออายุจากแอปได้ |
 
-  ชนิดสินค้า iOS (Consumable vs Non-Renewing Subscription) และสินค้าแพ็กใหญ่ **ยังไม่ตัดสินใจ** — ยังไม่ต้องสร้างสินค้าในร้าน · **ห้าม hardcode product_id ในแอป** ดึงจาก `GET subscription/products` เสมอ
+  ## อัปเดต 26/10/2569 — iOS ใช้สินค้า Consumable ซื้อหลายชิ้นได้
+
+  | เรื่อง | ใหม่ |
+  |---|---|
+  | ชนิดสินค้า iOS | **Consumable** (ยกเลิก Non-Renewing Subscription 45 ตัว) · ต้องสร้างสินค้า Consumable ใหม่ใน App Store Connect 3 ตัว (1 แพ็กต่อรอบบิล) |
+  | จำนวนชิ้น iOS | `max_quantity` = 10 → ส่ง `.quantity(purchase.quantity)` ตอนซื้อ · สูงสุด 10 แพ็ก = 30 ผู้ใช้ต่อครั้ง |
+  | `GET subscription/products` | เพิ่ม `product_type`, `price_markup_percent`, `rate_card_price` · `reference_price` = rate card (ไม่บวก 37%) · `product_id` ตัด `_pack` ท้าย |
+
+  **ห้าม hardcode product_id ในแอป** — ตอนซื้อใช้ `purchase.product_id` จาก `create-order` / `add-seats` เสมอ
 
   **ราคาที่ลูกค้าจ่ายจริงคือราคาที่ตั้งในร้าน** (Play Console / App Store Connect) เซิร์ฟเวอร์ควบคุมไม่ได้
   ค่า `amount` / `reference_price` ที่ API คืนมาเป็นแค่ราคาตาม rate card ฝั่งเราไว้เทียบ **ห้ามเอาไปโชว์เป็นราคาขาย**
