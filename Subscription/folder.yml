@@ -24,12 +24,12 @@ docs:
     | จำนวนในใบเสร็จไม่ตรงออเดอร์ | `409 purchase_mismatch` ไม่ consume | **ยึดใบเสร็จ** ปรับออเดอร์ตามที่จ่ายจริงแล้วเปิดใช้งาน · verify ตอบ `quantity_adjusted` + `message` |
     | บริษัทหมดอายุเกิน 3 วัน | ทุกเส้นโดน `403 subscription_expired` | **ยกเว้น** `subscription/status`, `products`, `orders*` → ต่ออายุจากแอปได้ |
 
-    ## อัปเดต 29/10/2569 — แพ็กละ 5 ผู้ใช้ · รายเดือนอย่างเดียว · รหัสสินค้าใหม่ `monthly_basic_5`
+    ## อัปเดต 29/10/2569 — แพ็กละ 5 ผู้ใช้ · รายเดือนอย่างเดียว · รหัสสินค้าใหม่ `monthly_basic`
 
     | เรื่อง | เดิม | ใหม่ |
     |---|---|---|
-    | `product_id` | `basic_monthly` / `basic_semiannual` / `basic_yearly` | **`monthly_basic_5`** ตัวเดียว ทุกเส้น (products, create-order, add-seats, order-status, verify) |
-    | สินค้าในร้าน | 3 ตัว (1 แพ็ก = 3 ผู้ใช้) | สร้างใหม่ 1 ตัว `monthly_basic_5` = 1 แพ็ก = **5 ผู้ใช้** ราคา rate card 199 ทั้ง Play Console และ App Store Connect (Consumable) · ชื่อเก่าเซิร์ฟเวอร์ไม่รับแล้ว ปิดการขายได้ |
+    | `product_id` | `basic_monthly` / `basic_semiannual` / `basic_yearly` | **`monthly_basic`** ตัวเดียว ทุกเส้น (products, create-order, add-seats, order-status, verify) |
+    | สินค้าในร้าน | 3 ตัว (1 แพ็ก = 3 ผู้ใช้) | สร้างใหม่ 1 ตัว `monthly_basic` = 1 แพ็ก = **5 ผู้ใช้** ราคา rate card 199 ทั้ง Play Console และ App Store Connect (Consumable) · ชื่อเก่าเซิร์ฟเวอร์ไม่รับแล้ว ปิดการขายได้ |
     | `billing_cycle` | `monthly` / `semiannual` / `yearly` | **`monthly` เท่านั้น** — ส่งรอบอื่นได้ 422 · เอาตัวเลือก 6 เดือน / รายปี ออกจากแอป |
     | `pack_size` | 3 (3, 6, 9 …) | **5** (5, 10, 15 …) |
     | `max_quantity` (ทั้งสองร้าน) | Google 99 · Apple 10 | **2** = ซื้อได้ครั้งละไม่เกิน 2 แพ็ก (10 ผู้ใช้) |
