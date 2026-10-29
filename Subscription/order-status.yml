@@ -46,7 +46,7 @@ docs: |
       "status_label": "ชำระเงินสำเร็จ",
       "is_final": true,
       "is_paid": true,
-      "seats": 6,
+      "seats": 10,
       "extra_seats": null,
       "billing_cycle": "monthly",
       "amount": 398,
@@ -65,7 +65,7 @@ docs: |
     },
     "purchase": {
       "platform": "google_play",
-      "product_id": "basic_monthly",
+      "product_id": "monthly_basic",
       "quantity": 2,
       "account_token": "0f9c2c7a-5b1e-4c7d-9b2a-1c2d3e4f5a6b",
       "product_type": "consumable"

@@ -1,0 +1,289 @@
+info:
+  name: subscription/status copy
+  type: http
+  seq: 12
+
+http:
+  method: GET
+  url: "{{sale_uat}}/api/v1/subscription/status"
+  auth:
+    type: bearer
+    token: "{{token}}"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+
+docs: |
+  # API — สถานะแพ็กเกจ / วันใช้งาน / สิทธิ์ใช้ฟีเจอร์
+
+  ให้แอปมือถือแสดงตัวนับ "วันใช้งาน" แบบเดียวกับแถบบน navbar ของเว็บ
+  และเช็คว่าหมดช่วงทดลองใช้แล้วหรือยัง เพื่อปิดปุ่มสร้างใบเสนอราคา / นัดหมาย
+
+  **อัปเดต 29/10/2569:** แพ็กละ **5 ผู้ใช้** · ขาย**รายเดือนอย่างเดียว** (ตัด `semiannual` / `yearly`) · ทดลองใช้ฟรี **60 วัน**
+  · เพิ่ม `seat_quota.pack_size` และ `package_renewal` (ต่ออายุผ่านแอปได้เฉพาะบริษัทที่ยังไม่เคยใช้ Basic)
+
+  **อัปเดต 16/10/2569:** เส้นนี้**ยกเว้นจากด่าน `403 subscription_expired`** แล้ว (เช่นเดียวกับ `subscription/products` และ `subscription/orders*`)
+  บริษัทที่หมดอายุเกิน 3 วันจึงเรียกได้ → เมื่อ `is_blocked: true` ให้แสดงหน้าต่ออายุด้วยข้อมูลจาก response นี้
+
+  ```
+  GET /api/v1/subscription/status
+  Authorization: Bearer <token>
+  Accept: application/json
+  ```
+
+  ---
+
+  ## ตัวอย่าง response
+
+  ```json
+  {
+    "status": "success",
+    "data": {
+      "plan": "basic",
+      "plan_label": "Basic",
+      "plan_label_display": "Basic",
+      "is_paid_plan": true,
+      "is_trial": false,
+      "billing_cycle": "monthly",
+      "seats": 20,
+      "price": 796,
+
+      "subscription_started_at": "2026-10-22",
+      "subscription_ends_at": "2026-11-22",
+
+      "usage": {
+        "days_used": 8,
+        "total_days": 31,
+        "days_left": 23,
+        "percent": 26,
+        "days_used_label": "8 วัน",
+        "total_label": "31 วัน",
+        "text": "8 วัน / 31 วัน"
+      },
+
+      "days_remaining": 23,
+      "is_expired": false,
+      "is_blocked": false,
+
+      "features": {
+        "can_create_quotation": true,
+        "can_create_appointment": true,
+        "blocked_reason": null
+      },
+
+      "seat_quota": {
+        "limit": 20, "used": 12, "suspended": 0, "remaining": 8,
+        "unlimited": false, "is_full": false, "over_by": 0, "is_over_limit": false, "percent": 60, "pack_size": 5
+      },
+
+      "package_renewal": {
+        "has_renewed": true, "can_renew_on_mobile": false, "renew_channel": "web_only",
+        "message": "บริษัทของคุณใช้แพ็กเกจ Basic แล้ว การต่ออายุหรือเพิ่มผู้ใช้ทำได้ผ่านเว็บไซต์เท่านั้น",
+        "pricing_url": "https://<company>.followonecrm.com/pricing"
+      },
+
+      "pricing": {
+        "trial": { "days": 60, "label": "2 เดือน", "max_users": 10 },
+        "pack": { "size": 5, "price_monthly": 199, "price_per_user_monthly": 39.8 },
+        "cycles": [
+          { "cycle": "monthly", "label": "รายเดือน", "unit": "เดือน", "months": 1, "billed_months": 1, "free_months": 0, "days": 30, "pack_price": 199, "pack_price_full": 199 }
+        ],
+        "max_seats_per_order": 999,
+        "test_flat_amount": null
+      },
+      "pricing_url": "https://<company>.followonecrm.com/pricing",
+      "plan_change": { "locked": true, "opens_at": "2026-11-15", "window_days": 7 },
+      "current_cycle": { "started_at": "2026-10-22", "last_day": "2026-11-21", "total_days": 31 },
+      "next_cycle": null,
+
+      "is_admin": true,
+      "notice": null
+    }
+  }
+  ```
+
+  ---
+
+  ## ฟิลด์ที่เพิ่มเข้ามา
+
+  ### `usage` — ตัวนับวันใช้งาน
+
+  | ฟิลด์ | ความหมาย |
+  |---|---|
+  | `days_used` | ใช้งานมาแล้วกี่วัน นับจาก `subscription_started_at` (ไม่เกิน `total_days`) |
+  | `total_days` | ระยะเวลาทั้งหมดของแพ็กเกจ — `60` ช่วงทดลอง (2 เดือน), 28–31 รายเดือน (ตามปฏิทิน), **`null` = ไม่มีวันหมดอายุ** (standalone) |
+  | `days_left` | เหลืออีกกี่วัน (ไม่ติดลบ) — `null` เมื่อไม่มีวันหมดอายุ |
+  | `percent` | เปอร์เซ็นต์ที่ใช้ไป (0–100) เอาไปวาด progress bar ได้เลย |
+  | `days_used_label` | `days_used` แบบพร้อมแสดง — ไม่ถึงปีเป็นวัน (`"11 วัน"`) ตั้งแต่ 365 วันนับเป็นปี (`"1 ปี"`, `"1 ปี 2 เดือน"`) |
+  | `total_label` | `total_days` แบบพร้อมแสดง กติกาเดียวกัน เช่น `"30 วัน"`, `"1 ปี"`, `"3 ปี 1 เดือน"` — `null` เมื่อไม่มีวันหมดอายุ |
+  | `text` | ข้อความพร้อมแสดง = `days_used_label / total_label` เช่น `"11 วัน / 1 ปี"` หรือ `"ใช้งานมาแล้ว 23 วัน"` ถ้าไม่มีวันหมดอายุ |
+
+  > กติกาแปลงวัน→ปี (`Tenant::formatDuration()`): ต่ำกว่า 365 วันแสดงเป็นวัน, ตั้งแต่ 365 วันขึ้นไปแสดงเป็นปี เศษที่ครบ 30 วันต่อท้ายเป็นเดือน เศษวันที่ไม่ถึงเดือนตัดทิ้ง (ตัวเลขละเอียดยังอยู่ใน `days_used` / `total_days`)
+
+  > ตัวเลขชุดนี้คำนวณจาก `Tenant::daysUsedInPlan()` / `Tenant::planTotalDays()` **ตัวเดียวกับที่ navbar ฝั่งเว็บใช้** จึงตรงกันเสมอ
+
+  ### `features` — สิทธิ์ใช้ฟีเจอร์
+
+  | ฟิลด์ | ความหมาย |
+  |---|---|
+  | `can_create_quotation` | `false` = ห้ามเปิดใบเสนอราคาใหม่ |
+  | `can_create_appointment` | `false` = ห้ามสร้างนัดหมายใหม่ |
+  | `blocked_reason` | ข้อความไทยพร้อมแสดง — `null` เมื่อยังใช้ได้ปกติ |
+
+  เป็น `false` เมื่อ **เลยวันหมดอายุแล้วและยังไม่ต่อแพ็กเกจ** (`days_remaining < 0`)
+
+  - ช่วงทดลอง → `"หมดช่วงทดลองใช้งานแล้ว กรุณาต่ออายุแพ็กเกจเพื่อใช้งานต่อ"`
+  - แพ็กเกจเสียเงิน → `"แพ็กเกจหมดอายุแล้ว กรุณาต่ออายุเพื่อใช้งานต่อ"`
+
+  ### `seat_quota` — โควตาผู้ใช้
+
+  ชุดเดียวกับ `seats` ของ `GET /api/v1/seats` — `limit` คือจำนวนบัญชีที่เปิดได้
+  (Basic = ที่นั่งที่ซื้อไว้ · ทดลองใช้ฟรี = `pricing.trial.max_users` · `unlimited: true` = standalone)
+  `pack_size` = ซื้อ/เพิ่มผู้ใช้ได้ทีละกี่คน (5)
+
+  ### `package_renewal` — ต่ออายุแพ็กเกจผ่านแอปได้ไหม (เพิ่ม 29/10/2569)
+
+  กติกา: **ซื้อ/ต่ออายุผ่านแอปได้เฉพาะบริษัทที่ยังใช้ Free และไม่เคยใช้ Basic เลย** —
+  ต่ออายุครั้งแรกแล้ว (ไม่ว่าผ่านแอปหรือเว็บ) ครั้งต่อไปทั้งต่ออายุและเพิ่มผู้ใช้ทำได้ผ่านเว็บเท่านั้น
+
+  | ฟิลด์ | ชนิด | ความหมาย |
+  |---|---|---|
+  | `has_renewed` | bool | `false` = ยังไม่เคยต่ออายุแพ็กเกจ (ใช้ Free มาตลอด) · `true` = เคยใช้ Basic แล้ว (รวมที่หมดอายุไปแล้ว) |
+  | `can_renew_on_mobile` | bool | `true` = โชว์ปุ่มซื้อในแอปได้ · `false` = ซ่อนปุ่มซื้อ/เพิ่มผู้ใช้ แล้วพาไปเว็บ |
+  | `renew_channel` | string | `mobile_or_web` / `web_only` |
+  | `message` | string \| null | ข้อความพร้อมแสดงเมื่อ `can_renew_on_mobile = false` |
+  | `pricing_url` | string | หน้าแพ็กเกจบนเว็บ ใช้เปิดเมื่อ `web_only` |
+
+  ตัวอย่าง:
+  - **บริษัท A** ใช้ฟรีครบ 2 เดือน → `can_renew_on_mobile: true` ต่ออายุผ่านแอปได้ → รอบต่อไปเป็น Basic แล้ว → `web_only`
+  - **บริษัท B** ใช้ฟรีครบ 2 เดือน แล้วต่ออายุผ่านเว็บ → `web_only` ตั้งแต่นั้น ต่อผ่านแอปไม่ได้อีก
+
+  ถ้าแอปยังยิง `subscription/orders` หรือ `orders/seats` ทั้งที่เป็น `web_only` จะได้ `403 mobile_purchase_not_allowed`
+  `null` = บริษัทโหมด standalone
+
+
+  ### `pricing` — แพ็กเกจที่ขายอยู่
+
+  ตัวเลขชุดเดียวกับหน้า `/pricing` บนเว็บ (`SeatPricingService::catalog()`) ค่าตั้งได้ที่หลังบ้าน Central → จัดการแพ็กเกจ
+
+  | ฟิลด์ | ความหมาย |
+  |---|---|
+  | `trial.days` / `trial.label` / `trial.max_users` | ทดลองใช้ฟรีกี่วัน · ข้อความพร้อมแสดง (`"2 เดือน"`) · ผู้ใช้สูงสุด |
+  | `pack.size` | จำนวนผู้ใช้ต่อ 1 แพ็ก — **ซื้อ/เพิ่มผู้ใช้ได้ทีละแพ็กเท่านั้น** (5, 10, 15 …) |
+  | `pack.price_monthly` | ราคา 1 แพ็ก / เดือน (บาท) |
+  | `pack.price_per_user_monthly` | ตกคนละกี่บาท / เดือน (ไว้โชว์เฉย ๆ ห้ามเอาไปคูณคิดยอด) |
+  | `cycles[]` | รอบบิลที่ขาย — **มีแค่ `monthly`** ตั้งแต่ 2026-10-29 (ตัด `semiannual` / `yearly` ออก) |
+  | `cycles[].pack_price` | ราคา 1 แพ็ก ต่อรอบบิล = `price_monthly × billed_months` · `pack_price_full` เท่ากันเพราะไม่มีส่วนลดรอบยาวแล้ว |
+  | `max_seats_per_order` | เพดานกันพิมพ์ผิดต่อ 1 ออเดอร์ |
+  | `test_flat_amount` | โหมดทดสอบการชำระเงิน — ถ้าไม่ใช่ `null` ทุกออเดอร์จะเรียกเก็บยอดนี้ (บาท) แทนราคาจริง แอปควรโชว์ยอดนี้เป็นยอดที่ต้องจ่าย · ตั้งผ่าน `PRICING_TEST_FLAT_AMOUNT` ใน `.env` ของเว็บ |
+
+  ยอดรวมที่ต้องจ่าย = `(จำนวนผู้ใช้ ÷ pack.size) × cycles[].pack_price` — ยอดจริงเซิร์ฟเวอร์คิดใหม่ตอนชำระเงินเสมอ
+  ซื้อผ่านแอปได้เฉพาะเมื่อ `package_renewal.can_renew_on_mobile = true` ไม่งั้นต้องชำระบนเว็บ (`pricing_url`)
+
+  ### `plan_change` — ซื้อ/ต่อแพ็กเกจ (เลือกรอบบิล) ได้ตอนนี้ไหม
+
+  | ฟิลด์ | ความหมาย |
+  |---|---|
+  | `locked` | `true` = อยู่กลางรอบของแพ็กเกจที่จ่ายแล้ว → **เพิ่มได้แค่ที่นั่ง** (`POST subscription/orders/seats`) ในรอบบิลเดิม (`billing_cycle`) ปุ่มรอบบิลอื่นต้องปิด · `POST subscription/orders` จะตอบ `422 plan_change_locked` |
+  | `opens_at` | วันแรกที่เปลี่ยนรอบบิล/ต่ออายุได้ (`YYYY-MM-DD`) · `null` เมื่อไม่ล็อก |
+  | `window_days` | เปิดให้เลือกรอบบิลเมื่อเหลือไม่เกินกี่วันก่อนหมดอายุ (7) |
+
+  ### รอบบิลตามปฏิทิน — `current_cycle` / `next_cycle`
+
+  รอบนับตามปฏิทิน: สมัคร 22/10 รายเดือน → ใช้ได้ถึง 21/11 (วันที่สมัคร = วันตัดรอบประจำ) · ขายรายเดือนอย่างเดียว
+  เพิ่มผู้ใช้กลางรอบ: ที่นั่งที่เพิ่มหมดอายุพร้อมรอบเดิม และจ่ายตามวันที่เหลือ (รอบหมด 31 เพิ่มวันที่ 29 = 3 วัน)
+  `subscription_ends_at` = วันเริ่มรอบถัดไป (ไม่รวม) — วันสุดท้ายที่ใช้ได้คือวันก่อนหน้านั้น (`current_cycle.last_day`)
+
+  | ฟิลด์ | ความหมาย |
+  |---|---|
+  | `current_cycle.started_at` / `last_day` / `total_days` | รอบที่กำลังใช้ (รวมวันแรกและวันสุดท้าย เช่น 22/10–21/11 = 31 วัน) |
+  | `next_cycle` | ต่ออายุตอนแพ็กเกจเดิมยังไม่หมด = จ่ายค่ารอบถัดไปล่วงหน้า · `seats` / `billing_cycle` ใหม่มีผลเมื่อถึง `starts_at` (ไม่มีการลดผู้ใช้ระหว่างรอบ) · `null` = ไม่มี |
+
+  ลดผู้ใช้ในรอบถัดไป: เมื่อรอบใหม่เริ่ม ถ้าบัญชีใช้งานเกินจำนวนใหม่ ด่านโควตาจะให้แอดมินเลือกบัญชีที่จะคงไว้ (`GET/POST seats`)
+  ซื้อผู้ใช้เพิ่มกลางรอบบนเว็บคิด prorate: `ราคาบล็อก × จำนวนบล็อก × วันที่เหลือ ÷ วันทั้งรอบ` (ผ่านแอป/ร้านค้าคิดเต็มบล็อก)
+
+  ### ฟิลด์อื่นที่เพิ่ม
+
+  | ฟิลด์ | ความหมาย |
+  |---|---|
+  | `plan` | ค่าเชิงระบบ ใช้เขียนเงื่อนไขในโค้ด: `free` / `basic` / `standalone` |
+  | `plan_label` | ป้ายอังกฤษคงรูป: `Free` / `Basic` / `Pro` / `Standalone` |
+  | `plan_label_display` | **ป้ายสำหรับโชว์ผู้ใช้** — แผนฟรีเป็น `ทดลอง` นอกนั้นเหมือน `plan_label` |
+  | `is_paid_plan` | ใช้แพ็กเกจ Basic อยู่ (มีที่นั่งที่ซื้อไว้ รวมที่หมดอายุแล้ว) · ต่างจาก `package_renewal.has_renewed` ที่นับออเดอร์ที่เคยจ่ายด้วย |
+  | `is_trial` | `true` = ยังอยู่ช่วงทดลองใช้ฟรี |
+  | `billing_cycle` | รอบบิล: `monthly` (นับตามปฏิทินจากวันสมัคร) · `null` = ยังไม่มีแพ็กเกจรายที่นั่ง |
+  | `price` | ราคา snapshot ของแพ็กเกจ (บาท) |
+  | `subscription_started_at` | วันเริ่มนับ (ถ้าไม่มีจะถอยไปใช้วันที่สร้างบริษัท) |
+
+  ---
+
+  ## พฤติกรรมตรงเส้นแบ่ง
+
+  ทดสอบแล้วกับทุกกรณี
+
+  | สถานการณ์ | `days_used` | `days_left` | สร้างใบเสนอราคา/นัดหมาย |
+  |---|---:|---:|:---:|
+  | ทดลองใช้ (60 วัน) วันที่ 11 | 11 | 49 | ✅ |
+  | ทดลองใช้ **วันที่ 60 (วันสุดท้าย)** | 60 | 0 | ✅ ยังใช้ได้ |
+  | ทดลองใช้ **เลย 1 วัน** | 60 | −1 | ❌ บล็อก |
+  | ทดลองใช้ เลย 7 วัน | 60 | −7 | ❌ บล็อก |
+  | Basic รายเดือน (31 วัน) หมดอายุ 1 วัน | 31 | −1 | ❌ บล็อก |
+  | Standalone (ไม่มีวันหมดอายุ) | 100 | `null` | ✅ ตลอด |
+
+  **วันสุดท้ายยังใช้ได้** — ทดลองใช้ฟรีบล็อกตั้งแต่วันที่ 61 เป็นต้นไป (ให้ใช้ครบ 60 วันเต็ม)
+
+  > ช่วงทดลองใช้ฟรีจำกัดผู้ใช้ **10 คน** (ตั้งได้ที่หลังบ้าน · `pricing.trial.max_users`) — ดูโควตาได้จาก `seat_quota` ในเส้นนี้ / ตอน login / `GET /api/v1/seats`
+
+  ---
+
+  ## วิธีใช้ในแอป
+
+  เรียกครั้งเดียวตอนเปิดแอป (หรือหลัง login) แล้วเก็บไว้ใน state
+
+  ```dart
+  final sub = await api.getSubscriptionStatus();
+
+  // แสดงแถบวันใช้งาน
+  Text(sub.usage.text);                        // "8 วัน / 31 วัน"
+  LinearProgressIndicator(value: sub.usage.percent / 100);
+
+  // ปิดปุ่มเมื่อหมดอายุ
+  if (!sub.features.canCreateQuotation) {
+    showDialog(message: sub.features.blockedReason);
+    return;
+  }
+
+  // ปุ่มต่ออายุ: ซื้อในแอปได้เฉพาะบริษัทที่ยังไม่เคยใช้ Basic
+  if (sub.packageRenewal.canRenewOnMobile) {
+    openStorePurchase();                       // POST subscription/orders
+  } else {
+    showMessage(sub.packageRenewal.message);
+    launchUrl(sub.packageRenewal.pricingUrl);  // ต่ออายุ / เพิ่มผู้ใช้บนเว็บ
+  }
+  ```
+
+  ควรเรียกซ้ำหลังผู้ใช้ต่อแพ็กเกจ หรือเมื่อแอปกลับมาจาก background ข้ามวัน (`days_used` เปลี่ยนตามวันที่)
+
+  ---
+
+  ## ⚠️ ข้อควรทราบ: ฝั่งเซิร์ฟเวอร์ยังไม่บังคับ
+
+  `features` เป็น **ธงให้แอปเอาไปปิด UI เท่านั้น** — endpoint สร้างใบเสนอราคาและนัดหมาย
+  **ยังรับ request ตามปกติ** แม้แพ็กเกจหมดอายุแล้ว
+
+  จงใจไม่บังคับที่เซิร์ฟเวอร์ เพราะ `Tenant::isAccessBlocked()` ถูกปิดไว้
+  ด้วยเหตุผลทางธุรกิจ (มีบริษัทที่เลย 14 วันไปแล้วแต่ยังต้องใช้งานต่อได้) การเปิดบังคับทันที
+  จะตัดการใช้งานของบริษัทเหล่านั้น
+
+  **ถ้าจะบังคับจริงในภายหลัง** ทำได้โดยเพิ่ม middleware ที่เช็ค `tenant()->isSubscriptionLapsed()`
+  แล้วผูกกับ route กลุ่มสร้างเอกสาร/นัดหมาย (ทั้ง `routes/route/quotation.php`,
+  `routes/route/relationshipDetail.php` และฝั่ง `routes/api/api_v1.php`) — ตรวจสอบก่อนว่ามี tenant
+  ไหนบ้างที่จะโดนผลกระทบ
+
+  ```bash
+  php artisan tinker
+  >>> App\Models\Tenant::all()->filter->isSubscriptionLapsed()->pluck('id');
+  ```

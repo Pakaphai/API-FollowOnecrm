@@ -1,7 +1,7 @@
 info:
   name: Integration-POS
   type: folder
-  seq: 99
+  seq: 20
 
 request:
   auth:
@@ -10,12 +10,14 @@ request:
     value: "{{pos_api_key}}"
     placement: header
 
-docs: |
-  # เชื่อมต่อระบบ POS (หน้าร้าน) — server-to-server
+docs:
+  content: |
+    # เชื่อมต่อระบบ POS (หน้าร้าน) — server-to-server
 
-  เส้นในโฟลเดอร์นี้ **ไม่ใช่ของแอปมือถือ** คนเรียกคือเซิร์ฟเวอร์ของระบบ POS
-  โค้ดฝั่ง Sale แยกไว้ที่ `routes/integration/pos.php` และ `app/Http/Controllers/Integration/Pos/`
+    เส้นในโฟลเดอร์นี้ **ไม่ใช่ของแอปมือถือ** คนเรียกคือเซิร์ฟเวอร์ของระบบ POS
+    โค้ดฝั่ง Sale แยกไว้ที่ `routes/integration/pos.php` และ `app/Http/Controllers/Integration/Pos/`
 
-  - ยืนยันตัวตนด้วยส่วนหัว `X-POS-Api-Key` (ค่าจาก `POS_API_KEY` ใน .env ของ Sale) ไม่ใช่ JWT
-  - ต้องยิงเข้า subdomain ของบริษัทเหมือน API อื่น เช่น `https://<code>.followonecrm.com`
-  - ตั้งค่า environment: เพิ่มตัวแปร `pos_api_key` (secret)
+    - ยืนยันตัวตนด้วยส่วนหัว `X-POS-Api-Key` (ค่าจาก `POS_API_KEY` ใน .env ของ Sale) ไม่ใช่ JWT
+    - ต้องยิงเข้า subdomain ของบริษัทเหมือน API อื่น เช่น `https://<code>.followonecrm.com`
+    - ตั้งค่า environment: เพิ่มตัวแปร `pos_api_key` (secret)
+  type: text/markdown
