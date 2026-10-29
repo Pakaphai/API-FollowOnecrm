@@ -11,7 +11,7 @@ http:
     data: |-
       {
         "platform": "app_store",
-        "extra_seats": 9
+        "extra_seats": 12
       }
   auth:
     type: bearer
@@ -49,7 +49,7 @@ docs: |
   | ฟิลด์ | ชนิด | บังคับ | กติกา |
   |---|---|:---:|---|
   | `platform` | string | ✅ | `google_play` / `app_store` |
-  | `extra_seats` | int | ✅ | จำนวนที่จะ**เพิ่ม** (ไม่ใช่ยอดรวม) · ลงตัวทีละแพ็ก (5, 10, 15 …) · ขั้นต่ำ 1 แพ็ก · สูงสุด 999 |
+  | `extra_seats` | int | ✅ | จำนวนที่จะ**เพิ่ม** (ไม่ใช่ยอดรวม) · ลงตัวทีละแพ็ก (3, 6, 9 …) · ขั้นต่ำ 1 แพ็ก · สูงสุด 999 |
 
   ที่นั่งเดิมและรอบบิล เซิร์ฟเวอร์อ่านจากบริษัทเอง (`tenant.seats`, `tenant.billing_cycle`)
 
@@ -76,8 +76,8 @@ docs: |
       "id": 43,
       "kind": "seats_addon",
       "status": "pending",
-      "seats": 15,
-      "extra_seats": 5,
+      "seats": 9,
+      "extra_seats": 3,
       "billing_cycle": "monthly",
       "amount": 199,
       "payment_method": "app_store",
@@ -85,7 +85,7 @@ docs: |
     },
     "purchase": {
       "platform": "app_store",
-      "product_id": "monthly_basic",
+      "product_id": "basic_monthly_pack",
       "quantity": 1,
       "account_token": "7b3e1d0a-…",
       "product_type": "consumable"
@@ -122,12 +122,11 @@ docs: |
   | 422 | `no_paid_plan` | ยังไม่มีแพ็กเกจ Basic (ทดลองใช้ฟรี / หมดอายุ / ไม่มีรอบบิล) | พาไป `create-order` แทน |
   | 422 | `product_unavailable` | ร้านไม่มีสินค้าของรอบบิลบริษัท หรือจำนวนชิ้นเกิน `max_quantity` | ให้เลือกจำนวนอื่น |
   | 422 | `quote_unavailable` | คิดราคาไม่ได้ | ติดต่อเจ้าหน้าที่ |
-  | 403 | `mobile_purchase_not_allowed` | บริษัทที่เพิ่มผู้ใช้ได้คือใช้ Basic อยู่แล้ว → เพิ่มผู้ใช้ผ่านแอปไม่ได้ ทำที่เว็บเท่านั้น | ซ่อนปุ่ม แล้วพาไป `package_renewal.pricing_url` |
   | 403 | `forbidden` | ไม่ใช่ level 0/1 | ซ่อนปุ่ม |
   | 404 | `not_found` | standalone | ซ่อนเมนู |
   | 503 | `store_unavailable` | ร้านยังไม่ได้ตั้งค่าฝั่งเซิร์ฟเวอร์ | ลองใหม่ภายหลัง |
 
-  ตัวอย่าง `message` validation: `เพิ่มผู้ใช้ได้ขั้นต่ำ 5 ผู้ใช้` · `เพิ่มได้ครั้งละไม่เกิน 999 คน หากต้องการมากกว่านี้ กรุณาติดต่อเจ้าหน้าที่`
+  ตัวอย่าง `message` validation: `เพิ่มผู้ใช้ได้ขั้นต่ำ 3 ผู้ใช้` · `เพิ่มได้ครั้งละไม่เกิน 999 คน หากต้องการมากกว่านี้ กรุณาติดต่อเจ้าหน้าที่`
 
   > เช็ก `is_paid_plan` จาก `subscription/status` ก่อนโชว์ปุ่ม "เพิ่มที่นั่ง" จะได้ไม่เจอ `no_paid_plan` ตอนกด
 

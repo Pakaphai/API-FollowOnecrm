@@ -1,9 +1,9 @@
 name: sale - Copy
 variables:
   - name: sale_uat
-    value: http://sunnypop.localhost:8000
+    value: http://sakuraya.localhost:8000
   - name: sale_uat_loc
-    value: http://sunnypop.localhost:8000
+    value: http://sakuraya.localhost:8000
   - name: sale
     value: https://jiwonmeaosomzaa.followonecrm.com
   - secret: true

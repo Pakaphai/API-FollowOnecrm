@@ -23,7 +23,7 @@ docs: |
   และเช็คว่าหมดช่วงทดลองใช้แล้วหรือยัง เพื่อปิดปุ่มสร้างใบเสนอราคา / นัดหมาย
 
   **อัปเดต 29/10/2569:** แพ็กละ **5 ผู้ใช้** · ขาย**รายเดือนอย่างเดียว** (ตัด `semiannual` / `yearly`) · ทดลองใช้ฟรี **60 วัน**
-  · เพิ่ม `seat_quota.pack_size` และ `package_renewal` (ต่ออายุผ่านแอปได้เฉพาะบริษัทที่ยังไม่เคยใช้ Basic)
+  · เพิ่ม `seat_quota.pack_size` และ `package_renewal` (ต่ออายุผ่านแอปเป็นแพ็กเกจ 10 ผู้ใช้ ได้เมื่อมีผู้ใช้งานไม่เกิน 10 คน · เพิ่มผู้ใช้ผ่านแอปไม่ได้)
 
   **อัปเดต 16/10/2569:** เส้นนี้**ยกเว้นจากด่าน `403 subscription_expired`** แล้ว (เช่นเดียวกับ `subscription/products` และ `subscription/orders*`)
   บริษัทที่หมดอายุเกิน 3 วันจึงเรียกได้ → เมื่อ `is_blocked: true` ให้แสดงหน้าต่ออายุด้วยข้อมูลจาก response นี้
@@ -80,8 +80,8 @@ docs: |
       },
 
       "package_renewal": {
-        "has_renewed": true, "can_renew_on_mobile": false, "renew_channel": "web_only",
-        "message": "บริษัทของคุณใช้แพ็กเกจ Basic แล้ว การต่ออายุหรือเพิ่มผู้ใช้ทำได้ผ่านเว็บไซต์เท่านั้น",
+        "has_renewed": true, "can_renew_on_mobile": true, "can_add_seats_on_mobile": false,
+        "mobile_seats": 10, "active_users": 7, "renew_channel": "mobile_or_web", "message": null,
         "pricing_url": "https://<company>.followonecrm.com/pricing"
       },
 
@@ -144,24 +144,29 @@ docs: |
   (Basic = ที่นั่งที่ซื้อไว้ · ทดลองใช้ฟรี = `pricing.trial.max_users` · `unlimited: true` = standalone)
   `pack_size` = ซื้อ/เพิ่มผู้ใช้ได้ทีละกี่คน (5)
 
-  ### `package_renewal` — ต่ออายุแพ็กเกจผ่านแอปได้ไหม (เพิ่ม 29/10/2569)
+  ### `package_renewal` — ต่ออายุแพ็กเกจผ่านแอปได้ไหม (ปรับกติกา 29/10/2569)
 
-  กติกา: **ซื้อ/ต่ออายุผ่านแอปได้เฉพาะบริษัทที่ยังใช้ Free และไม่เคยใช้ Basic เลย** —
-  ต่ออายุครั้งแรกแล้ว (ไม่ว่าผ่านแอปหรือเว็บ) ครั้งต่อไปทั้งต่ออายุและเพิ่มผู้ใช้ทำได้ผ่านเว็บเท่านั้น
+  กติกา:
+  - ต่ออายุผ่านแอปเป็น**แพ็กเกจ 10 ผู้ใช้เสมอ** (`mobile_seats`) — แอปส่ง `seats: 10` ไปที่ `subscription/orders`
+  - **แพ็กเกจเกิน 10 ที่นั่ง** (แม้ใช้งานจริงไม่ถึง) หรือ**ผู้ใช้งานเกิน 10 คน** (`active_users`) → ต่ออายุผ่านเว็บเท่านั้น
+  - **เพิ่มผู้ใช้ผ่านแอปไม่ได้ทุกกรณี** → ทำบนเว็บเท่านั้น
 
   | ฟิลด์ | ชนิด | ความหมาย |
   |---|---|---|
-  | `has_renewed` | bool | `false` = ยังไม่เคยต่ออายุแพ็กเกจ (ใช้ Free มาตลอด) · `true` = เคยใช้ Basic แล้ว (รวมที่หมดอายุไปแล้ว) |
-  | `can_renew_on_mobile` | bool | `true` = โชว์ปุ่มซื้อในแอปได้ · `false` = ซ่อนปุ่มซื้อ/เพิ่มผู้ใช้ แล้วพาไปเว็บ |
+  | `has_renewed` | bool | เคยใช้ Basic แล้วหรือยัง (ไว้แสดงข้อมูล ไม่ได้ใช้ตัดสินสิทธิ์) |
+  | `can_renew_on_mobile` | bool | `true` = โชว์ปุ่มต่ออายุในแอปได้ · `false` = ซ่อนปุ่ม แล้วพาไปเว็บ |
+  | `can_add_seats_on_mobile` | bool | `false` เสมอ — ซ่อนปุ่ม "เพิ่มผู้ใช้" ในแอป |
+  | `mobile_seats` | int | จำนวนผู้ใช้ของแพ็กเกจที่ต่อผ่านแอป = `10` ตายตัว (ไม่ต้องมี stepper) |
+  | `active_users` | int | บัญชีที่ใช้งานอยู่ตอนนี้ — เกิน `mobile_seats` ต่อผ่านแอปไม่ได้ |
   | `renew_channel` | string | `mobile_or_web` / `web_only` |
   | `message` | string \| null | ข้อความพร้อมแสดงเมื่อ `can_renew_on_mobile = false` |
-  | `pricing_url` | string | หน้าแพ็กเกจบนเว็บ ใช้เปิดเมื่อ `web_only` |
+  | `pricing_url` | string | หน้าแพ็กเกจบนเว็บ ใช้เปิดเมื่อ `web_only` หรือเมื่อต้องการเพิ่มผู้ใช้ |
 
   ตัวอย่าง:
-  - **บริษัท A** ใช้ฟรีครบ 2 เดือน → `can_renew_on_mobile: true` ต่ออายุผ่านแอปได้ → รอบต่อไปเป็น Basic แล้ว → `web_only`
-  - **บริษัท B** ใช้ฟรีครบ 2 เดือน แล้วต่ออายุผ่านเว็บ → `web_only` ตั้งแต่นั้น ต่อผ่านแอปไม่ได้อีก
+  - ทดลองใช้ฟรี / Basic ที่มีผู้ใช้งาน 7 คน → ต่อผ่านแอปได้ ได้แพ็กเกจ 10 ผู้ใช้
+  - มีผู้ใช้งาน 11 คนขึ้นไป หรือแพ็กเกจ 15 ที่นั่ง (แม้ใช้งาน 6 คน) → `web_only`
 
-  ถ้าแอปยังยิง `subscription/orders` หรือ `orders/seats` ทั้งที่เป็น `web_only` จะได้ `403 mobile_purchase_not_allowed`
+  Error จากแอป: `403 mobile_purchase_not_allowed` (แพ็กเกจหรือผู้ใช้งานเกิน 10) · `422 mobile_seats_fixed` (ส่ง `seats` ไม่ใช่ 10) · `403 mobile_add_seats_not_allowed` (ยิง `orders/seats`)
   `null` = บริษัทโหมด standalone
 
 
@@ -178,7 +183,7 @@ docs: |
   | `cycles[]` | รอบบิลที่ขาย — **มีแค่ `monthly`** ตั้งแต่ 2026-10-29 (ตัด `semiannual` / `yearly` ออก) |
   | `cycles[].pack_price` | ราคา 1 แพ็ก ต่อรอบบิล = `price_monthly × billed_months` · `pack_price_full` เท่ากันเพราะไม่มีส่วนลดรอบยาวแล้ว |
   | `max_seats_per_order` | เพดานกันพิมพ์ผิดต่อ 1 ออเดอร์ |
-  | `test_flat_amount` | โหมดทดสอบการชำระเงิน — ถ้าไม่ใช่ `null` ทุกออเดอร์จะเรียกเก็บยอดนี้ (บาท) แทนราคาจริง แอปควรโชว์ยอดนี้เป็นยอดที่ต้องจ่าย · ตั้งผ่าน `PRICING_TEST_FLAT_AMOUNT` ใน `.env` ของเว็บ |
+  | `test_flat_amount` | **เลิกใช้แล้ว** (29/10/2569) — เป็น `null` เสมอ ทุกออเดอร์คิดราคาจริง · คงคีย์ไว้ให้แอปรุ่นที่ยังอ่านฟิลด์นี้ ลบออกจากแอปได้ |
 
   ยอดรวมที่ต้องจ่าย = `(จำนวนผู้ใช้ ÷ pack.size) × cycles[].pack_price` — ยอดจริงเซิร์ฟเวอร์คิดใหม่ตอนชำระเงินเสมอ
   ซื้อผ่านแอปได้เฉพาะเมื่อ `package_renewal.can_renew_on_mobile = true` ไม่งั้นต้องชำระบนเว็บ (`pricing_url`)
@@ -256,7 +261,7 @@ docs: |
     return;
   }
 
-  // ปุ่มต่ออายุ: ซื้อในแอปได้เฉพาะบริษัทที่ยังไม่เคยใช้ Basic
+  // ปุ่มต่ออายุ: ต่อในแอปเป็นแพ็กเกจ mobileSeats (10) ผู้ใช้ เมื่อผู้ใช้งานไม่เกิน 10 คน · ปุ่มเพิ่มผู้ใช้ซ่อนเสมอ
   if (sub.packageRenewal.canRenewOnMobile) {
     openStorePurchase();                       // POST subscription/orders
   } else {

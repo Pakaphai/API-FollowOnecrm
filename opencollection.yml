@@ -46,17 +46,17 @@ docs:
     | [order-edit-status-impact.md](order-edit-status-impact.md) | เปิดปุ่มแก้ไขทุกสถานะ — ผลกระทบและแนวทางแก้ |
     | [api-subscription-purchase.md](api-subscription-purchase.md) | **ซื้อแพ็กเกจ / ที่นั่งเพิ่มจากแอป — Google Play Billing (Android) · Apple In-App Purchase/StoreKit 2 (iOS)** |
 
-    ## อัปเดต 29/10/2569 — แพ็กละ 5 ผู้ใช้ · รายเดือนอย่างเดียว · รหัสสินค้าใหม่ `monthly_basic`
+    ## อัปเดต 29/10/2569 — แพ็กละ 5 ผู้ใช้ · รายเดือนอย่างเดียว · รหัสสินค้าใหม่ `monthly_basic_5`
 
     | เรื่อง | เดิม | ใหม่ |
     |---|---|---|
-    | `product_id` | `basic_monthly` / `basic_semiannual` / `basic_yearly` | **`monthly_basic`** ตัวเดียว ทุกเส้น (products, create-order, add-seats, order-status, verify) |
-    | สินค้าในร้าน | 3 ตัว (1 แพ็ก = 3 ผู้ใช้) | สร้างใหม่ 1 ตัว `monthly_basic` = 1 แพ็ก = **5 ผู้ใช้** ราคา rate card 199 ทั้ง Play Console และ App Store Connect (Consumable) · ชื่อเก่าเซิร์ฟเวอร์ไม่รับแล้ว ปิดการขายได้ |
+    | `product_id` | `basic_monthly` / `basic_semiannual` / `basic_yearly` | **`monthly_basic_5`** ตัวเดียว ทุกเส้น (products, create-order, add-seats, order-status, verify) |
+    | สินค้าในร้าน | 3 ตัว (1 แพ็ก = 3 ผู้ใช้) | สร้างใหม่ 1 ตัว `monthly_basic_5` = 1 แพ็ก = **5 ผู้ใช้** ราคา rate card 199 ทั้ง Play Console และ App Store Connect (Consumable) · ชื่อเก่าเซิร์ฟเวอร์ไม่รับแล้ว ปิดการขายได้ |
     | `billing_cycle` | `monthly` / `semiannual` / `yearly` | **`monthly` เท่านั้น** — ส่งรอบอื่นได้ 422 · เอาตัวเลือก 6 เดือน / รายปี ออกจากแอป |
     | `pack_size` | 3 (3, 6, 9 …) | **5** (5, 10, 15 …) |
-    | iOS สูงสุดต่อออเดอร์ | 10 ชิ้น = 30 ผู้ใช้ | 10 ชิ้น = **50 ผู้ใช้** |
+    | `max_quantity` (ทั้งสองร้าน) | Google 99 · Apple 10 | **2** = ซื้อได้ครั้งละไม่เกิน 2 แพ็ก (10 ผู้ใช้) |
     | ทดลองใช้ฟรี | 30 วัน | **60 วัน** (2 เดือน) ผู้ใช้สูงสุด 10 คน |
-    | ต่ออายุผ่านแอป | ได้ทุกบริษัท | **ได้เฉพาะบริษัทที่ยังไม่เคยใช้ Basic** (ครั้งแรกจาก Free) · ดู `package_renewal` ใน login / subscription/status · ไม่ผ่านได้ `403 mobile_purchase_not_allowed` |
+    | ต่ออายุผ่านแอป | ได้ทุกบริษัท | **ต่อเป็นแพ็กเกจ 10 ผู้ใช้เสมอ** ได้เมื่อแพ็กเกจไม่เกิน 10 ที่นั่งและผู้ใช้งานไม่เกิน 10 คน · เกินนั้นต่อได้แค่เว็บ · **เพิ่มผู้ใช้ผ่านแอปไม่ได้** (`orders/seats` ตอบ 403) · ดู `package_renewal` ใน subscription/status |
     | `add-seats` กลางรอบ | — | ที่นั่งที่เพิ่มหมดอายุพร้อมรอบเดิม (ร้านค้าแอปคิดเต็มแพ็ก) |
 
     ## อัปเดต 26/10/2569 — iOS ซื้อหลายชิ้นได้ (สินค้า Consumable) · ปรับ `subscription/products`

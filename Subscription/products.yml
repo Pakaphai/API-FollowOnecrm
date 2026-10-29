@@ -46,17 +46,17 @@ docs: |
       "google_play": {
         "price_markup_percent": 0,
         "product_type": "consumable",
-        "max_quantity": 99,
+        "max_quantity": 2,
         "products": [
-          { "product_id": "monthly_basic", "billing_cycle": "monthly", "packs": 1, "seats": 5, "rate_card_price": 199, "reference_price": 199 }
+          { "product_id": "monthly_basic_5", "billing_cycle": "monthly", "packs": 1, "seats": 5, "rate_card_price": 199, "reference_price": 199 }
         ]
       },
       "app_store": {
         "price_markup_percent": 0,
         "product_type": "consumable",
-        "max_quantity": 10,
+        "max_quantity": 2,
         "products": [
-          { "product_id": "monthly_basic", "billing_cycle": "monthly", "packs": 1, "seats": 5, "rate_card_price": 199, "reference_price": 199 }
+          { "product_id": "monthly_basic_5", "billing_cycle": "monthly", "packs": 1, "seats": 5, "rate_card_price": 199, "reference_price": 199 }
         ]
       }
     }
@@ -70,8 +70,8 @@ docs: |
   | `pack_size` | int | ผู้ใช้ต่อ 1 แพ็ก (ตั้งที่หลังบ้าน `packages.seats_per_pack` ของ Basic · ค่าเริ่มต้น 5) ใช้เป็นขั้นของ stepper เลือกจำนวนผู้ใช้ |
   | `stores.<platform>.price_markup_percent` | float | % ที่บวกจาก rate card ใน `reference_price` · ตอนนี้ `0` ทั้งสองร้าน |
   | `stores.<platform>.product_type` | string | ชนิดสินค้าในร้าน · `consumable` ทั้งสองร้าน (App Store ตั้งแต่ 26/10/2569) = ส่งจำนวนชิ้นไปกับคำสั่งซื้อได้ |
-  | `stores.<platform>.max_quantity` | int | จำนวนชิ้นสูงสุดที่ร้านนั้นยอมให้ซื้อต่อครั้ง · Google 99 · Apple 10 (ข้อจำกัดของ Apple consumable) |
-  | `products[].product_id` | string | รหัสสินค้าในร้าน (`monthly_basic` — ตั้งแต่ 29/10/2569) — ต้องสร้างให้ตรงกันใน Play Console / App Store Connect |
+  | `stores.<platform>.max_quantity` | int | จำนวนชิ้นสูงสุดต่อการซื้อ 1 ครั้ง · **2 ทั้งสองร้าน** (ตั้งแต่ 29/10/2569) = ซื้อได้ครั้งละไม่เกิน 2 แพ็ก (10 ผู้ใช้) |
+  | `products[].product_id` | string | รหัสสินค้าในร้าน (`monthly_basic_5` — ตั้งแต่ 29/10/2569) — ต้องสร้างให้ตรงกันใน Play Console / App Store Connect |
   | `products[].billing_cycle` | string | รอบบิลที่สินค้านี้ให้ — `monthly` เท่านั้น |
   | `products[].packs` | int | 1 ชิ้นของสินค้านี้ = กี่แพ็ก (ตอนนี้ทุกตัว = 1) |
   | `products[].seats` | int | `packs × pack_size` = 1 ชิ้นได้ผู้ใช้กี่คน |
@@ -86,7 +86,7 @@ docs: |
   |---|:---:|:---:|:---:|
   | `monthly` | 1 เดือน | 1 เดือน | 199 |
 
-  ราคาแพ็ก/เดือนอ่านจาก `packages.price` ของ Basic ที่หลังบ้าน (บน UAT ตั้งไว้ 10 บาท จึงเห็น 10)
+  ราคาแพ็ก/เดือนอ่านจาก `packages.price` ของ Basic ที่หลังบ้าน (UAT ใช้ราคาจริง 199 แล้ว ตั้งแต่ 29/10/2569)
   **ราคาที่โชว์และเก็บจริงต้องเป็นของร้าน** ค่านี้มีไว้ให้ทีมเทียบว่าตั้งราคาในร้านตรงหรือยัง
 
   ---
@@ -100,8 +100,8 @@ docs: |
   3. เลือกตัวที่ต้องซื้อ**น้อยชิ้นที่สุด** และไม่เกิน `max_quantity` ของร้าน
   4. ไม่มีตัวไหนเข้าเงื่อนไข → `422 product_unavailable`
 
-  ตัวอย่าง (ทุกสินค้าเป็น 1 แพ็ก): 10 ผู้ใช้ = 2 แพ็ก → `monthly_basic × 2`
-  iOS (Consumable) ซื้อได้ไม่เกิน 10 ชิ้น = **50 ผู้ใช้ต่อออเดอร์** มากกว่านั้นได้ `product_unavailable` ต้องแยกซื้อหลายรอบ
+  ตัวอย่าง (ทุกสินค้าเป็น 1 แพ็ก): 10 ผู้ใช้ = 2 แพ็ก → `monthly_basic_5 × 2`
+  ทั้งสองร้านซื้อได้ครั้งละไม่เกิน 2 ชิ้น (`max_quantity = 2`) = **10 ผู้ใช้ต่อออเดอร์** · แอปต่ออายุเป็นแพ็กเกจ `package_renewal.mobile_seats` (10) ผู้ใช้เสมอ
 
   ---
 

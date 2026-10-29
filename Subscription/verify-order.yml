@@ -11,7 +11,7 @@ http:
     data: |-
       {
         "platform": "google_play",
-        "product_id": "monthly_basic",
+        "product_id": "monthly_basic_5",
         "purchase_token": "fake-token",
         "order_id": 16
       }
@@ -46,7 +46,7 @@ docs: |
 
   Android:
   ```json
-  { "platform": "google_play", "product_id": "monthly_basic", "purchase_token": "<Purchase.purchaseToken>", "order_id": 42 }
+  { "platform": "google_play", "product_id": "monthly_basic_5", "purchase_token": "<Purchase.purchaseToken>", "order_id": 42 }
   ```
 
   iOS:
@@ -117,6 +117,7 @@ docs: |
     },
     "purchase": {
       "platform": "google_play",
+      "product_id": "monthly_basic_5",
       "transaction_id": "GPA.3333-4444-5555-66666",
       "finish_transaction": false,
       "consumed": true
@@ -146,7 +147,7 @@ docs: |
     "success": true,
     "message": "ชำระเงินสำเร็จ ได้รับ 1 แพ็ก (5 ผู้ใช้) จากที่เลือกไว้ 2 แพ็ก (10 ผู้ใช้) เพราะจำนวนที่ชำระกับร้านต่างจากที่เลือก ซื้อเพิ่มได้จากหน้าจัดการที่นั่ง",
     "order": { "id": 42, "status": "paid", "seats": 5, "store_quantity": 1, "store_quantity_ordered": 2, "quantity_adjusted": true, "…": "…" },
-    "purchase": { "platform": "google_play", "finish_transaction": false, "consumed": true },
+    "purchase": { "platform": "google_play", "product_id": "monthly_basic_5", "finish_transaction": false, "consumed": true },
     "quantity_adjusted": true,
     "quantity": { "ordered": 2, "paid": 1, "ordered_seats": 6, "paid_seats": 3 }
   }
@@ -163,7 +164,7 @@ docs: |
     "code": "purchase_pending",
     "message": "ร้านค้ารับคำสั่งซื้อแล้ว กำลังรอการชำระเงิน — ระบบจะเปิดใช้งานให้เมื่อได้รับเงิน",
     "order": { "id": 42, "status": "pending", "is_final": false, "…": "…" },
-    "purchase": { "platform": "google_play", "finish_transaction": false, "consumed": false }
+    "purchase": { "platform": "google_play", "product_id": "monthly_basic_5", "finish_transaction": false, "consumed": false }
   }
   ```
 
