@@ -22,3 +22,77 @@ settings:
   timeout: 0
   followRedirects: true
   maxRedirects: 5
+
+docs: |-
+  ## 7. `POST /api/v1/connect/google` — เชื่อม / ยกเลิกการเชื่อมบัญชี
+
+  ต้องแนบ JWT ของ CRM (อยู่ใน `auth_api`) — ใช้เมื่อผู้ใช้ที่ login ด้วย username/password อยู่แล้ว อยากผูกบัญชี Google เข้ากับตัวเอง
+
+  ### เชื่อมบัญชี
+
+  ```bash
+  curl -s -X POST "$BASE/connect/google" \
+    -H "$AUTH" -H "Accept: application/json" -H "Content-Type: application/json" \
+    -d '{"id_token":"<Google ID Token>", "bukkhon_token":"<access_token จาก BukkhonID>"}'
+  ```
+
+  | ฟิลด์ | บังคับ | หมายเหตุ |
+  |---|:---:|---|
+  | `id_token` | ✅ | Google ID Token |
+  | `bukkhon_token` | | ถ้าส่งมา จะเรียก `/auth/google/link` ผูก Google เข้ากับบัญชี BukkhonID นั้นก่อน (**ล้มเหลวก็ทำงานต่อ** แค่เขียน log warning เผื่อเคยผูกไว้แล้ว) |
+  | `device_id` | | ไม่บังคับ |
+
+  ขั้นตอนภายใน:
+  1. (ถ้ามี `bukkhon_token`) `POST {BukkhonID}/api/v1/auth/google/link`
+  2. `POST {BukkhonID}/api/v1/auth/google/login` เพื่อดึง `bukkhon_id`
+  3. เช็คว่า `bukkhon_id` นี้ถูกใช้โดย user อื่นในบริษัทหรือยัง — **1 บัญชี Google ผูกได้กับ 1 user เท่านั้น**
+  4. บันทึก `bukkhon_id` ลง user ปัจจุบัน
+
+  ```json
+  {
+    "success": true,
+    "message": "เชื่อมต่อบัญชี Google สำเร็จ",
+    "bukkhon_id": "BK-xxxxx",
+    "access_token": "<access_token ของ BukkhonID>"
+  }
+  ```
+
+  | HTTP | เกิดเมื่อ |
+  |:---:|---|
+  | `401` | ไม่ได้แนบ JWT ของ CRM |
+  | `422` | ไม่ส่ง `id_token` (และไม่ได้ส่ง `bukkhon_id`) |
+  | `400` | BukkhonID ปฏิเสธ id_token / ไม่พบ `bukkhon_id` ใน response |
+  | `409` | `"บัญชี Google นี้ถูกเชื่อมกับผู้ใช้อื่นในระบบแล้ว"` |
+  | `500` | exception อื่น ๆ |
+
+  ### เชื่อมด้วยตั๋วจาก `proxy/auth/login` (ไม่มี `id_token`)
+
+  ใช้เมื่อผู้ใช้ล็อกอินบุคคล ID ด้วยอีเมล/รหัสผ่านผ่าน `POST /api/v1/proxy/auth/login` — คำตอบที่สำเร็จมีฟิลด์ **`link_ticket`** (เซิร์ฟเวอร์ออกให้เมื่อเห็นเองว่า BukkhonID ตอบล็อกอินสำเร็จ) ส่งตั๋วนั้นคู่กับ `bukkhon_id` ตัวเดียวกัน:
+
+  ```bash
+  curl -s -X POST "$BASE/connect/google" \
+    -H "$AUTH" -H "Accept: application/json" -H "Content-Type: application/json" \
+    -d '{"bukkhon_id": "B-7", "link_ticket": "<link_ticket จาก proxy/auth/login>"}'
+  ```
+
+  - ตั๋วมีอายุ **10 นาที** และใช้ได้กับ `bukkhon_id` ที่ออกให้เท่านั้น
+  - ส่ง `bukkhon_id` ที่ไม่ใช่ `null` โดยไม่มี `id_token` และไม่มีตั๋วที่ตรงกัน → **422** `{"success": false, "message": "การเชื่อมบัญชีต้องยืนยันด้วย Google id_token"}`
+  - `bukkhon_id` ถูกผู้ใช้อื่นใช้อยู่ → **409** เหมือนเชื่อมด้วย `id_token`
+
+  > **เปลี่ยนเมื่อ 10/11/2569** — เดิมรับ `bukkhon_id` อะไรก็ได้โดยไม่ต้องมีหลักฐาน ใครก็ผูก `bukkhon_id` ของคนอื่นเข้าบัญชีตัวเองได้ แล้วพอเจ้าของตัวจริงล็อกอินด้วย Google ก็จะเข้าบัญชีผู้นั้นแทน
+
+  ### ยกเลิกการเชื่อมต่อ
+
+  ส่ง `bukkhon_id: null` มาโดย **ไม่ต้องมี `id_token`**:
+
+  ```bash
+  curl -s -X POST "$BASE/connect/google" \
+    -H "$AUTH" -H "Accept: application/json" -H "Content-Type: application/json" \
+    -d '{"bukkhon_id": null}'
+  ```
+
+  ```json
+  { "success": true, "message": "ยกเลิกการเชื่อมต่อบัญชีแล้ว" }
+  ```
+
+  ---

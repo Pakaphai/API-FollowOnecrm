@@ -1,6 +1,6 @@
 name: sale-uat-jiwon
 variables:
   - name: sale_uat
-    value: https://jiwonmeaosommm.uat-followonecrm.com
+    value: https://integracore.uat-followonecrm.com
   - secret: true
     name: token

@@ -21,7 +21,7 @@ settings:
   followRedirects: true
   maxRedirects: 5
 
-docs: |
+docs: |-
   # API — เข้าสู่ระบบด้วย Google (ผ่าน BukkhonID)
 
   เข้าสู่ระบบด้วยบัญชี Google โดยใช้ **BukkhonID เป็นตัวกลางยืนยันตัวตน** แล้วออก JWT ของ CRM ให้เหมือน login ปกติ
@@ -259,14 +259,30 @@ docs: |
   | HTTP | เกิดเมื่อ |
   |:---:|---|
   | `401` | ไม่ได้แนบ JWT ของ CRM |
-  | `422` | ไม่ส่ง `id_token` |
+  | `422` | ไม่ส่ง `id_token` (และไม่ได้ส่ง `bukkhon_id`) |
   | `400` | BukkhonID ปฏิเสธ id_token / ไม่พบ `bukkhon_id` ใน response |
   | `409` | `"บัญชี Google นี้ถูกเชื่อมกับผู้ใช้อื่นในระบบแล้ว"` |
   | `500` | exception อื่น ๆ |
 
+  ### เชื่อมด้วยตั๋วจาก `proxy/auth/login` (ไม่มี `id_token`)
+
+  ใช้เมื่อผู้ใช้ล็อกอินบุคคล ID ด้วยอีเมล/รหัสผ่านผ่าน `POST /api/v1/proxy/auth/login` — คำตอบที่สำเร็จมีฟิลด์ **`link_ticket`** (เซิร์ฟเวอร์ออกให้เมื่อเห็นเองว่า BukkhonID ตอบล็อกอินสำเร็จ) ส่งตั๋วนั้นคู่กับ `bukkhon_id` ตัวเดียวกัน:
+
+  ```bash
+  curl -s -X POST "$BASE/connect/google" \
+    -H "$AUTH" -H "Accept: application/json" -H "Content-Type: application/json" \
+    -d '{"bukkhon_id": "B-7", "link_ticket": "<link_ticket จาก proxy/auth/login>"}'
+  ```
+
+  - ตั๋วมีอายุ **10 นาที** และใช้ได้กับ `bukkhon_id` ที่ออกให้เท่านั้น
+  - ส่ง `bukkhon_id` ที่ไม่ใช่ `null` โดยไม่มี `id_token` และไม่มีตั๋วที่ตรงกัน → **422** `{"success": false, "message": "การเชื่อมบัญชีต้องยืนยันด้วย Google id_token"}`
+  - `bukkhon_id` ถูกผู้ใช้อื่นใช้อยู่ → **409** เหมือนเชื่อมด้วย `id_token`
+
+  > **เปลี่ยนเมื่อ 10/11/2569** — เดิมรับ `bukkhon_id` อะไรก็ได้โดยไม่ต้องมีหลักฐาน ใครก็ผูก `bukkhon_id` ของคนอื่นเข้าบัญชีตัวเองได้ แล้วพอเจ้าของตัวจริงล็อกอินด้วย Google ก็จะเข้าบัญชีผู้นั้นแทน
+
   ### ยกเลิกการเชื่อมต่อ
 
-  ส่ง `bukkhon_id` มาโดย **ไม่ต้องมี `id_token`**:
+  ส่ง `bukkhon_id: null` มาโดย **ไม่ต้องมี `id_token`**:
 
   ```bash
   curl -s -X POST "$BASE/connect/google" \
@@ -288,25 +304,8 @@ docs: |
   **2. ไม่ได้ตรวจคอลัมน์ `status`**
   เหมือน `/login` — กรองแค่ `is_delete = 0` ผู้ใช้ที่ถูกปิดใช้งานด้วย `status = 0` จึงยัง login ได้ (ยกเว้นโหมด MOCK ที่กรอง `status = 1` ด้วย)
 
-  **3. เส้น unlink รับค่า `bukkhon_id` แบบไม่ validate**
-  ```php
-  if (!$request->filled('id_token') && $request->exists('bukkhon_id')) {
-      $user->bukkhon_id = $request->bukkhon_id;   // ← เขียนค่าอะไรก็ได้ลง DB
-      $user->save();
-  }
-  ```
-  เจตนาคือให้ส่ง `bukkhon_id = null` เพื่อยกเลิกการเชื่อมต่อ แต่โค้ดรับค่าอะไรก็ได้ และ**ข้ามการเช็คซ้ำในขั้นที่ 3** ผู้ใช้ที่ login อยู่จึงตั้ง `bukkhon_id` ของตัวเองให้เท่ากับของคนอื่นในบริษัทเดียวกันได้
-
-  ผลกระทบ: ตอน `loginWithGoogle` ค้นด้วย `WHERE email = ? OR bukkhon_id = ?` แล้ว `first()` — ถ้ามีสองแถวตรงเงื่อนไข ระบบอาจคืนแถวของผู้โจมตีแทนเจ้าของบัญชีจริง
-
-  วิธีปิด — บังคับให้ค่าเป็น `null` เท่านั้น:
-  ```php
-  if (!$request->filled('id_token') && $request->exists('bukkhon_id')) {
-      $user->bukkhon_id = null;   // unlink ได้อย่างเดียว ไม่ให้กำหนดค่าเอง
-      $user->save();
-      return response()->json(['success' => true, 'message' => 'ยกเลิกการเชื่อมต่อบัญชีแล้ว']);
-  }
-  ```
+  **3. ~~เส้น unlink รับค่า `bukkhon_id` แบบไม่ validate~~ — แก้แล้ว 10/11/2569**
+  ตอนนี้ส่งได้แค่ `bukkhon_id: null` (ยกเลิก) หรือ `bukkhon_id` คู่กับ `link_ticket` ที่ตรงกันจาก `proxy/auth/login` ค่าอื่นได้ 422 และค่าที่ผู้ใช้อื่นใช้อยู่ได้ 409
 
   **4. CRM เชื่อ email จาก BukkhonID โดยตรง**
   ไม่ได้ verify ลายเซ็น Google เอง — ความปลอดภัยของ flow นี้ขึ้นกับ BukkhonID ทั้งหมด ถ้า `EXTERNAL_API_URL` ถูกตั้งผิดไปชี้ปลายทางที่ไม่น่าเชื่อถือ จะกลายเป็นช่องเข้าระบบทันที **ตรวจค่านี้ใน `.env` ของทุก environment**

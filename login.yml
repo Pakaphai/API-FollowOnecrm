@@ -10,8 +10,8 @@ http:
     type: json
     data: |-
       {
-        "username": "sakuraya",
-        "password": "sakuraya"
+        "username": "integracore",
+        "password": "integracore"
       }
   auth: inherit
 

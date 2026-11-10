@@ -46,6 +46,19 @@ docs:
     | [order-edit-status-impact.md](order-edit-status-impact.md) | เปิดปุ่มแก้ไขทุกสถานะ — ผลกระทบและแนวทางแก้ |
     | [api-subscription-purchase.md](api-subscription-purchase.md) | **ซื้อแพ็กเกจ / ที่นั่งเพิ่มจากแอป — Google Play Billing (Android) · Apple In-App Purchase/StoreKit 2 (iOS)** |
 
+    ## อัปเดต 10/11/2569 — ตรวจสิทธิ์เจ้าของข้อมูล · การเชื่อมบัญชีต้องมีหลักฐาน
+
+    | เรื่อง | เดิม | ใหม่ |
+    |---|---|---|
+    | `POST connect/google` ส่ง `bukkhon_id` โดยไม่มี `id_token` | บันทึกค่าอะไรก็ได้ | ได้แค่ `null` (ยกเลิก) หรือคู่กับ `link_ticket` จาก `proxy/auth/login` (อายุ 10 นาที) · อื่น ๆ **422** |
+    | เส้นลูกค้า `customer/update/{id}` · `customer/delete/{id}` | เซลส์แก้/ลบลูกค้าของคนอื่นได้ | **403** ถ้าไม่ใช่ลูกค้าของตัวเอง · แอดมิน level 0/1 ทำแทนได้ |
+    | เส้นความสัมพันธ์ `customer/relationship/update|delete/{id}` · `customer/relationship/{id}` | ไม่ตรวจ | **403** แบบเดียวกัน |
+    | เส้นนัดหมาย `relationship-detail/edit-contact|update-contact|submit-contact|delete-contact/{id}` · `relationship-detail/{id}` | ไม่ตรวจ | **403** แบบเดียวกัน · update/submit ส่ง `customer_id` ของคนอื่นก็ 403 |
+    | `GET customer/relationship/{id}` | `relationship_details` + ยอดนับคืนทั้งบริษัท | เฉพาะลูกค้ารายนั้น |
+    | `DELETE relationship-detail/delete-contact/{id}` | ลบพ่วงนัดที่ `relationship_id` ตรงกับเลขนี้ | ลบเฉพาะนัดใบนั้น · ไม่ลบไฟล์รูป |
+
+    ก้อน 403 ของเส้นความสัมพันธ์/นัดหมาย: `{"success": false, "message": "คุณไม่มีสิทธิ์เข้าถึงบันทึกนี้"}` — แอปควรแสดง `message` แล้วพากลับหน้ารายการ ไม่ต้อง retry
+
     ## อัปเดต 29/10/2569 — แพ็กละ 5 ผู้ใช้ · รายเดือนอย่างเดียว · รหัสสินค้าใหม่ `monthly_basic`
 
     | เรื่อง | เดิม | ใหม่ |
@@ -261,7 +274,7 @@ docs:
     | | `GET` | `privacy-policy/v/{version}` | นโยบายความเป็นส่วนตัว ย้อนหลังตาม version |
     | 🔒 | `GET` | `logout` | ออกจากระบบ + เคลียร์ fcm_token |
     | 🔒 | `POST` | `update-password` | เปลี่ยนรหัสผ่าน |
-    | 🔒 | `POST` | `connect/google` | เชื่อม/ยกเลิกการเชื่อมบัญชี Google |
+    | 🔒 | `POST` | `connect/google` | เชื่อม/ยกเลิกการเชื่อมบัญชี Google · ผูกด้วย `bukkhon_id` ต้องมี `link_ticket` (ไม่งั้น 422) |
 
     ### ลืมรหัสผ่าน — `forgot-password/*`
 
@@ -473,7 +486,9 @@ docs:
     → `{success, message}` · ไม่บังคับกรอกรหัสเดิม
 
     ### `POST proxy/auth/login`
-    proxy ไป `{BUKKHONID_URL}/api/v1/auth/login` ตรง ๆ ด้วย `{email_or_phone, password, device_id?, program_code?}` แล้วคืน body ของ BukkhonID กลับมาทั้งก้อน (เติม `user.id`/`user.bukkhon_id` ให้ครบทั้งคู่) — **เส้นนี้ไม่ได้ออก JWT ของ CRM** ใช้ฝั่งเว็บ ไม่ใช่ mobile flow
+    proxy ไป `{BUKKHONID_URL}/api/v1/auth/login` ตรง ๆ ด้วย `{email_or_phone, password, device_id?, program_code?}` แล้วคืน body ของ BukkhonID กลับมาทั้งก้อน (เติม `user.id`/`user.bukkhon_id` ให้ครบทั้งคู่) — **เส้นนี้ไม่ได้ออก JWT ของ CRM**
+
+    ล็อกอินสำเร็จจะได้ฟิลด์ **`link_ticket`** เพิ่ม (อายุ 10 นาที) — ใช้ส่งคู่กับ `bukkhon_id` ที่ `connect/google` ถ้าจะผูกบัญชีโดยไม่มี Google `id_token`
 
     ---
 
@@ -686,9 +701,9 @@ docs:
     คืนเฉพาะลูกค้าที่ `user_id = ตัวเอง` เท่านั้น (ไม่ใช่ = **404**) → `{customer, user_id}` · มี `province_name`/`district_name`/`subdistrict_name`/`subdistrict_zip_code` + `credit_type_name` + `customer_scope_label`
 
     ### `DELETE customer/delete/{id}`
-    soft delete (`is_delete = true`) → `{success, message}`
+    soft delete (`is_delete = true`) → `{success, message}` · ไม่พบ/ลบไปแล้ว = **404**
 
-    > ⚠️ **ไม่เช็คความเป็นเจ้าของ** — ส่ง id ของลูกค้าเซลส์คนอื่นในบริษัทเดียวกันก็ลบได้
+    > 🔐 `customer/update/{id}` และ `customer/delete/{id}` ทำได้เฉพาะลูกค้าของตัวเอง แอดมิน level 0/1 ทำแทนได้ทุกราย · ไม่ใช่ = **403** `{success: false, message: "คุณไม่มีสิทธิ์แก้ไขลูกค้ารายนี้" | "คุณไม่มีสิทธิ์ลบลูกค้ารายนี้"}` (เริ่ม 10/11/2569)
 
     ### `GET api/customer/purchased-product/{id}`
     สินค้าที่ลูกค้ารายนี้เคยซื้อ นับเฉพาะ order ที่ `status = completed` **และ** `payment_status = paid` — รวม qty ต่อสินค้า เรียงมากไปน้อย → `{success, data: [{product_name, product_code, total_qty, uom_name}]}`
@@ -714,6 +729,8 @@ docs:
 
     → `{success, message, customer_id, relationship_id}`
 
+    > 🔐 ตั้งแต่ 10/11/2569 เส้น update / delete / `customer/relationship/{id}` และเส้น `relationship-detail` ทุกเส้นที่รับ `{id}` ทำได้เฉพาะลูกค้าของตัวเอง (แอดมิน level 0/1 ผ่านหมด) · ไม่ใช่ = **403** `{"success": false, "message": "คุณไม่มีสิทธิ์เข้าถึงบันทึกนี้"}` · ส่ง `customer_id` ใหม่ที่เป็นลูกค้าของคนอื่นก็ได้ 403
+
     ### `POST customer/relationship/update/{id}`
     `{id}` = **relationship_id** · ฟิลด์เดียวกับ create → `{success, message, customer_id, data}`
 
@@ -721,7 +738,7 @@ docs:
     edit คืนข้อมูลแผน · delete ลบแผน **พร้อม detail ที่ผูกอยู่ทั้งหมด** → `{success, message}` · ไม่พบ = 404
 
     ### `GET customer/relationship/{id}`
-    → `{customer, relationships, defaultRel, relationship_details, counts_relationship_details}`
+    → `{customer, relationships, defaultRel, relationship_details, counts_relationship_details, avgOccasionByRel}` · ทุกก้อนเป็นของ**ลูกค้ารายนี้เท่านั้น** (ก่อน 10/11/2569 `relationship_details` และยอดนับคืนทั้งบริษัท)
 
     ### `POST customer/contact/customer/store` · `multipart/form-data`
     **บันทึกการติดต่อด่วน** — สร้าง detail ที่ `mode = 'completed'` ทันที (ไม่ต้องนัดล่วงหน้า)
@@ -807,7 +824,8 @@ docs:
     | `201` | `{success, message, customer_id, image_path, late_request:{id,status,late_days,reason}}` |
 
     ### `DELETE relationship-detail/delete-contact/{id}` · `GET relationship-detail/{id}`
-    delete → `{success, message}` · get → `{status:"success", data:{details}}`
+    delete → `{success, message}` · ลบ**เฉพาะนัดใบนั้น** (เดิมลบพ่วงนัดที่ `relationship_id` ตรงกับเลขนี้) · ลบไปแล้ว = 404
+    get (`{id}` = customer_id) → `{status:"success", data:{details}}`
 
     ### `GET getcustomer/detail/byid/{id}`
     เส้นหลักของหน้ารายละเอียดลูกค้า `{id}` = **customer_id**
@@ -1489,9 +1507,9 @@ docs:
 
     ## 3. เส้นที่ไม่ตรวจความเป็นเจ้าของข้อมูล
 
-    `DELETE customer/delete/{id}` และ `DELETE relationship-detail/delete-contact/{id}` **ไม่เช็คว่าข้อมูลนั้นเป็นของ user ที่ login หรือเปล่า** — เซลส์คนหนึ่งลบข้อมูลของเซลส์อีกคนในบริษัทเดียวกันได้ ต่างจาก `customer/edit/{id}` และ `getCustomer-detail` ที่กรอง `user_id` ไว้
+    **ปิดแล้ว 10/11/2569** สำหรับเส้นลูกค้า (update / delete) ความสัมพันธ์ (update / delete / `customer/relationship/{id}`) และนัดหมาย (edit / update / submit / delete / `relationship-detail/{id}`) — ใช้ `RelationshipDetailController::denyUnlessCanManage()` ตอบ 403 เมื่อไม่ใช่ลูกค้าของตัวเอง แอดมิน level 0/1 ผ่านหมด
 
-    ถ้าต้องการปิด ให้เพิ่มเงื่อนไขแบบเดียวกับ `RelationshipDetailController::canManageDetail()` ที่เส้นนัดหมายล่าช้าใช้อยู่
+    ที่ยังไม่ตรวจ: `GET api/customer/purchased-product/{id}`, `POST customer/relationship/create/{id}`, `POST relationship-detail/create-contact`, `POST customer/contact/customer/store`
 
     ## 4. `GET calendar` ไม่รับพารามิเตอร์เดือน
 
